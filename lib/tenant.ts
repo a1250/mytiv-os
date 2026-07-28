@@ -35,6 +35,26 @@ export async function resolveBusiness(slug: string, userId: string): Promise<Res
   return { business, role: membership.role as ResolvedBusiness["role"] };
 }
 
+/**
+ * Same lookup as resolveBusiness(), but returns null instead of calling
+ * Next.js's notFound() — notFound() only works correctly inside a Server
+ * Component render, not inside a Route Handler. Use this variant from
+ * app/api/[businessSlug]/** routes (see lib/api-guard.ts).
+ */
+export async function resolveBusinessOrNull(slug: string, userId: string): Promise<ResolvedBusiness | null> {
+  const [business] = await db.select().from(businesses).where(eq(businesses.slug, slug)).limit(1);
+  if (!business) return null;
+
+  const [membership] = await db
+    .select()
+    .from(businessMemberships)
+    .where(and(eq(businessMemberships.businessId, business.id), eq(businessMemberships.userId, userId)))
+    .limit(1);
+  if (!membership) return null;
+
+  return { business, role: membership.role as ResolvedBusiness["role"] };
+}
+
 /** All businesses the given user belongs to — powers the business switcher. */
 export async function listBusinessesForUser(userId: string) {
   return db
