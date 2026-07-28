@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [accentColor, setAccentColor] = useState((settings.accent_color as string) || "#6366f1");
   const [savedFlash, setSavedFlash] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   async function loadGoogleStatus() {
     setGoogleStatus((await api.google.status()) as GoogleStatus);
@@ -40,6 +41,22 @@ export default function SettingsPage() {
     await loadGoogleStatus();
   }
 
+  async function handleLogoChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const { url } = await api.upload.image(file, "logo");
+      await setSetting("logo_url", url);
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
+  async function handleLogoClear() {
+    await setSetting("logo_url", "");
+  }
+
   const googleConnected = searchParams.get("google_connected");
   const googleError = searchParams.get("google_error");
 
@@ -56,6 +73,20 @@ export default function SettingsPage() {
         <div className="settings-field">
           <label>{t("Accent color")}</label>
           <input type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} />
+        </div>
+        <div className="settings-field">
+          <label>{t("Logo")}</label>
+          {settings.logo_url ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <img src={settings.logo_url as string} alt="logo" style={{ width: 40, height: 40, borderRadius: 8 }} />
+              <button className="secondary" onClick={handleLogoClear}>
+                {t("Remove")}
+              </button>
+            </div>
+          ) : (
+            <input type="file" accept="image/*" onChange={handleLogoChosen} disabled={logoUploading} />
+          )}
+          {logoUploading && <span className="empty">{t("Uploading…")}</span>}
         </div>
         <button onClick={handleSave}>{t("Save")}</button>
         {savedFlash && <span className="empty">{t("Saved")}</span>}

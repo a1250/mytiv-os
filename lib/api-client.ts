@@ -25,6 +25,15 @@ const post = <T>(path: string, data?: unknown) => request<T>(path, { method: "PO
 const patch = <T>(path: string, data?: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(data ?? {}) });
 const del = <T>(path: string) => request<T>(path, { method: "DELETE" });
 
+async function uploadFile(path: string, file: File, folder: string): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("folder", folder);
+  const res = await fetch(path, { method: "POST", body: form });
+  if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text().catch(() => "")}`);
+  return res.json();
+}
+
 export function createApiClient(businessSlug: string) {
   const base = `/api/${businessSlug}`;
 
@@ -113,7 +122,9 @@ export function createApiClient(businessSlug: string) {
       update: (id: string, data: unknown) => patch(`${base}/inspiration/${id}`, data),
       remove: (id: string) => del(`${base}/inspiration/${id}`),
       fetchMeta: (url: string) => post(`${base}/inspiration/fetch-meta`, { url }),
-      // chooseImage has no web equivalent — replaced by direct <input type="file"> + POST /inspiration/upload
+    },
+    upload: {
+      image: (file: File, folder: "logo" | "inspiration" | "carousel") => uploadFile(`${base}/upload`, file, folder),
     },
     moodboards: {
       list: () => get(`${base}/moodboards`),
