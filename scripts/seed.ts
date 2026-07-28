@@ -5,7 +5,6 @@
  * Phase 0 milestone in the plan). Safe to run once against a fresh database;
  * re-running skips creation if the owner email already exists.
  */
-import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "../lib/db";
