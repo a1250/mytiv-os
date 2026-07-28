@@ -42,6 +42,21 @@ export const HE: Record<string, string> = {
   Status: "סטטוס",
   "The Goal": "המטרה",
   Proposal: "הצעת מחיר",
+  "Connect your Google account in Settings to see real Gmail here.": "חבר את חשבון Google שלך בהגדרות כדי לראות כאן Gmail אמיתי.",
+  "Connect Google Account": "חבר חשבון Google",
+  "Could not load inbox.": "לא ניתן לטעון את תיבת הדואר הנכנס.",
+  "No messages.": "אין הודעות.",
+  Unread: "לא נקרא",
+  "Google Account": "חשבון Google",
+  "Google account connected.": "חשבון Google חובר בהצלחה.",
+  "Google connection failed": "החיבור לגוגל נכשל",
+  "Not connected.": "לא מחובר.",
+  Disconnect: "נתק",
+  "Syncing…": "מסנכרן…",
+  "Sync now": "סנכרן עכשיו",
+  "Connect Google Calendar in Settings to sync — local events still work without it.": "חבר את יומן Google בהגדרות כדי לסנכרן — אירועים מקומיים עובדים גם בלעדיו.",
+  "Event title…": "כותרת אירוע…",
+  "No events yet.": "עדיין אין אירועים.",
 };
 
 export type Lang = "en" | "he";
