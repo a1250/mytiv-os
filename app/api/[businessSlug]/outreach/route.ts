@@ -1,0 +1,25 @@
+import { NextRequest, NextResponse } from "next/server";
+import { guard, ApiGuardError } from "@/lib/api-guard";
+import { listOutreach, createOutreach } from "@/lib/db/queries/outreach";
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
+  try {
+    const { businessId } = await guard((await params).businessSlug);
+    const leadId = req.nextUrl.searchParams.get("leadId") || undefined;
+    return NextResponse.json(await listOutreach(businessId, leadId));
+  } catch (err) {
+    if (err instanceof ApiGuardError) return err.response;
+    throw err;
+  }
+}
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
+  try {
+    const { businessId } = await guard((await params).businessSlug);
+    const data = await req.json();
+    return NextResponse.json(await createOutreach(businessId, data));
+  } catch (err) {
+    if (err instanceof ApiGuardError) return err.response;
+    throw err;
+  }
+}
