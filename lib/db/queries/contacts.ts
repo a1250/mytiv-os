@@ -19,7 +19,17 @@ export async function updateContact(businessId: string, id: string, patch: Recor
 }
 
 export async function removeContact(businessId: string, id: string) {
+  // Verify ownership before touching child rows — a contactId from another
+  // business must not be able to trigger any delete here, not even on
+  // contact_sources/outreach_queue.
+  const [owned] = await db
+    .select({ id: leadContacts.id })
+    .from(leadContacts)
+    .where(and(eq(leadContacts.businessId, businessId), eq(leadContacts.id, id)))
+    .limit(1);
+  if (!owned) return;
+
   await db.delete(contactSources).where(eq(contactSources.contactId, id));
   await db.delete(outreachQueue).where(eq(outreachQueue.contactId, id));
-  await db.delete(leadContacts).where(and(eq(leadContacts.businessId, businessId), eq(leadContacts.id, id)));
+  await db.delete(leadContacts).where(eq(leadContacts.id, id));
 }

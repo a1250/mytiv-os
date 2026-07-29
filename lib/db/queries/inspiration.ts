@@ -75,8 +75,10 @@ export async function createMoodboard(businessId: string, name: string, descript
 }
 
 export async function removeMoodboard(businessId: string, id: string) {
+  const [owned] = await db.select({ id: moodboards.id }).from(moodboards).where(and(eq(moodboards.businessId, businessId), eq(moodboards.id, id))).limit(1);
+  if (!owned) return;
   await db.delete(moodboardItems).where(eq(moodboardItems.moodboardId, id));
-  await db.delete(moodboards).where(and(eq(moodboards.businessId, businessId), eq(moodboards.id, id)));
+  await db.delete(moodboards).where(eq(moodboards.id, id));
 }
 
 export async function addMoodboardItem(businessId: string, moodboardId: string, itemId: string) {

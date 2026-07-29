@@ -125,11 +125,18 @@ export async function updateSlide(businessId: string, slideId: string, patch: Re
 }
 
 export async function removeCarousel(businessId: string, id: string) {
+  const [owned] = await db
+    .select({ id: carouselProjects.id })
+    .from(carouselProjects)
+    .where(and(eq(carouselProjects.businessId, businessId), eq(carouselProjects.id, id)))
+    .limit(1);
+  if (!owned) return;
+
   const slides = await db.select().from(carouselSlides).where(eq(carouselSlides.carouselId, id));
   for (const s of slides) {
     if (s.generatedImageUrl) await deleteAsset(s.generatedImageUrl);
     if (s.importedImageUrl) await deleteAsset(s.importedImageUrl);
   }
   await db.delete(carouselSlides).where(eq(carouselSlides.carouselId, id));
-  await db.delete(carouselProjects).where(and(eq(carouselProjects.businessId, businessId), eq(carouselProjects.id, id)));
+  await db.delete(carouselProjects).where(eq(carouselProjects.id, id));
 }
