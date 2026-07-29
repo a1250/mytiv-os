@@ -403,11 +403,15 @@ export const proposals = pgTable(
     businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     clientName: text("client_name").default(""),
+    clientCompany: text("client_company").default(""),
+    clientEmail: text("client_email").default(""),
     brand: text("brand").default(""),
     contact: text("contact").default(""),
     leadId: uuid("lead_id").references(() => leads.id),
     type: text("type").default(""),
     status: text("status").default("draft"),
+    date: text("date"), // YYYY-MM-DD
+    projectOverview: text("project_overview").default(""),
     description: text("description").default(""),
     goal: text("goal").default(""),
     timeline: text("timeline").default(""),
@@ -417,8 +421,13 @@ export const proposals = pgTable(
     budget: text("budget").default(""),
     paymentTerms: text("payment_terms").default(""),
     notes: text("notes").default(""),
+    validUntil: text("valid_until"), // YYYY-MM-DD
+    vatRate: integer("vat_rate").default(18),
+    includeVat: boolean("include_vat").default(false),
+    retainerMode: boolean("retainer_mode").default(false),
     sections: jsonb("sections").default([]), // [{title, body}]
     lineItems: jsonb("line_items").default([]), // [{name, description, qty, unit_price, optional}]
+    services: jsonb("services").default([]), // [{id, title, description, setupFee, monthlyFee, monthlyBreakdown, monthlyBlockTitle}]
     emailText: text("email_text").default(""),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
