@@ -102,6 +102,21 @@ export const HE: Record<string, string> = {
   Added: "נוספו",
   Skipped: "דולגו",
   "No radar items yet — click Refresh.": "עדיין אין פריטים ברדאר — לחץ רענן.",
+  "Discover Leads": "גילוי לידים",
+  "Search query (e.g. boutique hotels Tel Aviv)…": "שאילתת חיפוש (למשל מסעדות בוטיק בתל אביב)…",
+  "Category (optional)": "קטגוריה (לא חובה)",
+  "Searching… (up to a minute)": "מחפש… (עד דקה)",
+  Discover: "גלה",
+  "Search failed": "החיפוש נכשל",
+  "No candidates found.": "לא נמצאו מועמדים.",
+  "Already a lead": "כבר ליד קיים",
+  "Add to CRM": "הוסף למערכת",
+  "Saved leads": "לידים שמורים",
+  "Contact Finder": "מציאת אנשי קשר",
+  "Find contacts": "מצא אנשי קשר",
+  "Search was rate-limited — results may be partial.": "החיפוש הוגבל בקצב — התוצאות עשויות להיות חלקיות.",
+  "Already saved": "כבר נשמר",
+  "Add contact": "הוסף איש קשר",
 };
 
 export type Lang = "en" | "he";

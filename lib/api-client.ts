@@ -217,6 +217,9 @@ export function createApiClient(businessSlug: string) {
         post(`${base}/calendar/events/${eventId}/resolve-conflict`, { resolution }),
       createFromTask: (taskId: string) => post(`${base}/calendar/events/from-task`, { taskId }),
     },
+    jobs: {
+      get: (id: string) => get(`${base}/jobs/${id}`),
+    },
   };
 }
 
