@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useApi, useStudio, useT } from "@/components/studio-provider";
 import { computeTotals } from "@/lib/pdf-helpers";
+import { buildProposalEmail } from "@/lib/services/proposal-email";
 import {
   blankService,
   serviceFromTemplate,
@@ -26,6 +27,7 @@ type Proposal = {
   validUntil: string | null;
   projectOverview: string | null;
   notes: string | null;
+  emailText: string | null;
   vatRate: number | null;
   includeVat: boolean | null;
   retainerMode: boolean | null;
@@ -44,13 +46,14 @@ export default function ProposalEditorPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApi();
   const t = useT();
-  const { businessSlug } = useStudio();
+  const { businessSlug, settings: studioSettings, businessName } = useStudio();
 
   const [draft, setDraft] = useState<Proposal | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [templates, setTemplates] = useState<ServiceTemplate[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -65,6 +68,7 @@ export default function ProposalEditorPage() {
   function patch(p: Partial<Proposal>) {
     setDraft((d) => (d ? { ...d, ...p } : d));
     setDirty(true);
+    setNotice(null); // a status line about the last action is stale once editing resumes
   }
 
   const services = draft?.services ?? [];
@@ -120,6 +124,7 @@ export default function ProposalEditorPage() {
       vatRate: draft.vatRate,
       includeVat: draft.includeVat,
       retainerMode: draft.retainerMode,
+      emailText: draft.emailText,
       services,
     });
     setSaving(false);
@@ -129,6 +134,50 @@ export default function ProposalEditorPage() {
   async function downloadPdf() {
     if (dirty) await save();
     window.open(api.proposals.pdfUrl(id), "_blank");
+  }
+
+  /** Follow-up lives in Tasks & Ops, linked to the same lead, so it surfaces on the dashboard. */
+  async function createFollowUpTask() {
+    if (!draft) return;
+    const due = new Date();
+    due.setDate(due.getDate() + 7);
+    await api.tasks.create({
+      title: `${t("Follow up on proposal")} — ${draft.clientCompany || draft.clientName || draft.title}`,
+      notes: `${window.location.origin}/${businessSlug}/proposals/${id}`,
+      dueDate: due.toISOString().slice(0, 10),
+      priority: "high",
+      category: "sales",
+      leadId: draft.leadId,
+    });
+    setNotice(t("Follow-up task created for a week from today."));
+  }
+
+  function generateEmail() {
+    if (!draft) return;
+    const { subject, body } = buildProposalEmail(
+      { ...draft, services },
+      (studioSettings.studio_name as string) || businessName
+    );
+    patch({ emailText: `${subject}\n\n${body}` });
+    setNotice(t("Draft email generated below — edit it before sending."));
+  }
+
+  /** Creates a Gmail draft only. Sending stays behind the Mail module's own confirmation. */
+  async function createGmailDraft() {
+    if (!draft?.emailText) return;
+    if (!draft.clientEmail) return setNotice(t("Add a client email address first."));
+    if (dirty) await save();
+    const [subject, ...rest] = draft.emailText.split("\n");
+    try {
+      await api.gmail.createDraft({
+        to: draft.clientEmail,
+        subject,
+        body: rest.join("\n").trimStart(),
+      });
+      setNotice(t("Draft created in Gmail — review and send it from there."));
+    } catch {
+      setNotice(t("Could not reach Gmail. Connect a Google account in Settings first."));
+    }
   }
 
   if (!draft) return <div className="page">{t("Loading…")}</div>;
@@ -146,7 +195,7 @@ export default function ProposalEditorPage() {
         <h1>{draft.title}</h1>
         <div className="editor-actions">
           <span className="empty">
-            {saving ? t("Saving…") : dirty ? t("Unsaved changes") : t("All changes saved")}
+            {notice ?? (saving ? t("Saving…") : dirty ? t("Unsaved changes") : t("All changes saved"))}
           </span>
           <button className="secondary" onClick={downloadPdf}>
             {t("Download PDF")}
@@ -382,6 +431,29 @@ export default function ProposalEditorPage() {
           <span>₪ {totals.grandTotal.toLocaleString("en-US")}</span>
         </div>
       </div>
+
+      {/* ---- Send & follow up ---- */}
+      <h2 className="section-head">{t("Send & follow up")}</h2>
+      <div className="template-row">
+        <button className="secondary" onClick={generateEmail}>
+          {t("Generate cover email")}
+        </button>
+        <button className="secondary" onClick={createGmailDraft} disabled={!draft.emailText}>
+          {t("Create Gmail draft")}
+        </button>
+        <button className="secondary" onClick={createFollowUpTask}>
+          {t("Add follow-up task")}
+        </button>
+      </div>
+      <p className="empty">{t("Drafts only — nothing is sent from here. Review and send from Mail.")}</p>
+      {draft.emailText && (
+        <textarea
+          className="editor-textarea"
+          rows={12}
+          value={draft.emailText}
+          onChange={(e) => patch({ emailText: e.target.value })}
+        />
+      )}
 
       {/* ---- Notes ---- */}
       <h2 className="section-head">{t("Notes")}</h2>

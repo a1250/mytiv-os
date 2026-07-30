@@ -26,16 +26,20 @@ type StudioContextValue = {
   lang: Lang;
   api: ApiClient;
   businessSlug: string;
+  /** Display name of the active business — the fallback when studio_name isn't set. */
+  businessName: string;
 };
 
 const StudioContext = createContext<StudioContextValue | null>(null);
 
 export function StudioProvider({
   businessSlug,
+  businessName,
   initialSettings,
   children,
 }: {
   businessSlug: string;
+  businessName: string;
   initialSettings: Settings;
   children: React.ReactNode;
 }) {
@@ -61,7 +65,7 @@ export function StudioProvider({
   }
 
   return (
-    <StudioContext.Provider value={{ settings, setSetting, refresh, t, lang, api, businessSlug }}>
+    <StudioContext.Provider value={{ settings, setSetting, refresh, t, lang, api, businessSlug, businessName }}>
       {children}
     </StudioContext.Provider>
   );

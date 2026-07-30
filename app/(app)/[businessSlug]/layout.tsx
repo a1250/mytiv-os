@@ -33,7 +33,7 @@ export default async function BusinessLayout({
   };
 
   return (
-    <StudioProvider businessSlug={businessSlug} initialSettings={initialSettings}>
+    <StudioProvider businessSlug={businessSlug} businessName={business.name} initialSettings={initialSettings}>
       <div className="app">
         <Sidebar businesses={businesses} />
         <main className="main">{children}</main>
