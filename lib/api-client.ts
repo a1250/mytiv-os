@@ -112,6 +112,14 @@ export function createApiClient(businessSlug: string) {
       /** Direct link to the rendered PDF — used as an <a href> so the browser downloads it. */
       pdfUrl: (id: string) => `${base}/proposals/${id}/pdf`,
     },
+    serviceTemplates: {
+      list: () => get(`${base}/service-templates`),
+      create: (data: unknown) => post(`${base}/service-templates`, data),
+      update: (id: string, data: unknown) => patch(`${base}/service-templates/${id}`, data),
+      remove: (id: string) => del(`${base}/service-templates/${id}`),
+      /** Loads the starter catalogue; no-ops if the business already has templates. */
+      seedStarters: () => post(`${base}/service-templates`, { seedStarters: true }),
+    },
     briefs: {
       list: () => get(`${base}/briefs`),
       get: (id: string) => get(`${base}/briefs/${id}`),

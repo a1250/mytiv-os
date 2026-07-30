@@ -6,10 +6,10 @@ import Link from "next/link";
 import { useApi, useStudio, useT } from "@/components/studio-provider";
 import { computeTotals } from "@/lib/pdf-helpers";
 import {
-  SERVICE_TEMPLATES,
   blankService,
   serviceFromTemplate,
   type ServiceItem,
+  type ServiceTemplate,
 } from "@/lib/service-templates";
 
 type Lead = { id: string; company: string; contactName: string | null; email: string | null };
@@ -48,6 +48,7 @@ export default function ProposalEditorPage() {
 
   const [draft, setDraft] = useState<Proposal | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [templates, setTemplates] = useState<ServiceTemplate[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -58,6 +59,7 @@ export default function ProposalEditorPage() {
       setDirty(false);
     })();
     (async () => setLeads((await api.leads.list()) as Lead[]))();
+    (async () => setTemplates((await api.serviceTemplates.list()) as ServiceTemplate[]))();
   }, [id]);
 
   function patch(p: Partial<Proposal>) {
@@ -225,7 +227,7 @@ export default function ProposalEditorPage() {
       {/* ---- Services ---- */}
       <h2 className="section-head">{t("Services")}</h2>
       <div className="template-row">
-        {SERVICE_TEMPLATES.map((tpl) => (
+        {templates.map((tpl) => (
           <button key={tpl.id} className="secondary" onClick={() => addService(serviceFromTemplate(tpl))}>
             + {tpl.label}
           </button>
@@ -233,6 +235,9 @@ export default function ProposalEditorPage() {
         <button className="secondary" onClick={() => addService(blankService())}>
           + {t("Blank service")}
         </button>
+        <Link href={`/${businessSlug}/proposals/templates`} className="empty" style={{ alignSelf: "center" }}>
+          {templates.length === 0 ? t("Set up your service catalogue →") : t("Edit catalogue →")}
+        </Link>
       </div>
 
       {services.length === 0 && <p className="empty">{t("No services yet — add one above.")}</p>}

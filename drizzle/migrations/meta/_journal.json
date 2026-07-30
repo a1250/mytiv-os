@@ -15,6 +15,13 @@
       "when": 1785359931482,
       "tag": "0001_phase5_proposal_pdf",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785397804523,
+      "tag": "0002_service_templates",
+      "breakpoints": true
     }
   ]
 }

@@ -451,6 +451,31 @@ export const proposalTemplates = pgTable(
   (t) => [index("proposal_templates_business_idx").on(t.businessId)]
 );
 
+/**
+ * Reusable service rows for the proposal editor — one row = one offering with
+ * its pricing. Distinct from proposalTemplates, which models a whole-proposal
+ * skeleton (sections + line items). Per business, because pricing and the
+ * service catalogue are exactly what differs between them.
+ */
+export const serviceTemplates = pgTable(
+  "service_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    label: text("label").notNull(), // short name shown on the "+ add" button
+    title: text("title").default(""), // headline written into the proposal
+    description: text("description").default(""),
+    setupFee: integer("setup_fee").default(0),
+    monthlyFee: integer("monthly_fee").default(0),
+    monthlyBlockTitle: text("monthly_block_title").default(""),
+    monthlyBreakdown: text("monthly_breakdown").default(""), // one feature per line
+    position: integer("position").default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("service_templates_business_idx").on(t.businessId)]
+);
+
 export const proposalVersions = pgTable(
   "proposal_versions",
   {
