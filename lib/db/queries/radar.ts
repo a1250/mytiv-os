@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../index";
 import { newsItems } from "../schema";
-import { sanitizePatch } from "./_patch";
+import { sanitizePatch, isEmptyPatch } from "./_patch";
 import { DEFAULT_FEEDS, WHY_BY_CATEGORY, ACTION_BY_CATEGORY, fetchUrl, parseFeed, categorize, score, extractTags } from "../../services/rss";
 
 export async function listNews(businessId: string) {
@@ -14,9 +14,19 @@ export async function createNews(businessId: string, data: { title: string } & R
 }
 
 export async function updateNews(businessId: string, id: string, patch: Record<string, unknown>) {
+  // news_items has no updatedAt, so a patch of only immutable fields would
+  // leave an empty SET — return the row unchanged instead of erroring.
+  if (isEmptyPatch(patch)) {
+    const [current] = await db
+      .select()
+      .from(newsItems)
+      .where(and(eq(newsItems.businessId, businessId), eq(newsItems.id, id)))
+      .limit(1);
+    return current ?? null;
+  }
   const [item] = await db
     .update(newsItems)
-    .set(patch)
+    .set(sanitizePatch(patch))
     .where(and(eq(newsItems.businessId, businessId), eq(newsItems.id, id)))
     .returning();
   return item;

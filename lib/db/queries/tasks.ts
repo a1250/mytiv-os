@@ -6,6 +6,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../index";
 import { tasks } from "../schema";
+import { sanitizePatch } from "./_patch";
 
 export async function listTasks(businessId: string) {
   return db
@@ -37,7 +38,7 @@ export async function createTask(
 }
 
 export async function updateTask(businessId: string, id: string, patch: Record<string, unknown>) {
-  const updates: Record<string, unknown> = { ...patch, updatedAt: new Date() };
+  const updates: Record<string, unknown> = { ...sanitizePatch(patch), updatedAt: new Date() };
   if (patch.status) {
     updates.doneAt = patch.status === "done" ? new Date() : null;
   }

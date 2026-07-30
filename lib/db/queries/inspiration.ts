@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../index";
 import { inspirationItems, moodboards, moodboardItems } from "../schema";
-import { sanitizePatch } from "./_patch";
+import { sanitizePatch, isEmptyPatch } from "./_patch";
 import { deleteAsset } from "../../blob";
 
 export async function listInspiration(businessId: string) {
@@ -17,9 +17,18 @@ export async function createInspiration(
 }
 
 export async function updateInspiration(businessId: string, id: string, patch: Record<string, unknown>) {
+  // No updatedAt column here either — see updateNews.
+  if (isEmptyPatch(patch)) {
+    const [current] = await db
+      .select()
+      .from(inspirationItems)
+      .where(and(eq(inspirationItems.businessId, businessId), eq(inspirationItems.id, id)))
+      .limit(1);
+    return current ?? null;
+  }
   const [item] = await db
     .update(inspirationItems)
-    .set(patch)
+    .set(sanitizePatch(patch))
     .where(and(eq(inspirationItems.businessId, businessId), eq(inspirationItems.id, id)))
     .returning();
   return item;
