@@ -171,6 +171,8 @@ export function buildWeeklyReview(data: ReviewInput, opts: ReviewOptions = {}) {
     payload: {
       studio,
       range: { start, end },
+      /** "builder" until a Claude pass rewrites the summary — see the reviews/generate route. */
+      source: "builder" as "builder" | "claude",
       exec,
       blockers,
       opportunities,

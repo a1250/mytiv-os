@@ -23,6 +23,7 @@ async function request<T = unknown>(path: string, init?: RequestInit): Promise<T
 const get = <T>(path: string) => request<T>(path);
 const post = <T>(path: string, data?: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(data ?? {}) });
 const patch = <T>(path: string, data?: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(data ?? {}) });
+const put = <T>(path: string, data?: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(data ?? {}) });
 const del = <T>(path: string) => request<T>(path, { method: "DELETE" });
 
 async function uploadFile(path: string, file: File, folder: string): Promise<{ url: string }> {
@@ -175,6 +176,9 @@ export function createApiClient(businessSlug: string) {
       status: () => get(`${base}/ai/status`),
       test: () => post(`${base}/ai/test`),
       complete: (params: unknown) => post(`${base}/ai/complete`, params),
+      /** Write-only — the stored key is never readable back. */
+      setKey: (apiKey: string) => put(`${base}/ai/key`, { apiKey }),
+      clearKey: () => del(`${base}/ai/key`),
     },
     carousel: {
       list: () => get(`${base}/carousel`),

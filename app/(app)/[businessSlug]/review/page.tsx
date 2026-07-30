@@ -54,8 +54,12 @@ export default function WeeklyReviewPage() {
   async function generate() {
     setBusy(true);
     setNotice(null);
-    setReview((await api.reviews.generate({ range })) as WeeklyReview);
+    const result = (await api.reviews.generate({ range })) as WeeklyReview & { aiError?: string | null };
+    setReview(result);
     setSavedId(null);
+    // Surface a failed AI pass instead of silently showing the deterministic
+    // text as though Claude had written it.
+    setNotice(result.aiError ? `${t("Written without Claude")}: ${result.aiError}` : null);
     setBusy(false);
   }
 
@@ -138,7 +142,10 @@ export default function WeeklyReviewPage() {
 
       {review && p && (
         <>
-          <h2 style={{ fontSize: 16, marginTop: 8 }}>{review.title}</h2>
+          <h2 style={{ fontSize: 16, marginTop: 8 }}>
+            {review.title}
+            {p.source === "claude" && <span className="pill" style={{ marginInlineStart: 8 }}>Claude</span>}
+          </h2>
 
           <Section n={1} title={t("Executive summary")}>
             <List items={p.exec} empty={t("Nothing to report.")} />

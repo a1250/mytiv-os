@@ -60,6 +60,45 @@ export default function SettingsPage() {
   const googleConnected = searchParams.get("google_connected");
   const googleError = searchParams.get("google_error");
 
+  const [aiStatus, setAiStatus] = useState<{ configured: boolean } | null>(null);
+  const [aiKeyInput, setAiKeyInput] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMessage, setAiMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => setAiStatus((await api.ai.status()) as { configured: boolean }))();
+  }, []);
+
+  async function handleAiSave() {
+    setAiBusy(true);
+    setAiMessage(null);
+    try {
+      await api.ai.setKey(aiKeyInput.trim());
+      setAiKeyInput("");
+      setAiStatus((await api.ai.status()) as { configured: boolean });
+      setAiMessage(t("Key saved. Run a test to confirm it works."));
+    } catch {
+      setAiMessage(t("Could not save the key."));
+    }
+    setAiBusy(false);
+  }
+
+  async function handleAiTest() {
+    setAiBusy(true);
+    setAiMessage(null);
+    const res = (await api.ai.test()) as { ok: boolean; error?: string };
+    setAiMessage(res.ok ? t("Connection works.") : `${t("Test failed")}: ${res.error ?? ""}`);
+    setAiBusy(false);
+  }
+
+  async function handleAiClear() {
+    setAiBusy(true);
+    await api.ai.clearKey();
+    setAiStatus((await api.ai.status()) as { configured: boolean });
+    setAiMessage(t("Key removed."));
+    setAiBusy(false);
+  }
+
   return (
     <div className="page">
       <h1>{t("Settings")}</h1>
@@ -90,6 +129,43 @@ export default function SettingsPage() {
         </div>
         <button onClick={handleSave}>{t("Save")}</button>
         {savedFlash && <span className="empty">{t("Saved")}</span>}
+      </div>
+
+      <h2 style={{ fontSize: 15, margin: "28px 0 12px" }}>{t("Claude API")}</h2>
+      <p className="empty">
+        {t("Powers the AI passes in Weekly Review, Outreach, Brief Analyzer and Prompt Builder. Without a key those modules still work — they fall back to their built-in logic.")}
+      </p>
+      <div className="settings-form">
+        {aiStatus?.configured ? (
+          <>
+            <p className="empty" style={{ color: "#5bc98c" }}>{t("A key is stored for this business.")}</p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="secondary" onClick={handleAiTest} disabled={aiBusy}>
+                {aiBusy ? t("Testing…") : t("Test connection")}
+              </button>
+              <button className="secondary" onClick={handleAiClear} disabled={aiBusy}>
+                {t("Remove key")}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="settings-field">
+              <label>{t("Anthropic API key")}</label>
+              <input
+                type="password"
+                autoComplete="off"
+                placeholder="sk-ant-…"
+                value={aiKeyInput}
+                onChange={(e) => setAiKeyInput(e.target.value)}
+              />
+            </div>
+            <button onClick={handleAiSave} disabled={aiBusy || !aiKeyInput.trim()}>
+              {aiBusy ? t("Saving…") : t("Save key")}
+            </button>
+          </>
+        )}
+        {aiMessage && <span className="empty">{aiMessage}</span>}
       </div>
 
       <h2 style={{ fontSize: 15, margin: "28px 0 12px" }}>{t("Google Account")}</h2>

@@ -16,6 +16,59 @@ import {
 import { getSettingsForBusiness } from "@/lib/db/queries/settings";
 import { buildWeeklyReview } from "@/lib/services/review-builder";
 import { todayISO, addDays } from "@/lib/date-utils";
+import { complete, buildSystemPrompt } from "@/lib/ai/claude";
+
+export const runtime = "nodejs";
+export const maxDuration = 120;
+
+/**
+ * Optional Claude pass over the deterministic review: it rewrites the executive
+ * summary and next-week priorities from the numbers the builder already
+ * produced. Any failure — no key, a refusal, malformed JSON — leaves the
+ * deterministic text in place, exactly as the Electron version behaved when no
+ * key was configured.
+ */
+async function enrichWithClaude(
+  businessId: string,
+  review: ReturnType<typeof buildWeeklyReview>,
+  system: string
+) {
+  const p = review.payload;
+  const result = await complete(businessId, {
+    system,
+    maxTokens: 1200,
+    json: true,
+    prompt: [
+      "Here is this week's real business data summary:",
+      `exec: ${JSON.stringify(p.exec)}`,
+      `blockers: ${JSON.stringify(p.blockers)}`,
+      `opportunities: ${JSON.stringify(p.opportunities)}`,
+      `leads: ${JSON.stringify(p.leadsSection)}`,
+      `proposals: ${JSON.stringify(p.proposalsSection)}`,
+      "",
+      "Rewrite the executive summary (4-6 sentences, direct, honest about weak spots) and give 3 practical next-week priorities that are specific and actionable, referencing the actual companies and tasks above.",
+      'Return JSON only: {"exec": ["sentence", ...], "priorities": ["...", "...", "..."]}',
+    ].join("\n"),
+  });
+
+  if (!result.ok) return { review, aiError: result.error };
+
+  try {
+    const parsed = JSON.parse(result.text);
+    const exec = Array.isArray(parsed.exec) ? parsed.exec.filter((s: unknown) => typeof s === "string") : [];
+    const priorities = Array.isArray(parsed.priorities)
+      ? parsed.priorities.filter((s: unknown) => typeof s === "string").slice(0, 3)
+      : [];
+    // Only replace what actually came back — a partial response must not blank
+    // out a section that the deterministic builder filled in correctly.
+    if (exec.length > 0) p.exec = exec;
+    if (priorities.length > 0) p.nextWeek.priorities = priorities;
+    if (exec.length > 0 || priorities.length > 0) p.source = "claude";
+    return { review, aiError: null };
+  } catch {
+    return { review, aiError: "Claude returned text that was not valid JSON." };
+  }
+}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
   try {
@@ -54,7 +107,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ bus
       }
     );
 
-    return NextResponse.json(review);
+    // ai_usage_mode "mock" is the kill switch carried over from the Electron
+    // settings. Its "ask" mode prompted with window.confirm, which has no
+    // meaning now that generation runs server-side — treated as "auto".
+    if (settings.ai_usage_mode === "mock") {
+      return NextResponse.json({ ...review, aiError: null });
+    }
+
+    const enriched = await enrichWithClaude(
+      businessId,
+      review,
+      buildSystemPrompt({
+        businessName: settings.studio_name || business.name,
+        description: settings.business_description,
+        ownerName: settings.owner_name,
+        language: business.locale,
+      })
+    );
+
+    return NextResponse.json({ ...enriched.review, aiError: enriched.aiError });
   } catch (err) {
     if (err instanceof ApiGuardError) return err.response;
     throw err;
