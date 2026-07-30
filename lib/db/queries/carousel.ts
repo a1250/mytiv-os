@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../index";
 import { carouselProjects, carouselSlides } from "../schema";
+import { sanitizePatch } from "./_patch";
 import { deleteAsset } from "../../blob";
 import { buildCarouselConcept } from "../../services/carouselEngine";
 
@@ -106,7 +107,7 @@ export async function createCarousel(
 export async function updateCarousel(businessId: string, id: string, patch: Record<string, unknown>) {
   const [project] = await db
     .update(carouselProjects)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...sanitizePatch(patch), updatedAt: new Date() })
     .where(and(eq(carouselProjects.businessId, businessId), eq(carouselProjects.id, id)))
     .returning();
   return project;
@@ -115,7 +116,7 @@ export async function updateCarousel(businessId: string, id: string, patch: Reco
 export async function updateSlide(businessId: string, slideId: string, patch: Record<string, unknown>) {
   const [slide] = await db
     .update(carouselSlides)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...sanitizePatch(patch), updatedAt: new Date() })
     .where(and(eq(carouselSlides.businessId, businessId), eq(carouselSlides.id, slideId)))
     .returning();
   if (slide) {

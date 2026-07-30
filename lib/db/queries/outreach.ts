@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../index";
 import { outreachMessages } from "../schema";
+import { sanitizePatch } from "./_patch";
 
 export async function listOutreach(businessId: string, leadId?: string) {
   const conditions = [eq(outreachMessages.businessId, businessId)];
@@ -19,7 +20,7 @@ export async function createOutreach(
 export async function updateOutreach(businessId: string, id: string, patch: Record<string, unknown>) {
   const [msg] = await db
     .update(outreachMessages)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...sanitizePatch(patch), updatedAt: new Date() })
     .where(and(eq(outreachMessages.businessId, businessId), eq(outreachMessages.id, id)))
     .returning();
   return msg;

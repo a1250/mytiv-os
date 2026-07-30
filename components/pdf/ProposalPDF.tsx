@@ -12,7 +12,25 @@ import {
   Stop,
   Rect,
 } from "@react-pdf/renderer";
+import path from "node:path";
 import { formatILSPdf, formatDatePdf, computeTotals } from "@/lib/pdf-helpers";
+
+/**
+ * Server-only component — rendered with renderToBuffer() inside the PDF route
+ * handler, never in the browser. Font sources must therefore be absolute
+ * filesystem paths: @react-pdf resolves a "/fonts/x.ttf" string against the
+ * filesystem root in Node, not against an HTTP origin the way it does in the
+ * browser. The font files are force-included in the serverless bundle via
+ * outputFileTracingIncludes in next.config.ts.
+ */
+const fontPath = (file: string) => path.join(process.cwd(), "public", "fonts", file);
+
+/** Branding comes from the business row, so business B's proposals never carry business A's name or logo. */
+export type PdfBrand = {
+  name: string;
+  logoUrl?: string | null;
+  footer?: string | null;
+};
 
 type Proposal = {
   id?: string;
@@ -39,10 +57,10 @@ type Proposal = {
 Font.register({
   family: "Heebo",
   fonts: [
-    { src: "/fonts/Heebo-Regular.ttf", fontWeight: 400 },
-    { src: "/fonts/Heebo-Medium.ttf", fontWeight: 500 },
-    { src: "/fonts/Heebo-SemiBold.ttf", fontWeight: 600 },
-    { src: "/fonts/Heebo-Bold.ttf", fontWeight: 700 },
+    { src: fontPath("Heebo-Regular.ttf"), fontWeight: 400 },
+    { src: fontPath("Heebo-Medium.ttf"), fontWeight: 500 },
+    { src: fontPath("Heebo-SemiBold.ttf"), fontWeight: 600 },
+    { src: fontPath("Heebo-Bold.ttf"), fontWeight: 700 },
   ],
 });
 
@@ -410,7 +428,7 @@ function GradientBar() {
   );
 }
 
-export function ProposalPDF({ proposal }: { proposal: Proposal }) {
+export function ProposalPDF({ proposal, brand }: { proposal: Proposal; brand: PdfBrand }) {
   const { totalSetup, totalMonthly, firstYearTotal, vatAmount, grandTotal } =
     computeTotals(proposal);
 
@@ -422,13 +440,13 @@ export function ProposalPDF({ proposal }: { proposal: Proposal }) {
   const displayDate = proposal.date || new Date().toISOString().split("T")[0];
 
   return (
-    <Document title={`הצעת מחיר - ${proposal.clientName}`} author="Mytiv" language="he">
+    <Document title={`הצעת מחיר - ${proposal.clientName}`} author={brand.name} language="he">
       <Page size="A4" style={s.page}>
         {/* Header */}
         <View style={s.header}>
           <View style={s.logoRow}>
-            <Image src="/mytiv-logo.png" style={s.logo} />
-            <Text style={s.companyName}>Mytiv</Text>
+            {brand.logoUrl ? <Image src={brand.logoUrl} style={s.logo} /> : null}
+            <Text style={s.companyName}>{brand.name}</Text>
           </View>
           <Text style={s.dateText}>{formatDatePdf(displayDate)}</Text>
         </View>
@@ -494,7 +512,10 @@ export function ProposalPDF({ proposal }: { proposal: Proposal }) {
 
                   {service.monthlyFee > 0 && (
                     <View style={s.monthlyBlock}>
-                      <Text style={s.monthlyBlockTitle}>{blockTitle}</Text>
+                      {/* HebrewText, not a plain <Text>: a title mixing Hebrew with a Latin
+                          run ("ריטיינר AI חודשי") comes out with its words in reverse order
+                          otherwise, because the paragraph direction is inferred as LTR. */}
+                      <HebrewText text={blockTitle} style={s.monthlyBlockTitle} />
                       <View style={s.monthlyBlockBody}>
                         {items.length > 0 ? (
                           <View style={s.monthlyFeaturesCol}>
@@ -645,7 +666,7 @@ export function ProposalPDF({ proposal }: { proposal: Proposal }) {
               {proposal.validUntil ? formatDatePdf(proposal.validUntil) : ""}
             </Text>
           </View>
-          <Text style={s.footerText}>Mytiv · mytiv.co.il</Text>
+          <Text style={s.footerText}>{brand.footer || brand.name}</Text>
         </View>
       </Page>
     </Document>

@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../index";
 import { clientBriefs, briefAnalysisResults } from "../schema";
+import { sanitizePatch } from "./_patch";
 
 export async function listBriefs(businessId: string) {
   return db
@@ -29,7 +30,7 @@ export async function createBrief(
 export async function updateBrief(businessId: string, id: string, patch: Record<string, unknown>) {
   const [brief] = await db
     .update(clientBriefs)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...sanitizePatch(patch), updatedAt: new Date() })
     .where(and(eq(clientBriefs.businessId, businessId), eq(clientBriefs.id, id)))
     .returning();
   if (brief && patch.analysis) {

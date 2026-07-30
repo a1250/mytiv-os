@@ -1,56 +1,50 @@
-"use server";
+/**
+ * Renders a proposal to PDF server-side. Branding (name, logo, footer line) is
+ * read from the calling business, never hardcoded, so one business's proposals
+ * can't go out carrying another's identity.
+ */
 import { renderToBuffer } from "@react-pdf/renderer";
-import { auth } from "@/lib/auth";
-import { resolveBusiness } from "@/lib/tenant";
-import { db } from "@/lib/db";
-import { proposals, users } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
-import { pdfFileName } from "@/lib/pdf-helpers";
 import React from "react";
+import { NextRequest, NextResponse } from "next/server";
+import { guard, ApiGuardError } from "@/lib/api-guard";
+import { getProposal } from "@/lib/db/queries/proposals";
+import { getSettingsForBusiness } from "@/lib/db/queries/settings";
+import { pdfFileName } from "@/lib/pdf-helpers";
 import { ProposalPDF } from "@/components/pdf/ProposalPDF";
 
-export async function GET(req: Request, { params }: { params: Promise<{ businessSlug: string; id: string }> }) {
-  const { businessSlug, id } = await params;
-  const session = await auth();
+export const runtime = "nodejs";
 
-  if (!session?.user?.email) {
-    return new Response("Unauthorized", { status: 401 });
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ businessSlug: string; id: string }> }) {
+  try {
+    const { businessSlug, id } = await params;
+    const { businessId, business } = await guard(businessSlug);
+
+    const proposal = await getProposal(businessId, id);
+    if (!proposal) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+    const settings = await getSettingsForBusiness(businessId);
+    const brand = {
+      name: settings.studio_name || business.name,
+      logoUrl: business.logoUrl,
+      footer: settings.proposal_footer || null,
+    };
+
+    const proposalForPdf = {
+      ...proposal,
+      services: (proposal.services as React.ComponentProps<typeof ProposalPDF>["proposal"]["services"]) ?? [],
+    };
+
+    // @ts-expect-error @react-pdf/renderer's Style type conflicts with React.CSSProperties
+    const buffer = await renderToBuffer(React.createElement(ProposalPDF, { proposal: proposalForPdf, brand }));
+
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${pdfFileName(proposalForPdf)}"`,
+      },
+    });
+  } catch (err) {
+    if (err instanceof ApiGuardError) return err.response;
+    throw err;
   }
-
-  const user = await db.select().from(users).where(eq(users.email, session.user.email)).limit(1);
-  if (!user[0]) {
-    return new Response("User not found", { status: 401 });
-  }
-
-  const business = await resolveBusiness(businessSlug, user[0].id);
-  if (!business) {
-    return new Response("Business not found", { status: 404 });
-  }
-
-  const [proposal] = await db
-    .select()
-    .from(proposals)
-    .where(and(eq(proposals.id, id), eq(proposals.businessId, business.business.id)))
-    .limit(1);
-
-  if (!proposal) {
-    return new Response("Proposal not found", { status: 404 });
-  }
-
-  // Cast services array to the shape ProposalPDF expects
-  const proposalForPdf = {
-    ...proposal,
-    services: (proposal.services as any[]) ?? [],
-  };
-
-  // @ts-ignore - @react-pdf/renderer has style type conflicts
-  const buffer = await renderToBuffer(React.createElement(ProposalPDF, { proposal: proposalForPdf }));
-  const fileName = pdfFileName(proposalForPdf);
-
-  return new Response(buffer as any, {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${fileName}"`,
-    },
-  });
 }

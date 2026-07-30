@@ -7,6 +7,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "../index";
 import { savedPrompts } from "../schema";
+import { sanitizePatch } from "./_patch";
 
 export async function listSavedPrompts(businessId: string) {
   return db.select().from(savedPrompts).where(eq(savedPrompts.businessId, businessId)).orderBy(desc(savedPrompts.updatedAt));
@@ -32,7 +33,7 @@ export async function createSavedPrompt(
 export async function updateSavedPrompt(businessId: string, id: string, patch: Record<string, unknown>) {
   const [row] = await db
     .update(savedPrompts)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...sanitizePatch(patch), updatedAt: new Date() })
     .where(and(eq(savedPrompts.businessId, businessId), eq(savedPrompts.id, id)))
     .returning();
   return row;

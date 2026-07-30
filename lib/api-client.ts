@@ -108,6 +108,8 @@ export function createApiClient(businessSlug: string) {
       listVersions: (id: string) => get(`${base}/proposals/${id}/versions`),
       remove: (id: string) => del(`${base}/proposals/${id}`),
       listTemplates: () => get(`${base}/proposals/templates`),
+      /** Direct link to the rendered PDF — used as an <a href> so the browser downloads it. */
+      pdfUrl: (id: string) => `${base}/proposals/${id}/pdf`,
     },
     briefs: {
       list: () => get(`${base}/briefs`),

@@ -6,6 +6,7 @@
 import { and, desc, eq, notInArray } from "drizzle-orm";
 import { db } from "../index";
 import { proposals, proposalVersions } from "../schema";
+import { sanitizePatch } from "./_patch";
 
 export async function listProposals(businessId: string) {
   return db.select().from(proposals).where(eq(proposals.businessId, businessId)).orderBy(desc(proposals.updatedAt));
@@ -47,7 +48,7 @@ export async function updateProposal(businessId: string, id: string, patch: Reco
 
   const [row] = await db
     .update(proposals)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...sanitizePatch(patch), updatedAt: new Date() })
     .where(and(eq(proposals.businessId, businessId), eq(proposals.id, id)))
     .returning();
   return row;

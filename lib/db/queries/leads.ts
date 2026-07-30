@@ -7,6 +7,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "../index";
 import { leads, leadNotes } from "../schema";
+import { sanitizePatch } from "./_patch";
 
 export async function listLeads(businessId: string) {
   return db.select().from(leads).where(eq(leads.businessId, businessId)).orderBy(desc(leads.updatedAt));
@@ -25,7 +26,7 @@ export async function createLead(businessId: string, data: { company: string; [k
 export async function updateLead(businessId: string, id: string, patch: Record<string, unknown>) {
   const [lead] = await db
     .update(leads)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...sanitizePatch(patch), updatedAt: new Date() })
     .where(and(eq(leads.businessId, businessId), eq(leads.id, id)))
     .returning();
   return lead;
