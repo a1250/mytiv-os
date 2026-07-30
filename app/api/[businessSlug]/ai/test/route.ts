@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guard, ApiGuardError } from "@/lib/api-guard";
+import { rateLimitGuard } from "@/lib/rate-limit";
 import { complete } from "@/lib/ai/claude";
 
 export const runtime = "nodejs";
@@ -8,6 +9,9 @@ export const runtime = "nodejs";
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
   try {
     const { businessId } = await guard((await params).businessSlug);
+    const limited = await rateLimitGuard(businessId, "ai");
+    if (limited) return limited;
+
     const result = await complete(businessId, {
       prompt: 'Reply with exactly this JSON and nothing else: {"ok":true}',
       system: "You are a connection test. Reply with the exact JSON requested.",

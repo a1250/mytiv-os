@@ -14,7 +14,16 @@ async function request<T = unknown>(path: string, init?: RequestInit): Promise<T
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`API ${init?.method ?? "GET"} ${path} failed: ${res.status} ${body}`);
+    // Route handlers answer with { error } — surface that rather than a raw
+    // status dump, so a rate-limit message reaches the user as written.
+    let message = body;
+    try {
+      const parsed = JSON.parse(body);
+      if (typeof parsed?.error === "string") message = parsed.error;
+    } catch {
+      // non-JSON body — fall through to the raw text
+    }
+    throw new Error(message || `API ${init?.method ?? "GET"} ${path} failed: ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

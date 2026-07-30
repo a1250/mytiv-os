@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guard, ApiGuardError } from "@/lib/api-guard";
+import { rateLimitGuard } from "@/lib/rate-limit";
 import { getSettingsForBusiness } from "@/lib/db/queries/settings";
 import { complete, buildSystemPrompt } from "@/lib/ai/claude";
 
@@ -14,6 +15,9 @@ export const maxDuration = 120;
 export async function POST(req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
   try {
     const { businessId, business } = await guard((await params).businessSlug);
+    const limited = await rateLimitGuard(businessId, "ai");
+    if (limited) return limited;
+
     const body = await req.json().catch(() => ({}));
 
     if (typeof body?.prompt !== "string" || !body.prompt.trim()) {

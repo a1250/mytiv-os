@@ -452,6 +452,25 @@ export const proposalTemplates = pgTable(
 );
 
 /**
+ * Fixed-window rate-limit counters for the endpoints that cost real money per
+ * call (Claude) or hit third parties (discovery scraping). One row per
+ * business + bucket + window rather than one per request, so the table stays
+ * small; Postgres is used rather than Redis because this deployment already
+ * has Neon and no Upstash Redis credentials.
+ */
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    bucket: text("bucket").notNull(), // ai | discovery
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [uniqueIndex("rate_limits_window_uq").on(t.businessId, t.bucket, t.windowStart)]
+);
+
+/**
  * Reusable service rows for the proposal editor — one row = one offering with
  * its pricing. Distinct from proposalTemplates, which models a whole-proposal
  * skeleton (sections + line items). Per business, because pricing and the

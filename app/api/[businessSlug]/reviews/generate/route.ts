@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { guard, ApiGuardError } from "@/lib/api-guard";
+import { rateLimitGuard } from "@/lib/rate-limit";
 import { db } from "@/lib/db";
 import {
   tasks, leads, outreachMessages, newsItems, proposals,
@@ -73,6 +74,9 @@ async function enrichWithClaude(
 export async function POST(req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
   try {
     const { businessId, business } = await guard((await params).businessSlug);
+    const limited = await rateLimitGuard(businessId, "ai");
+    if (limited) return limited;
+
     const body = await req.json().catch(() => ({}));
 
     // "this" = the last 7 days, "last" = the 7 before that.

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guard, ApiGuardError } from "@/lib/api-guard";
+import { rateLimitGuard } from "@/lib/rate-limit";
 import { listCarousels, createCarousel } from "@/lib/db/queries/carousel";
 import { getSettingsForBusiness } from "@/lib/db/queries/settings";
 import { buildCarouselConcept } from "@/lib/services/carouselEngine";
@@ -22,6 +23,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ bus
 export async function POST(req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
   try {
     const { businessId, business } = await guard((await params).businessSlug);
+    const limited = await rateLimitGuard(businessId, "ai");
+    if (limited) return limited;
+
     const data = await req.json();
     const settings = await getSettingsForBusiness(businessId);
 
