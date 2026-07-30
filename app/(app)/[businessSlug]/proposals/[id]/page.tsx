@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useApi, useStudio, useT } from "@/components/studio-provider";
 import { computeTotals } from "@/lib/pdf-helpers";
 import { buildProposalEmail } from "@/lib/services/proposal-email";
+import { askClaude } from "@/lib/ai/ask-claude";
 import {
   blankService,
   serviceFromTemplate,
@@ -152,14 +153,41 @@ export default function ProposalEditorPage() {
     setNotice(t("Follow-up task created for a week from today."));
   }
 
-  function generateEmail() {
+  async function generateEmail() {
     if (!draft) return;
-    const { subject, body } = buildProposalEmail(
-      { ...draft, services },
-      (studioSettings.studio_name as string) || businessName
-    );
+    const brand = (studioSettings.studio_name as string) || businessName;
+
+    // Deterministic email first — it is what stands if the AI pass doesn't run.
+    const { subject, body } = buildProposalEmail({ ...draft, services }, brand);
     patch({ emailText: `${subject}\n\n${body}` });
     setNotice(t("Draft email generated below — edit it before sending."));
+
+    const refined = await askClaude<string>(api, {
+      json: false,
+      maxTokens: 700,
+      onError: (msg) => setNotice(`${t("Written without Claude")}: ${msg}`),
+      prompt: [
+        "Rewrite the cover email for sending this proposal. Keep the same language as the draft.",
+        `Proposal: ${JSON.stringify({
+          client: draft.clientName,
+          company: draft.clientCompany,
+          overview: (draft.projectOverview ?? "").slice(0, 300),
+          services: services.map((s) => ({ title: s.title, setupFee: s.setupFee, monthlyFee: s.monthlyFee })),
+          validUntil: draft.validUntil,
+        })}`,
+        "Current draft:",
+        "---",
+        `${subject}\n\n${body}`,
+        "---",
+        `Max 110 words, confident but not pushy, propose a short walkthrough call, sign as ${brand}.`,
+        "Keep the first line as the subject, then a blank line, then the body. Return only the email text.",
+      ].join("\n"),
+    });
+
+    if (typeof refined === "string" && refined.trim().length > 40) {
+      patch({ emailText: refined.trim() });
+      setNotice(t("Draft email written by Claude — edit it before sending."));
+    }
   }
 
   /** Creates a Gmail draft only. Sending stays behind the Mail module's own confirmation. */

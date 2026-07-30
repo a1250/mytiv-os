@@ -50,16 +50,23 @@ export async function createCarousel(
     slideCount?: number;
     tone?: string;
     audience?: string;
-  }
+  },
+  /**
+   * Lets the route hand in a concept it has already run a Claude pass over.
+   * Omitted, the deterministic concept is built here as before.
+   */
+  prebuiltConcept?: ReturnType<typeof buildCarouselConcept>
 ) {
-  const concept = buildCarouselConcept({
-    sourceType: data.sourceType,
-    payload: data.sourcePayload,
-    slideCount: data.slideCount ?? 4,
-    tone: data.tone ?? "editorial",
-    audience: data.audience ?? "",
-    aspect: data.aspectRatio ?? "4:5",
-  });
+  const concept =
+    prebuiltConcept ??
+    buildCarouselConcept({
+      sourceType: data.sourceType,
+      payload: data.sourcePayload,
+      slideCount: data.slideCount ?? 4,
+      tone: data.tone ?? "editorial",
+      audience: data.audience ?? "",
+      aspect: data.aspectRatio ?? "4:5",
+    });
 
   const [project] = await db
     .insert(carouselProjects)

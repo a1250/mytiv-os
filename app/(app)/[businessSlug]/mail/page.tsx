@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useApi, useT } from "@/components/studio-provider";
+import { askClaude } from "@/lib/ai/ask-claude";
+import { buildReplyDraft, type ThreadMessage as ReplySource } from "@/lib/services/email-reply";
+import { useApi, useStudio, useT } from "@/components/studio-provider";
 
 type GoogleStatus = { connected: boolean; email: string; gmail: boolean };
 type Message = {
@@ -19,10 +21,15 @@ type ThreadMessage = { googleMessageId: string; fromEmail: string; fromName: str
 export default function MailPage() {
   const api = useApi();
   const t = useT();
+  const { settings, businessName } = useStudio();
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
   const [messages, setMessages] = useState<Message[] | null>(null);
   const [threadMessages, setThreadMessages] = useState<ThreadMessage[] | null>(null);
   const [error, setError] = useState("");
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const [reply, setReply] = useState<string>("");
+  const [replyBusy, setReplyBusy] = useState(false);
+  const [replyNote, setReplyNote] = useState<string | null>(null);
 
   async function load() {
     const s = (await api.google.status()) as GoogleStatus;
@@ -43,6 +50,64 @@ export default function MailPage() {
   async function openThread(threadId: string) {
     const thread = (await api.gmail.readThread(threadId)) as { messages: ThreadMessage[] };
     setThreadMessages(thread.messages);
+    setOpenThreadId(threadId);
+    setReply("");
+    setReplyNote(null);
+  }
+
+  async function draftReply() {
+    if (!threadMessages) return;
+    setReplyBusy(true);
+    setReplyNote(null);
+
+    const brand = (settings.studio_name as string) || businessName;
+    const subject = messages?.find((m) => m.googleThreadId === openThreadId)?.subject ?? "";
+    const local = buildReplyDraft(subject, threadMessages as ReplySource[], brand);
+    setReply(local.body);
+
+    const recent = threadMessages
+      .slice(-4)
+      .map((m) => `${m.fromEmail}: ${(m.bodyPreview || "").slice(0, 500)}`)
+      .join("\n---\n");
+
+    const refined = await askClaude<string>(api, {
+      json: false,
+      maxTokens: 500,
+      onError: (msg) => setReplyNote(`${t("Written without Claude")}: ${msg}`),
+      prompt: [
+        `Email thread with a potential client (subject: "${subject}"):`,
+        recent,
+        "",
+        `Write our next reply in ${local.language === "he" ? "Hebrew" : "English"}, matching their language.`,
+        `Max 90 words, move toward a concrete next step (short call or scope), sign as ${brand}.`,
+        "Return only the reply text.",
+      ].join("\n"),
+    });
+
+    if (typeof refined === "string" && refined.trim().length > 20) {
+      setReply(refined.trim());
+      setReplyNote(t("Written by Claude — edit before creating the draft."));
+    }
+    setReplyBusy(false);
+  }
+
+  /** Creates a Gmail draft in the same thread. Sending happens in Gmail, never here. */
+  async function createReplyDraft() {
+    const thread = messages?.find((m) => m.googleThreadId === openThreadId);
+    if (!openThreadId || !reply.trim() || !thread) return;
+    setReplyBusy(true);
+    try {
+      await api.gmail.createDraft({
+        to: thread.fromEmail,
+        subject: thread.subject?.startsWith("Re:") ? thread.subject : `Re: ${thread.subject ?? ""}`,
+        body: reply,
+        googleThreadId: openThreadId,
+      });
+      setReplyNote(t("Draft created in Gmail — review and send it from there."));
+    } catch {
+      setReplyNote(t("Could not create the draft in Gmail."));
+    }
+    setReplyBusy(false);
   }
 
   if (!googleStatus) return <div className="page">{t("Loading…")}</div>;
@@ -88,6 +153,29 @@ export default function MailPage() {
                 <div style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>{tm.bodyPreview}</div>
               </div>
             ))}
+
+            <div className="settings-form" style={{ marginTop: 12 }}>
+              <div className="settings-field">
+                <label>{t("Reply")}</label>
+                <textarea
+                  className="editor-textarea"
+                  rows={7}
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  placeholder={t("Draft a reply, or let Claude write one…")}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="secondary" onClick={draftReply} disabled={replyBusy}>
+                  {replyBusy ? t("Working…") : t("Draft reply")}
+                </button>
+                <button onClick={createReplyDraft} disabled={replyBusy || !reply.trim()}>
+                  {t("Create Gmail draft")}
+                </button>
+              </div>
+              <p className="empty">{t("Creates a draft only — nothing is sent from here.")}</p>
+              {replyNote && <span className="empty">{replyNote}</span>}
+            </div>
           </div>
         )}
       </div>

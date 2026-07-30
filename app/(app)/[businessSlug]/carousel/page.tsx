@@ -14,6 +14,7 @@ export default function CarouselListPage() {
   const [title, setTitle] = useState("");
   const [mainIdea, setMainIdea] = useState("");
   const [creating, setCreating] = useState(false);
+  const [aiNote, setAiNote] = useState<{ message: string; projectId: string } | null>(null);
 
   async function load() {
     setCarousels((await api.carousel.list()) as CarouselSummary[]);
@@ -34,9 +35,15 @@ export default function CarouselListPage() {
         sourcePayload: { title, main_idea: mainIdea },
         slideCount: 4,
         tone: "editorial",
-      })) as { project: { id: string } };
+      })) as { project: { id: string }; aiError?: string | null };
       setTitle("");
       setMainIdea("");
+      if (result.aiError) {
+        // Navigating away here would swallow the message — let the user read
+        // why the copy is the deterministic version, then click through.
+        setAiNote({ message: result.aiError, projectId: result.project.id });
+        return;
+      }
       window.location.href = `/${businessSlug}/carousel/${result.project.id}`;
     } finally {
       setCreating(false);
@@ -61,6 +68,12 @@ export default function CarouselListPage() {
         <button type="submit" disabled={creating}>
           {creating ? t("Generating…") : t("Create carousel")}
         </button>
+        {aiNote && (
+          <p className="empty">
+            {t("Copy written without Claude")}: {aiNote.message}{" "}
+            <Link href={`/${businessSlug}/carousel/${aiNote.projectId}`}>{t("Open carousel →")}</Link>
+          </p>
+        )}
       </form>
 
       <div className="lead-list">
