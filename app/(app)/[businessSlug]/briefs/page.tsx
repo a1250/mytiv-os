@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApi, useT } from "@/components/studio-provider";
 import { analyzeBriefHeuristic } from "@/lib/services/briefAnalyzer";
+import { askClaude } from "@/lib/ai/ask-claude";
 
 type BriefSummary = { id: string; title: string; clientName: string | null; status: string };
 type Analysis = {
@@ -11,6 +12,7 @@ type Analysis = {
   deliverables: string[];
   risks: { risk: string; severity: string }[];
   replies: { en_email: string; he_email: string };
+  source?: string;
 };
 
 export default function BriefAnalyzerPage() {
@@ -21,6 +23,7 @@ export default function BriefAnalyzerPage() {
   const [clientName, setClientName] = useState("");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [aiNote, setAiNote] = useState<string | null>(null);
 
   async function load() {
     setBriefs((await api.briefs.list()) as BriefSummary[]);
@@ -34,8 +37,47 @@ export default function BriefAnalyzerPage() {
     e.preventDefault();
     if (!rawText.trim()) return;
     setAnalyzing(true);
+    setAiNote(null);
     try {
-      const result = analyzeBriefHeuristic({ rawText, clientName }) as Analysis;
+      // Heuristic structure is the source of truth; Claude only sharpens the
+      // summary and the suggested replies, and only where it returns usable text.
+      const local = analyzeBriefHeuristic({ rawText, clientName }) as Analysis;
+
+      const ai = await askClaude<{ summary?: string[] | string; replies?: Record<string, string> }>(api, {
+        maxTokens: 1600,
+        onError: (msg) => setAiNote(`${t("Analyzed without Claude")}: ${msg}`),
+        prompt: [
+          "A client sent this (possibly messy) brief:",
+          "---",
+          rawText.slice(0, 4000),
+          "---",
+          "Improve these parts of our analysis. Return JSON only:",
+          '{"summary": ["3-5 sharp sentences: what they want, budget/deadline signals, what kind of client this is"],',
+          ' "replies": {"en_email": "improved English reply", "he_email": "improved Hebrew reply"}}',
+        ].join("\n"),
+      });
+
+      const result: Analysis = { ...local, source: "local" };
+      if (ai) {
+        const summary = Array.isArray(ai.summary)
+          ? ai.summary.filter((x): x is string => typeof x === "string")
+          : typeof ai.summary === "string"
+            ? [ai.summary]
+            : [];
+        if (summary.length > 0) {
+          result.summary = summary;
+          result.source = "claude";
+        }
+        // Replace a reply only when Claude actually returned usable text —
+        // a short or missing value must not blank out the heuristic one.
+        for (const key of ["en_email", "he_email"] as const) {
+          const value = ai.replies?.[key];
+          if (typeof value === "string" && value.trim().length > 20) {
+            result.replies = { ...result.replies, [key]: value };
+            result.source = "claude";
+          }
+        }
+      }
       setAnalysis(result);
       await api.briefs.create({
         title: clientName ? `Brief — ${clientName}` : "New brief",
@@ -70,6 +112,8 @@ export default function BriefAnalyzerPage() {
         <button type="submit" disabled={analyzing}>
           {analyzing ? t("Analyzing…") : t("Analyze")}
         </button>
+        {analysis?.source === "claude" && <span className="pill">Claude</span>}
+        {aiNote && <span className="empty">{aiNote}</span>}
       </form>
 
       {analysis && (

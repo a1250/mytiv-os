@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useApi, useT } from "@/components/studio-provider";
 import { PROFILES, FIELD_GROUPS, OUTPUT_TYPES, buildPromptPackage, qualityChecklist } from "@/lib/services/promptEngine";
+import { askClaude } from "@/lib/ai/ask-claude";
 
 type Section = { id: string; label: string; text: string };
 type Check = { ok: boolean; text: string };
@@ -16,14 +17,51 @@ export default function PromptBuilderPage() {
   const [output, setOutput] = useState<Section[] | null>(null);
   const [checks, setChecks] = useState<Check[] | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [refining, setRefining] = useState(false);
+  const [aiNote, setAiNote] = useState<string | null>(null);
 
   function setField(id: string, value: string) {
     setFields((f) => ({ ...f, [id]: value }));
   }
 
-  function handleGenerate() {
-    setOutput(buildPromptPackage(toolId, fields, outputType));
+  async function handleGenerate() {
+    setRefining(true);
+    setAiNote(null);
+
+    // The local package encodes each tool's exact syntax rules — Claude may
+    // only rewrite the prose of the main prompt, never the structure around it.
+    const local = buildPromptPackage(toolId, fields, outputType) as Section[];
     setChecks(qualityChecklist(toolId, fields, outputType));
+
+    const main = local.find((s) => s.id === "prompt");
+    if (!main) {
+      setOutput(local);
+      setRefining(false);
+      return;
+    }
+
+    const refined = await askClaude<string>(api, {
+      json: false,
+      maxTokens: 900,
+      onError: (msg) => setAiNote(`${t("Built without Claude")}: ${msg}`),
+      prompt: [
+        `This is a generation prompt for the tool "${toolId}" (${outputType}). It was built with that tool's exact syntax rules.`,
+        "---",
+        main.text,
+        "---",
+        "Rewrite it to be more vivid and specific FOR THIS SAME TOOL. Hard rules:",
+        "- Preserve every parameter flag, syntax token, ordering convention and structural element exactly as-is.",
+        "- Do not add parameters the tool does not support. Do not convert to another tool's style.",
+        "- Keep roughly the same length. Return only the rewritten prompt text.",
+      ].join("\n"),
+    });
+
+    setOutput(
+      typeof refined === "string" && refined.trim().length > 30
+        ? local.map((s) => (s.id === "prompt" ? { ...s, text: refined.trim(), label: `${s.label} · Claude` } : s))
+        : local
+    );
+    setRefining(false);
   }
 
   async function handleSave() {
@@ -85,7 +123,10 @@ export default function PromptBuilderPage() {
               </div>
             </div>
           ))}
-          <button onClick={handleGenerate}>{t("Generate")}</button>
+          <button onClick={handleGenerate} disabled={refining}>
+            {refining ? t("Generating…") : t("Generate")}
+          </button>
+          {aiNote && <span className="empty">{aiNote}</span>}
         </div>
 
         <div style={{ flex: 1 }}>

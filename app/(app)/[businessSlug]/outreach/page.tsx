@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApi, useStudio, useT } from "@/components/studio-provider";
 import { generateDraft } from "@/lib/services/outreachGenerator";
+import { askClaude } from "@/lib/ai/ask-claude";
 
 type Lead = { id: string; company: string; contactName: string | null; opportunityType: string | null; category: string | null; status: string };
 type OutreachMsg = { id: string; leadId: string; kind: string; subject: string | null; body: string; status: string };
@@ -12,12 +13,14 @@ const KINDS = ["cold_email_en", "cold_email_he", "linkedin", "followup", "premiu
 export default function OutreachPage() {
   const api = useApi();
   const t = useT();
-  const { settings } = useStudio();
+  const { settings, businessName } = useStudio();
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [messages, setMessages] = useState<OutreachMsg[] | null>(null);
   const [leadId, setLeadId] = useState("");
   const [kind, setKind] = useState("cold_email_en");
-  const [draft, setDraft] = useState<{ subject: string; body: string; language: string } | null>(null);
+  const [draft, setDraft] = useState<{ subject: string; body: string; language: string; source?: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [aiNote, setAiNote] = useState<string | null>(null);
 
   async function load() {
     const [leadRows, msgRows] = await Promise.all([api.leads.list(), api.outreach.list()]);
@@ -29,11 +32,35 @@ export default function OutreachPage() {
     load();
   }, []);
 
-  function handleGenerate() {
+  async function handleGenerate() {
     const lead = leads?.find((l) => l.id === leadId);
     if (!lead) return;
-    const result = generateDraft(kind, lead, { studioName: settings.studio_name, ownerName: settings.owner_name });
-    setDraft(result);
+    setBusy(true);
+    setAiNote(null);
+
+    // Deterministic draft first — it is what ships if the AI pass doesn't run.
+    const local = generateDraft(kind, lead, { studioName: settings.studio_name, ownerName: settings.owner_name });
+    const brand = (settings.studio_name as string) || businessName;
+    const owner = (settings.owner_name as string) || "the founder";
+
+    const ai = await askClaude<{ subject: string; body: string }>(api, {
+      maxTokens: 900,
+      onError: (msg) => setAiNote(`${t("Written without Claude")}: ${msg}`),
+      prompt: [
+        `Write a cold outreach ${kind.includes("linkedin") ? "LinkedIn message" : "email"} from ${owner} of ${brand} to this lead.`,
+        `Language: ${kind.includes("_he") ? "Hebrew" : "English"}.`,
+        `Lead: ${JSON.stringify({ company: lead.company, category: lead.category, contact: lead.contactName, opportunity: lead.opportunityType })}`,
+        `Requirements: max 120 words body, one concrete idea specific to this company, one clear low-pressure call to action, sign as ${owner} · ${brand}.`,
+        'Return JSON: {"subject": "...", "body": "..."}',
+      ].join("\n"),
+    });
+
+    setDraft(
+      ai && typeof ai.subject === "string" && typeof ai.body === "string"
+        ? { ...local, subject: ai.subject, body: ai.body, source: "claude" }
+        : { ...local, source: "local" }
+    );
+    setBusy(false);
   }
 
   async function handleSave() {
@@ -65,9 +92,11 @@ export default function OutreachPage() {
             </option>
           ))}
         </select>
-        <button onClick={handleGenerate} disabled={!leadId}>
-          {t("Generate draft")}
+        <button onClick={handleGenerate} disabled={!leadId || busy}>
+          {busy ? t("Generating…") : t("Generate draft")}
         </button>
+        {draft?.source === "claude" && <span className="pill">Claude</span>}
+        {aiNote && <span className="empty">{aiNote}</span>}
       </div>
 
       {draft && (

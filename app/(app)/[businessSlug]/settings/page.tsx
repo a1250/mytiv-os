@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useApi, useStudio, useT } from "@/components/studio-provider";
+import { resetAiStatusCache } from "@/lib/ai/ask-claude";
 
 type GoogleStatus = { configured: boolean; connected: boolean; email: string; gmail: boolean; calendar: boolean };
 
@@ -74,6 +75,7 @@ export default function SettingsPage() {
     setAiMessage(null);
     try {
       await api.ai.setKey(aiKeyInput.trim());
+      resetAiStatusCache(); // other pages cache the status for a minute
       setAiKeyInput("");
       setAiStatus((await api.ai.status()) as { configured: boolean });
       setAiMessage(t("Key saved. Run a test to confirm it works."));
@@ -94,6 +96,7 @@ export default function SettingsPage() {
   async function handleAiClear() {
     setAiBusy(true);
     await api.ai.clearKey();
+    resetAiStatusCache();
     setAiStatus((await api.ai.status()) as { configured: boolean });
     setAiMessage(t("Key removed."));
     setAiBusy(false);
