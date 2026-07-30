@@ -11,11 +11,19 @@
  */
 const IMMUTABLE_COLUMNS = ["id", "businessId", "createdAt", "updatedAt"] as const;
 
-export function sanitizePatch<T extends Record<string, unknown>>(patch: T): Record<string, unknown> {
+/**
+ * Declared as T -> T rather than T -> Omit<T, immutable>: callers type their
+ * payloads as `{ title: string } & Record<string, unknown>`, and Omit over a
+ * type carrying a string index signature collapses the literal keys, so Drizzle
+ * would stop seeing that required columns like `title` were supplied. The
+ * removal is real at runtime; the type just doesn't narrow. Insert callers put
+ * `businessId` after the spread, so the guarded value wins either way.
+ */
+export function sanitizePatch<T extends Record<string, unknown>>(patch: T): T {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) {
     if ((IMMUTABLE_COLUMNS as readonly string[]).includes(key)) continue;
     out[key] = value;
   }
-  return out;
+  return out as T;
 }

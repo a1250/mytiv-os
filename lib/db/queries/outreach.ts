@@ -13,7 +13,7 @@ export async function createOutreach(
   businessId: string,
   data: { leadId: string; kind: string; language?: string; tone?: string; subject?: string; body: string }
 ) {
-  const [msg] = await db.insert(outreachMessages).values({ businessId, ...data, status: "draft" }).returning();
+  const [msg] = await db.insert(outreachMessages).values({ ...sanitizePatch(data), businessId, status: "draft" }).returning();
   return msg;
 }
 

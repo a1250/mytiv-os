@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../index";
 import { newsItems } from "../schema";
+import { sanitizePatch } from "./_patch";
 import { DEFAULT_FEEDS, WHY_BY_CATEGORY, ACTION_BY_CATEGORY, fetchUrl, parseFeed, categorize, score, extractTags } from "../../services/rss";
 
 export async function listNews(businessId: string) {
@@ -8,7 +9,7 @@ export async function listNews(businessId: string) {
 }
 
 export async function createNews(businessId: string, data: { title: string } & Record<string, unknown>) {
-  const [item] = await db.insert(newsItems).values({ businessId, ...data }).returning();
+  const [item] = await db.insert(newsItems).values({ ...sanitizePatch(data), businessId }).returning();
   return item;
 }
 

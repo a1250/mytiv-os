@@ -12,6 +12,15 @@ export async function listProposals(businessId: string) {
   return db.select().from(proposals).where(eq(proposals.businessId, businessId)).orderBy(desc(proposals.updatedAt));
 }
 
+/** Proposals attached to one lead — powers the Proposals block on the lead page. */
+export async function listProposalsByLead(businessId: string, leadId: string) {
+  return db
+    .select()
+    .from(proposals)
+    .where(and(eq(proposals.businessId, businessId), eq(proposals.leadId, leadId)))
+    .orderBy(desc(proposals.updatedAt));
+}
+
 export async function getProposal(businessId: string, id: string) {
   const [row] = await db
     .select()
@@ -22,7 +31,7 @@ export async function getProposal(businessId: string, id: string) {
 }
 
 export async function createProposal(businessId: string, data: { title: string; [key: string]: unknown }) {
-  const [row] = await db.insert(proposals).values({ businessId, ...data } as typeof proposals.$inferInsert).returning();
+  const [row] = await db.insert(proposals).values({ ...sanitizePatch(data), businessId } as typeof proposals.$inferInsert).returning();
   return row;
 }
 

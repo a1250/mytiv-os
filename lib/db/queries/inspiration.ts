@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../index";
 import { inspirationItems, moodboards, moodboardItems } from "../schema";
+import { sanitizePatch } from "./_patch";
 import { deleteAsset } from "../../blob";
 
 export async function listInspiration(businessId: string) {
@@ -11,7 +12,7 @@ export async function createInspiration(
   businessId: string,
   data: { title: string; url?: string; imageUrl?: string; category?: string; tags?: string; notes?: string; whySaved?: string; source?: string }
 ) {
-  const [item] = await db.insert(inspirationItems).values({ businessId, ...data }).returning();
+  const [item] = await db.insert(inspirationItems).values({ ...sanitizePatch(data), businessId }).returning();
   return item;
 }
 

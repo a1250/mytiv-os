@@ -19,7 +19,7 @@ export async function getLead(businessId: string, id: string) {
 }
 
 export async function createLead(businessId: string, data: { company: string; [key: string]: unknown }) {
-  const [lead] = await db.insert(leads).values({ businessId, ...data } as typeof leads.$inferInsert).returning();
+  const [lead] = await db.insert(leads).values({ ...sanitizePatch(data), businessId } as typeof leads.$inferInsert).returning();
   return lead;
 }
 

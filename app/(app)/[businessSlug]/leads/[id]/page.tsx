@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
-import { useApi, useT } from "@/components/studio-provider";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useApi, useStudio, useT } from "@/components/studio-provider";
 
 type Lead = {
   id: string;
@@ -14,7 +15,10 @@ type Lead = {
   phone: string | null;
   notes: string | null;
   opportunityType: string | null;
+  contactName: string | null;
 };
+
+type LinkedProposal = { id: string; title: string; status: string; updatedAt: string };
 
 type Note = { id: string; body: string; createdAt: string };
 
@@ -49,10 +53,13 @@ export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApi();
   const t = useT();
+  const router = useRouter();
+  const { businessSlug } = useStudio();
   const [lead, setLead] = useState<Lead | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteBody, setNoteBody] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [proposals, setProposals] = useState<LinkedProposal[]>([]);
   const [job, setJob] = useState<ContactJob | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -60,6 +67,7 @@ export default function LeadDetailPage() {
     setLead((await api.leads.get(id)) as Lead);
     setNotes((await api.leads.listNotes(id)) as Note[]);
     setContacts((await api.contacts.listByLead(id)) as Contact[]);
+    setProposals((await api.proposals.listByLead(id)) as LinkedProposal[]);
   }
 
   useEffect(() => {
@@ -105,6 +113,20 @@ export default function LeadDetailPage() {
     await load();
   }
 
+  /** Seeds the proposal from what the lead already knows, then opens the editor. */
+  async function handleCreateProposal() {
+    if (!lead) return;
+    const created = (await api.proposals.create({
+      title: `${t("Proposal")} — ${lead.company}`,
+      leadId: lead.id,
+      clientCompany: lead.company,
+      clientName: lead.contactName || "",
+      clientEmail: lead.email || "",
+      date: new Date().toISOString().slice(0, 10),
+    })) as { id: string };
+    router.push(`/${businessSlug}/proposals/${created.id}`);
+  }
+
   if (!lead) return <div className="page">{t("Loading…")}</div>;
 
   return (
@@ -132,6 +154,21 @@ export default function LeadDetailPage() {
             <span className="task-title">{note.body}</span>
             <span className="task-due">{new Date(note.createdAt).toLocaleDateString()}</span>
           </div>
+        ))}
+      </div>
+
+      <h2 style={{ marginTop: 24, fontSize: 15 }}>{t("Proposals")}</h2>
+      <button onClick={handleCreateProposal} style={{ marginBottom: 12 }}>
+        {t("Create proposal for this lead")}
+      </button>
+      <div className="lead-list">
+        {proposals.length === 0 && <p className="empty">{t("No proposals for this lead yet.")}</p>}
+        {proposals.map((p) => (
+          <Link key={p.id} href={`/${businessSlug}/proposals/${p.id}`} className="lead-row">
+            <span className="lead-company">{p.title}</span>
+            <span className="lead-meta">{new Date(p.updatedAt).toLocaleDateString()}</span>
+            <span className="pill">{p.status}</span>
+          </Link>
         ))}
       </div>
 

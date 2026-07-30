@@ -101,6 +101,7 @@ export function createApiClient(businessSlug: string) {
     },
     proposals: {
       list: () => get(`${base}/proposals`),
+      listByLead: (leadId: string) => get(`${base}/proposals?leadId=${encodeURIComponent(leadId)}`),
       get: (id: string) => get(`${base}/proposals/${id}`),
       create: (data: unknown) => post(`${base}/proposals`, data),
       update: (id: string, data: unknown) => patch(`${base}/proposals/${id}`, data),

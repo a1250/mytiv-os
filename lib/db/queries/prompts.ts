@@ -26,7 +26,7 @@ export async function createSavedPrompt(
   businessId: string,
   data: { title: string; tool?: string; fields?: unknown; output?: unknown; tags?: string; favorite?: boolean }
 ) {
-  const [row] = await db.insert(savedPrompts).values({ businessId, ...data } as typeof savedPrompts.$inferInsert).returning();
+  const [row] = await db.insert(savedPrompts).values({ ...sanitizePatch(data), businessId } as typeof savedPrompts.$inferInsert).returning();
   return row;
 }
 

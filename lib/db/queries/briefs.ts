@@ -21,7 +21,7 @@ export async function createBrief(
 ) {
   const [brief] = await db
     .insert(clientBriefs)
-    .values({ businessId, ...data, status: "analyzed" })
+    .values({ ...sanitizePatch(data), businessId, status: "analyzed" })
     .returning();
   await db.insert(briefAnalysisResults).values({ businessId, briefId: brief.id, payload: data.analysis });
   return brief;

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useApi, useT } from "@/components/studio-provider";
+import Link from "next/link";
+import { useApi, useStudio, useT } from "@/components/studio-provider";
 import { computeTotals } from "@/lib/pdf-helpers";
 import {
   SERVICE_TEMPLATES,
@@ -11,9 +12,12 @@ import {
   type ServiceItem,
 } from "@/lib/service-templates";
 
+type Lead = { id: string; company: string; contactName: string | null; email: string | null };
+
 type Proposal = {
   id: string;
   title: string;
+  leadId: string | null;
   clientName: string | null;
   clientCompany: string | null;
   clientEmail: string | null;
@@ -40,8 +44,10 @@ export default function ProposalEditorPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApi();
   const t = useT();
+  const { businessSlug } = useStudio();
 
   const [draft, setDraft] = useState<Proposal | null>(null);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -51,6 +57,7 @@ export default function ProposalEditorPage() {
       setDraft({ ...row, services: row.services ?? [] });
       setDirty(false);
     })();
+    (async () => setLeads((await api.leads.list()) as Lead[]))();
   }, [id]);
 
   function patch(p: Partial<Proposal>) {
@@ -59,6 +66,18 @@ export default function ProposalEditorPage() {
   }
 
   const services = draft?.services ?? [];
+
+  /** Linking a lead fills in blank client fields from it, but never overwrites what's already typed. */
+  function linkLead(leadId: string) {
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead) return patch({ leadId: null });
+    patch({
+      leadId,
+      clientCompany: draft?.clientCompany || lead.company,
+      clientName: draft?.clientName || lead.contactName || "",
+      clientEmail: draft?.clientEmail || lead.email || "",
+    });
+  }
 
   function patchService(serviceId: string, p: Partial<ServiceItem>) {
     patch({ services: services.map((s) => (s.id === serviceId ? { ...s, ...p } : s)) });
@@ -87,6 +106,7 @@ export default function ProposalEditorPage() {
     // (businessId, timestamps and all), and echoing that back as a patch is
     // how tenant-identity columns end up in an UPDATE.
     await api.proposals.update(id, {
+      leadId: draft.leadId,
       clientName: draft.clientName,
       clientCompany: draft.clientCompany,
       clientEmail: draft.clientEmail,
@@ -138,6 +158,25 @@ export default function ProposalEditorPage() {
       {/* ---- Client ---- */}
       <h2 className="section-head">{t("Client")}</h2>
       <div className="field-grid">
+        <div className="settings-field">
+          <label>
+            {t("Linked lead")}
+            {draft.leadId && (
+              <>
+                {" · "}
+                <Link href={`/${businessSlug}/leads/${draft.leadId}`}>{t("open lead")}</Link>
+              </>
+            )}
+          </label>
+          <select value={draft.leadId ?? ""} onChange={(e) => linkLead(e.target.value)}>
+            <option value="">{t("— none —")}</option>
+            {leads.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.company}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="settings-field">
           <label>{t("Client name")}</label>
           <input value={draft.clientName ?? ""} onChange={(e) => patch({ clientName: e.target.value })} />
