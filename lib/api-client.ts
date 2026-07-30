@@ -151,6 +151,9 @@ export function createApiClient(businessSlug: string) {
       get: (id: string) => get(`${base}/reviews/${id}`),
       create: (data: unknown) => post(`${base}/reviews`, data),
       remove: (id: string) => del(`${base}/reviews/${id}`),
+      /** Builds a review from the week's data without saving it. */
+      generate: (params: { range?: "this" | "last"; start?: string; end?: string }) =>
+        post(`${base}/reviews/generate`, params),
     },
     reports: {
       list: () => get(`${base}/reports`),

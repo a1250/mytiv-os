@@ -157,3 +157,16 @@ body {
 }
 .totals-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; color: var(--text-dim); }
 .totals-row.grand { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 10px; font-size: 15px; font-weight: 700; color: var(--text); }
+
+/* ---- Weekly Review ---- */
+.review-section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 12px; }
+.review-section h2 { display: flex; align-items: center; gap: 10px; font-size: 14px; margin-bottom: 10px; }
+.review-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 6px;
+  background: var(--accent); color: #fff; font-size: 12px; font-weight: 700;
+}
+.review-section h3 { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 6px; }
+.review-list { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 4px; }
+.review-list li { font-size: 13px; line-height: 1.5; }
+.review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
