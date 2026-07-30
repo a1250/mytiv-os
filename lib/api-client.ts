@@ -201,12 +201,17 @@ export function createApiClient(businessSlug: string) {
       // export is now client-side (JSZip) — no server round-trip needed, see Phase 3
     },
     visual: {
-      status: () => get(`${base}/visual/status`),
-      generateSlide: (data: unknown) => post(`${base}/visual/generate`, data),
-      generateBatch: (carouselId: string) => post(`${base}/visual/generate-batch`, { carouselId }),
-      checkPath: (path: string) => post(`${base}/visual/check-path`, { path }),
-      discoverModels: () => get(`${base}/visual/models`),
+      status: () => get(`${base}/visual/check`),
+      /** Validates a model path without generating — costs no credits. */
+      checkPath: (modelPath?: string) => post(`${base}/visual/check`, { modelPath }),
+      setKey: (apiKey: string) => put(`${base}/visual/key`, { apiKey }),
+      clearKey: () => del(`${base}/visual/key`),
+      /** Pass { requestId } to resume a generation whose earlier poll timed out. */
+      generateSlide: (slideId: string, data?: unknown) =>
+        post(`${base}/carousel/slides/${slideId}/generate-image`, data),
       // saveManualUpload/importBatch/readImage -> <input type="file"> + Blob URL fetch (Phase 3)
+      // generateBatch / discoverModels: not ported — batch generation multiplies
+      // credit spend per click, and model discovery probed ~40 paths per run.
     },
     google: {
       connect: () => { window.location.href = `${base}/google/oauth/start`; },

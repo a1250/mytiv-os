@@ -31,6 +31,9 @@ export default function CarouselEditorPage() {
   }, [params.id]);
 
   const activeSlide = slides?.[activeIdx];
+  const [generating, setGenerating] = useState(false);
+  const [imageNote, setImageNote] = useState<string | null>(null);
+  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeSlide || !project || !canvasRef.current) return;
@@ -88,6 +91,34 @@ export default function CarouselEditorPage() {
     }
   }
 
+  async function handleGenerateImage() {
+    if (!activeSlide) return;
+    setGenerating(true);
+    setImageNote(null);
+    try {
+      // pendingRequestId resumes a generation whose earlier poll ran out of
+      // time — re-submitting instead would spend a second set of credits.
+      const res = (await api.visual.generateSlide(
+        activeSlide.id,
+        pendingRequestId ? { requestId: pendingRequestId } : {}
+      )) as { ok: boolean; url?: string; error?: string; pending?: boolean; requestId?: string };
+
+      if (res.ok && res.url) {
+        setPendingRequestId(null);
+        setSlides((prev) => prev?.map((s) => (s.id === activeSlide.id ? { ...s, generatedImageUrl: res.url! } : s)) ?? prev);
+        setImageNote(null);
+      } else if (res.pending && res.requestId) {
+        setPendingRequestId(res.requestId);
+        setImageNote(`${res.error} ${t("Press again to check.")}`);
+      } else {
+        setImageNote(res.error ?? t("Generation failed."));
+      }
+    } catch (err) {
+      setImageNote(err instanceof Error ? err.message : t("Generation failed."));
+    }
+    setGenerating(false);
+  }
+
   if (!project || !slides || !activeSlide) return <div className="page">{t("Loading…")}</div>;
 
   return (
@@ -104,7 +135,11 @@ export default function CarouselEditorPage() {
               </button>
             ))}
           </div>
-          <button onClick={handleExportZip} disabled={exporting} style={{ marginTop: 14, width: "100%" }}>
+          <button onClick={handleGenerateImage} disabled={generating} className="secondary" style={{ marginTop: 14, width: "100%" }}>
+            {generating ? t("Generating…") : t("Generate background")}
+          </button>
+          {imageNote && <p className="empty">{imageNote}</p>}
+          <button onClick={handleExportZip} disabled={exporting} style={{ marginTop: 8, width: "100%" }}>
             {exporting ? t("Exporting…") : t("Export ZIP")}
           </button>
         </div>

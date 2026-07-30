@@ -102,6 +102,59 @@ export default function SettingsPage() {
     setAiBusy(false);
   }
 
+  const [visualStatus, setVisualStatus] = useState<{ configured: boolean; model: string; cliGapNote: string } | null>(null);
+  const [visualKeyInput, setVisualKeyInput] = useState("");
+  const [visualModel, setVisualModel] = useState("");
+  const [visualBusy, setVisualBusy] = useState(false);
+  const [visualMessage, setVisualMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const st = (await api.visual.status()) as { configured: boolean; model: string; cliGapNote: string };
+      setVisualStatus(st);
+      setVisualModel(st.model);
+    })();
+  }, []);
+
+  async function handleVisualSave() {
+    setVisualBusy(true);
+    setVisualMessage(null);
+    try {
+      await api.visual.setKey(visualKeyInput.trim());
+      setVisualKeyInput("");
+      setVisualStatus((await api.visual.status()) as typeof visualStatus);
+      setVisualMessage(t("Key saved."));
+    } catch (err) {
+      setVisualMessage(err instanceof Error ? err.message : t("Could not save the key."));
+    }
+    setVisualBusy(false);
+  }
+
+  async function handleVisualCheck() {
+    setVisualBusy(true);
+    setVisualMessage(null);
+    await setSetting("higgsfield_model", visualModel.trim());
+    const res = (await api.visual.checkPath(visualModel.trim())) as { ok: boolean; error?: string };
+    setVisualMessage(
+      res.ok
+        ? t("Model path is valid.")
+        : res.error === "not_found"
+          ? t("That model path does not exist on Higgsfield.")
+          : res.error === "auth"
+            ? t("Higgsfield rejected the key.")
+            : `${t("Check failed")}: ${res.error ?? ""}`
+    );
+    setVisualBusy(false);
+  }
+
+  async function handleVisualClear() {
+    setVisualBusy(true);
+    await api.visual.clearKey();
+    setVisualStatus((await api.visual.status()) as typeof visualStatus);
+    setVisualMessage(t("Key removed."));
+    setVisualBusy(false);
+  }
+
   return (
     <div className="page">
       <h1>{t("Settings")}</h1>
@@ -169,6 +222,53 @@ export default function SettingsPage() {
           </>
         )}
         {aiMessage && <span className="empty">{aiMessage}</span>}
+      </div>
+
+      <h2 style={{ fontSize: 15, margin: "28px 0 12px" }}>{t("Visual generation")}</h2>
+      <p className="empty">
+        {t("Generates slide backgrounds in Carousel Studio through Higgsfield. Each generation spends credits on your Higgsfield account.")}
+      </p>
+      {visualStatus?.cliGapNote && (
+        <p className="empty" style={{ color: "var(--text-dim)", maxWidth: 620 }}>
+          ⚠︎ {visualStatus.cliGapNote}
+        </p>
+      )}
+      <div className="settings-form">
+        {visualStatus?.configured ? (
+          <>
+            <p className="empty" style={{ color: "#5bc98c" }}>{t("A Higgsfield key is stored for this business.")}</p>
+            <div className="settings-field">
+              <label>{t("Model path")}</label>
+              <input value={visualModel} onChange={(e) => setVisualModel(e.target.value)} placeholder="higgsfield-ai/soul/standard" />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="secondary" onClick={handleVisualCheck} disabled={visualBusy}>
+                {visualBusy ? t("Checking…") : t("Save & check path")}
+              </button>
+              <button className="secondary" onClick={handleVisualClear} disabled={visualBusy}>
+                {t("Remove key")}
+              </button>
+            </div>
+            <p className="empty">{t("Checking a path validates it without generating — no credits are spent.")}</p>
+          </>
+        ) : (
+          <>
+            <div className="settings-field">
+              <label>{t("Higgsfield API key")}</label>
+              <input
+                type="password"
+                autoComplete="off"
+                placeholder="KEY_ID:KEY_SECRET"
+                value={visualKeyInput}
+                onChange={(e) => setVisualKeyInput(e.target.value)}
+              />
+            </div>
+            <button onClick={handleVisualSave} disabled={visualBusy || !visualKeyInput.trim()}>
+              {visualBusy ? t("Saving…") : t("Save key")}
+            </button>
+          </>
+        )}
+        {visualMessage && <span className="empty">{visualMessage}</span>}
       </div>
 
       <h2 style={{ fontSize: 15, margin: "28px 0 12px" }}>{t("Google Account")}</h2>
