@@ -16,6 +16,7 @@ import {
   classifyList,
   type BlockedOn,
   type ClientFolder,
+  type ListKind,
 } from "./ops-config";
 
 const API = "https://api.clickup.com/api/v2";
@@ -60,6 +61,8 @@ export type OpsTask = {
   clientLabel: string;
   listId: string;
   listName: string;
+  /** What the list means: work, a production bug, a decision, or unrecognised. */
+  listKind: ListKind;
   /** YYYY-MM-DD, or null when nobody committed to a date. */
   dueDate: string | null;
   overdue: boolean;
@@ -216,6 +219,7 @@ function normalise(raw: RawTask, folder: ClientFolder, now: number): OpsTask {
     clientLabel: folder.label,
     listId: raw.list?.id ?? "",
     listName,
+    listKind: kind,
     dueDate,
     overdue: Boolean(dueDate && dueDate < today),
     updatedAt: updatedMs ? new Date(updatedMs).toISOString() : "",
@@ -294,6 +298,40 @@ export function statsFor(open: OpsTask[], thresholdDays: number): OpsStats {
 
 export async function getTask(taskId: string): Promise<RawTask> {
   return get<RawTask>(`/task/${taskId}`);
+}
+
+export type FolderList = { id: string; name: string; kind: ListKind; statuses: string[] };
+
+/**
+ * The lists inside a client folder, with the statuses each one allows.
+ * One request per folder — the Tasks tab needs the status vocabulary before it
+ * can offer a dropdown, and ClickUp defines statuses per list, not globally.
+ */
+export async function getFolderLists(folder: ClientFolder): Promise<FolderList[]> {
+  const data = await get<{
+    lists?: { id: string; name: string; statuses?: { status?: string }[] }[];
+  }>(`/folder/${folder.clickupFolderId}/list`, new URLSearchParams({ archived: "false" }));
+
+  return (data.lists ?? []).map((l) => ({
+    id: l.id,
+    name: l.name,
+    kind: classifyList(l.name),
+    statuses: (l.statuses ?? []).map((s) => s.status ?? "").filter(Boolean),
+  }));
+}
+
+export type WorkspaceMember = { id: number; name: string };
+
+/** Assignee options for the Tasks tab. Cached like every other read. */
+export async function getWorkspaceMembers(): Promise<WorkspaceMember[]> {
+  const data = await get<{
+    teams?: { id: string; members?: { user?: { id: number; username?: string; email?: string } }[] }[];
+  }>("/team");
+  const team = data.teams?.find((t) => t.id === workspaceId()) ?? data.teams?.[0];
+  return (team?.members ?? [])
+    .map((m) => m.user)
+    .filter((u): u is { id: number; username?: string; email?: string } => Boolean(u?.id))
+    .map((u) => ({ id: u.id, name: u.username ?? u.email ?? String(u.id) }));
 }
 
 export async function getWorkspaceHierarchy() {

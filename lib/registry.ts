@@ -10,7 +10,10 @@ export type NavSection = { label: string; items: NavItem[] };
 export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Ops",
-    items: [{ id: "ops", label: "Ops Home", path: "ops", icon: "activity" }],
+    items: [
+      { id: "ops", label: "Ops Home", path: "ops", icon: "activity" },
+      { id: "projects", label: "Projects", path: "ops/projects", icon: "folder" },
+    ],
   },
   {
     label: "Studio",
@@ -47,4 +50,5 @@ export const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-export const FUTURE_MODULES: NavItem[] = [{ id: "projects", label: "Project Hub", path: "coming/projects", icon: "folder" }];
+/** Project Hub graduated out of here in Phase 1 — it is the Ops › Projects entry above. */
+export const FUTURE_MODULES: NavItem[] = [];

@@ -73,6 +73,34 @@ export function clientFoldersFor(businessSlug: string): ClientFolder[] {
 }
 
 /**
+ * A project row seen as a ClickUp folder. This is the Phase 1 handover: once a
+ * business has projects carrying a clickupFolderId, the hardcoded map above
+ * stops being consulted. `key` is the project id so every Ops row can link
+ * straight back to its client workspace.
+ */
+export function folderFromProject(project: {
+  id: string;
+  name: string;
+  clickupFolderId: string | null;
+}): ClientFolder | null {
+  if (!project.clickupFolderId) return null;
+  return { key: project.id, label: project.name, clickupFolderId: project.clickupFolderId };
+}
+
+/**
+ * The folders an Ops screen should read for this business: linked projects when
+ * there are any, otherwise the checked-in map so Phase 0 keeps working on a
+ * database with no projects yet.
+ */
+export function foldersForBusiness(
+  businessSlug: string,
+  linkedProjects: { id: string; name: string; clickupFolderId: string | null }[]
+): ClientFolder[] {
+  const fromDb = linkedProjects.map(folderFromProject).filter((f): f is ClientFolder => f !== null);
+  return fromDb.length > 0 ? fromDb : clientFoldersFor(businessSlug);
+}
+
+/**
  * Days without a ClickUp update before a task counts as stuck.
  * 0 is allowed and means "every open task" — useful for proving the screen
  * renders without waiting for real idleness to accumulate.

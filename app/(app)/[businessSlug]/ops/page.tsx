@@ -7,7 +7,11 @@ import {
   ClickUpRateLimited,
   NothingStuck,
 } from "@/components/ops/notice";
-import { clientFoldersFor, stuckThresholdDays } from "@/lib/ops-config";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { resolveBusiness } from "@/lib/tenant";
+import { listLinkedProjects } from "@/lib/db/queries/projects";
+import { foldersForBusiness, stuckThresholdDays } from "@/lib/ops-config";
 import {
   ClickUpConfigError,
   ClickUpRateLimitError,
@@ -26,7 +30,13 @@ import {
  */
 export default async function OpsHomePage({ params }: { params: Promise<{ businessSlug: string }> }) {
   const { businessSlug } = await params;
-  const folders = clientFoldersFor(businessSlug);
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  const { business } = await resolveBusiness(businessSlug, session.user.id);
+
+  // Linked projects are the source of the folder map; the checked-in config is
+  // only a fallback for a database that has no projects yet.
+  const folders = foldersForBusiness(businessSlug, await listLinkedProjects(business.id));
   const thresholdDays = stuckThresholdDays();
 
   let open: OpsTask[] | null = null;
@@ -34,7 +44,7 @@ export default async function OpsHomePage({ params }: { params: Promise<{ busine
 
   if (folders.length === 0) {
     failure = (
-      <ClickUpFailed message="No ClickUp folders are mapped to this business yet. Phase 1 replaces this mapping with the project record." />
+      <ClickUpFailed message="No project is linked to a ClickUp folder yet. Create one under Projects and paste its folder ID." />
     );
   } else {
     try {

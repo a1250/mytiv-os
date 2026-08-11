@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guard, ApiGuardError } from "@/lib/api-guard";
-import { clientFoldersFor, stuckThresholdDays } from "@/lib/ops-config";
+import { foldersForBusiness, stuckThresholdDays } from "@/lib/ops-config";
+import { listLinkedProjects } from "@/lib/db/queries/projects";
 import { ClickUpConfigError, ClickUpRateLimitError, getOpenTasks, statsFor } from "@/lib/clickup";
 
 /**
@@ -13,12 +14,12 @@ import { ClickUpConfigError, ClickUpRateLimitError, getOpenTasks, statsFor } fro
 export async function GET(req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
   try {
     const { businessSlug } = await params;
-    await guard(businessSlug);
+    const { businessId } = await guard(businessSlug);
 
     const thresholdParam = Number(req.nextUrl.searchParams.get("threshold"));
     const thresholdDays = Number.isFinite(thresholdParam) && thresholdParam > 0 ? thresholdParam : stuckThresholdDays();
 
-    const folders = clientFoldersFor(businessSlug);
+    const folders = foldersForBusiness(businessSlug, await listLinkedProjects(businessId));
     if (folders.length === 0) {
       return NextResponse.json({
         thresholdDays,
