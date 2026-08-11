@@ -300,6 +300,80 @@ export async function getTask(taskId: string): Promise<RawTask> {
   return get<RawTask>(`/task/${taskId}`);
 }
 
+export type TaskEvidence = {
+  taskId: string;
+  title: string;
+  status: string;
+  comments: { author: string; text: string }[];
+  attachments: { title: string; url: string; mimetype: string }[];
+  /** Links that look like a screen recording, from either comments or attachments. */
+  recordings: string[];
+};
+
+/** Anything that plausibly *is* a screen recording, rather than a link to a doc. */
+const RECORDING_PATTERNS = [
+  /https?:\/\/[^\s)>"']*loom\.com\/[^\s)>"']+/gi,
+  /https?:\/\/[^\s)>"']*(?:youtube\.com|youtu\.be)\/[^\s)>"']+/gi,
+  /https?:\/\/[^\s)>"']*drive\.google\.com\/[^\s)>"']+/gi,
+  /https?:\/\/[^\s)>"']*(?:vimeo\.com|screen\.studio|veed\.io|awesomescreenshot\.com)\/[^\s)>"']+/gi,
+  /https?:\/\/[^\s)>"']+\.(?:mp4|mov|webm|m4v)(?:\?[^\s)>"']*)?/gi,
+];
+
+function findRecordings(text: string): string[] {
+  const out: string[] = [];
+  for (const pattern of RECORDING_PATTERNS) {
+    for (const match of text.matchAll(pattern)) out.push(match[0]);
+  }
+  return out;
+}
+
+/**
+ * Everything attached to a task that could serve as proof a fix actually works.
+ *
+ * The standing rule is that nothing closes without a screen recording, so this
+ * gathers the raw material and lets the caller judge — it deliberately does not
+ * decide "verified", because a link that merely looks like a recording is not
+ * the same as one that shows the fix.
+ */
+export async function getTaskEvidence(taskId: string): Promise<TaskEvidence> {
+  const [task, commentData] = await Promise.all([
+    get<RawTask & { attachments?: { title?: string; url?: string; mimetype?: string }[] }>(`/task/${taskId}`),
+    get<{ comments?: { comment_text?: string; user?: { username?: string } }[] }>(`/task/${taskId}/comment`),
+  ]);
+
+  const comments = (commentData.comments ?? []).map((c) => ({
+    author: c.user?.username ?? "unknown",
+    text: (c.comment_text ?? "").trim(),
+  }));
+
+  const attachments = (task.attachments ?? []).map((a) => ({
+    title: a.title ?? "",
+    url: a.url ?? "",
+    mimetype: a.mimetype ?? "",
+  }));
+
+  const recordings = [
+    ...comments.flatMap((c) => findRecordings(c.text)),
+    ...attachments.filter((a) => a.mimetype.startsWith("video/")).map((a) => a.url),
+    ...attachments.flatMap((a) => findRecordings(a.url)),
+  ].filter((url, i, all) => url && all.indexOf(url) === i);
+
+  return {
+    taskId,
+    title: task.name,
+    status: task.status?.status ?? "",
+    comments,
+    attachments,
+    recordings,
+  };
+}
+
+/** The lists inside a folder, keyed by kind — where a new task or decision goes. */
+export async function resolveListId(folder: ClientFolder, kind: "tasks" | "bugs" | "decisions") {
+  const lists = await getFolderLists(folder);
+  return lists.find((l) => l.kind === kind)?.id ?? null;
+}
+
 export type FolderList = { id: string; name: string; kind: ListKind; statuses: string[] };
 
 /**

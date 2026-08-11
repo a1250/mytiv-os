@@ -1,16 +1,14 @@
 import { NextRequest } from "next/server";
 import { guard, ApiGuardError } from "@/lib/api-guard";
-import { getProject } from "@/lib/db/queries/projects";
-import { folderFromProject, stuckThresholdDays } from "@/lib/ops-config";
-import { getTasksByFolder, type OpsTask } from "@/lib/clickup";
-import { streamOpsChat, type ChatTurn, type OpsContext } from "@/lib/ai/ops-copilot";
+import { loadOpsContext, streamOpsChat, type ChatTurn } from "@/lib/ai/ops-copilot";
 
 /**
  * One copilot exchange, streamed as SSE.
  *
- * The context is assembled here — spec, live ClickUp work, decisions — so the
- * browser never sees the ClickUp token or the Claude key, and cannot widen what
- * the model is allowed to read by editing a request body.
+ * The context is assembled server-side from the project id, so the browser
+ * never sees the ClickUp token or the Claude key and cannot widen what the
+ * model is allowed to read. This route only ever reads: a write tool arrives
+ * back as a proposal event, and executing it is a separate confirmed call.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
   try {
@@ -22,29 +20,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ bus
       return Response.json({ error: "projectId and messages are required" }, { status: 400 });
     }
 
-    const project = await getProject(businessId, body.projectId);
-    if (!project) return Response.json({ error: "not_found" }, { status: 404 });
-
-    const folder = folderFromProject(project);
-    let rows: OpsTask[] = [];
-    if (folder) {
-      try {
-        rows = await getTasksByFolder(folder);
-      } catch {
-        // A ClickUp outage degrades the copilot to spec-only rather than failing
-        // the request; the system prompt already tells it to flag missing data.
-        rows = [];
-      }
-    }
-
-    const ctx: OpsContext = {
-      project,
-      folder,
-      tasks: rows.filter((t) => t.listKind === "tasks" || t.listKind === "other"),
-      bugs: rows.filter((t) => t.isBug),
-      decisions: rows.filter((t) => t.isDecision).slice(0, 10),
-      thresholdDays: stuckThresholdDays(),
-    };
+    const ctx = await loadOpsContext(businessId, body.projectId);
+    if (!ctx) return Response.json({ error: "not_found" }, { status: 404 });
 
     const history = body.messages
       .filter((m) => m.role === "user" || m.role === "assistant")
