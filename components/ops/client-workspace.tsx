@@ -1,8 +1,9 @@
 "use client";
 
-import { ExternalLink, Sparkles } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Copilot } from "./copilot";
 import { SpecEditor } from "./spec-editor";
 import { TaskTable } from "./task-table";
 import type { OpsTask, WorkspaceMember } from "@/lib/clickup";
@@ -115,14 +116,7 @@ export function ClientWorkspace({
       </TabsContent>
 
       <TabsContent value="copilot">
-        <div className="bg-card border-border flex flex-col items-center gap-2 rounded-xl border px-6 py-12 text-center">
-          <Sparkles className="text-active size-6" strokeWidth={1.75} />
-          <div className="text-sm font-semibold">Copilot arrives in Phase 2</div>
-          <div className="text-muted-foreground max-w-md text-xs leading-relaxed">
-            It will answer from three sources only — this project&apos;s spec, its live ClickUp tasks and bugs, and
-            the last ten decisions. Reading first; writing, with a preview and a confirm, in Phase 3.
-          </div>
-        </div>
+        <Copilot businessSlug={businessSlug} projectId={project.id} />
       </TabsContent>
     </Tabs>
   );

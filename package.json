@@ -14,7 +14,8 @@
     "db:seed": "node --env-file=.env.local --import tsx scripts/seed.ts",
     "audit:leaks": "node --env-file=.env.local --import tsx scripts/leak-audit.ts",
     "ops:check": "node --env-file=.env.local --conditions=react-server --import tsx scripts/ops-check.ts",
-    "ops:backfill": "node --env-file=.env.local --conditions=react-server --import tsx scripts/ops-backfill-projects.ts"
+    "ops:backfill": "node --env-file=.env.local --conditions=react-server --import tsx scripts/ops-backfill-projects.ts",
+    "ops:copilot-check": "node --env-file=.env.local --conditions=react-server --import tsx scripts/ops-copilot-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
