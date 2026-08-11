@@ -107,7 +107,7 @@ export const tasks = pgTable(
   (t) => [index("tasks_business_idx").on(t.businessId)]
 );
 
-// Placeholder for the future Project Hub module.
+// Project Hub. One row per client project; the Ops module's spine.
 export const projects = pgTable(
   "projects",
   {
@@ -119,10 +119,23 @@ export const projects = pgTable(
     brief: text("brief").default(""),
     budget: text("budget").default(""),
     deadline: text("deadline"),
+    /**
+     * The bridge to ClickUp, which stays the source of truth for tasks.
+     * Replaces the hardcoded map in lib/ops-config.ts once Phase 1 lands.
+     */
+    clickupFolderId: text("clickup_folder_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("projects_business_idx").on(t.businessId)]
+  (t) => [
+    index("projects_business_idx").on(t.businessId),
+    /**
+     * Two projects claiming the same ClickUp folder would double-count every
+     * task on Ops Home. Postgres treats NULLs as distinct, so any number of
+     * projects may stay unlinked.
+     */
+    uniqueIndex("projects_business_clickup_folder_idx").on(t.businessId, t.clickupFolderId),
+  ]
 );
 
 // ---------------------------------------------------------------------------
@@ -408,6 +421,8 @@ export const proposals = pgTable(
     brand: text("brand").default(""),
     contact: text("contact").default(""),
     leadId: uuid("lead_id").references(() => leads.id),
+    /** Which client project this proposal belongs to — the Phase 4 margin join. */
+    projectId: uuid("project_id").references(() => projects.id),
     type: text("type").default(""),
     status: text("status").default("draft"),
     date: text("date"), // YYYY-MM-DD

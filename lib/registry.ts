@@ -9,6 +9,10 @@ export type NavSection = { label: string; items: NavItem[] };
 
 export const NAV_SECTIONS: NavSection[] = [
   {
+    label: "Ops",
+    items: [{ id: "ops", label: "Ops Home", path: "ops", icon: "activity" }],
+  },
+  {
     label: "Studio",
     items: [
       { id: "dashboard", label: "Dashboard", path: "", icon: "home" },

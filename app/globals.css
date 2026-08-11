@@ -158,6 +158,61 @@ body {
 .totals-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; color: var(--text-dim); }
 .totals-row.grand { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 10px; font-size: 15px; font-weight: 700; color: var(--text); }
 
+/* ---------------------------------------------------------------------------
+   Ops module design tokens (dark-first, shadcn-compatible)
+
+   Deliberately namespaced `--ops-*` so nothing here can reach the other 16
+   modules: they read `--bg` / `--panel` / `--border`, which are untouched
+   above. Only the Ops module consumes these, via the Tailwind utilities the
+   @theme block below generates (bg-background, text-muted-foreground, ...).
+
+   A light theme is added later by re-declaring these seven values under a
+   `[data-theme="light"]` selector — no component changes required. Switching
+   the rest of the app to this token set is a separate job, not this build.
+   --------------------------------------------------------------------------- */
+:root {
+  --ops-background: #0f172a;
+  --ops-foreground: #f8fafc;
+  --ops-card: #182338;
+  --ops-muted: #1f2b42;
+  --ops-muted-foreground: #94a3b8;
+  --ops-border: rgba(255, 255, 255, 0.09);
+  --ops-ring: #6366f1;
+
+  /* State colours. The only colours in the module — see the UI brief:
+     red = overdue, amber = stuck, emerald = done, indigo = active. */
+  --ops-danger: #f0655a;
+  --ops-warning: #f5a524;
+  --ops-success: #5bc98c;
+  --ops-active: #6366f1;
+}
+
+@theme inline {
+  --color-background: var(--ops-background);
+  --color-foreground: var(--ops-foreground);
+  --color-card: var(--ops-card);
+  --color-card-foreground: var(--ops-foreground);
+  --color-muted: var(--ops-muted);
+  --color-muted-foreground: var(--ops-muted-foreground);
+  --color-border: var(--ops-border);
+  --color-ring: var(--ops-ring);
+  --color-danger: var(--ops-danger);
+  --color-warning: var(--ops-warning);
+  --color-success: var(--ops-success);
+  --color-active: var(--ops-active);
+}
+
+/* The Ops module opts out of `.page`'s max-width so wide tables can breathe. */
+.ops-root {
+  padding: 24px 28px 56px;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+@media (max-width: 640px) {
+  .ops-root { padding: 16px 14px 40px; }
+}
+
 /* ---- Weekly Review ---- */
 .review-section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 12px; }
 .review-section h2 { display: flex; align-items: center; gap: 10px; font-size: 14px; margin-bottom: 10px; }

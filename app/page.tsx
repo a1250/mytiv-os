@@ -14,5 +14,7 @@ export default async function RootPage() {
     redirect("/login");
   }
 
-  redirect(`/${businesses[0].business.slug}`);
+  // Ops Home is the landing screen: what is stuck is the first thing to see
+  // after logging in, not something to navigate to.
+  redirect(`/${businesses[0].business.slug}/ops`);
 }

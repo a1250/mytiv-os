@@ -29,6 +29,13 @@
       "when": 1785400773175,
       "tag": "0003_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786446913016,
+      "tag": "0004_wise_professor_monster",
+      "breakpoints": true
     }
   ]
 }
