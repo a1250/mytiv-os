@@ -213,6 +213,14 @@ body {
   .ops-root { padding: 16px 14px 40px; }
 }
 
+/* The monthly summary is meant to be printed. Only inside @media print, so
+   nothing here changes a pixel on screen for any other module. */
+@media print {
+  .sidebar { display: none; }
+  .ops-root { padding: 0; max-width: none; }
+  body { background: #fff; color: #111; }
+}
+
 /* ---- Weekly Review ---- */
 .review-section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 12px; }
 .review-section h2 { display: flex; align-items: center; gap: 10px; font-size: 14px; margin-bottom: 10px; }

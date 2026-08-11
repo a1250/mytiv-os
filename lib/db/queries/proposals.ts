@@ -12,6 +12,24 @@ export async function listProposals(businessId: string) {
   return db.select().from(proposals).where(eq(proposals.businessId, businessId)).orderBy(desc(proposals.updatedAt));
 }
 
+/**
+ * Proposals attached to one client project — the revenue side of the Ops money
+ * view. Accepted ones only: a draft or a declined proposal is not income.
+ */
+export async function listAcceptedProposalsForProject(businessId: string, projectId: string) {
+  return db
+    .select()
+    .from(proposals)
+    .where(
+      and(
+        eq(proposals.businessId, businessId),
+        eq(proposals.projectId, projectId),
+        eq(proposals.status, "accepted")
+      )
+    )
+    .orderBy(desc(proposals.date));
+}
+
 /** Proposals attached to one lead — powers the Proposals block on the lead page. */
 export async function listProposalsByLead(businessId: string, leadId: string) {
   return db

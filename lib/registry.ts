@@ -13,6 +13,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { id: "ops", label: "Ops Home", path: "ops", icon: "activity" },
       { id: "projects", label: "Projects", path: "ops/projects", icon: "folder" },
+      { id: "money", label: "Money", path: "ops/money", icon: "banknote" },
     ],
   },
   {

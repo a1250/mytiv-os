@@ -70,6 +70,8 @@ export type OpsTask = {
   updatedAt: string;
   daysIdle: number;
   blockedOn: BlockedOn | null;
+  /** Estimate in hours, or null when nobody set one. */
+  estimateHours: number | null;
   /** True when the task lives in the folder's תקלות list. */
   isBug: boolean;
   /**
@@ -175,6 +177,8 @@ type RawTask = {
   assignees?: { id: number; username?: string; email?: string }[];
   due_date?: string | null;
   date_updated?: string | null;
+  /** Milliseconds, per the v2 API — not minutes. */
+  time_estimate?: number | string | null;
   list?: { id?: string; name?: string };
   custom_fields?: RawCustomField[];
 };
@@ -225,6 +229,7 @@ function normalise(raw: RawTask, folder: ClientFolder, now: number): OpsTask {
     updatedAt: updatedMs ? new Date(updatedMs).toISOString() : "",
     daysIdle: updatedMs ? Math.floor((now - updatedMs) / DAY_MS) : 0,
     blockedOn: readBlockedOn(raw.custom_fields),
+    estimateHours: Number(raw.time_estimate) > 0 ? Number(raw.time_estimate) / 3_600_000 : null,
     isBug: kind === "bugs",
     isDecision: kind === "decisions",
   };
@@ -412,22 +417,54 @@ export async function getWorkspaceHierarchy() {
   return get<{ spaces?: unknown[] }>(`/team/${workspaceId()}/space`, new URLSearchParams({ archived: "false" }));
 }
 
-/** Phase 4 input. Returns zero hours until the contractors actually log time. */
+/** Returns zero hours until the contractors actually log time. */
 export async function getTimeEntries(
   folder: ClientFolder,
   range: { from: Date; to: Date }
 ): Promise<TimeEntrySummary> {
+  const { totalHours } = await getTimeByTask(folder, range);
+  return { clientKey: folder.key, hours: totalHours };
+}
+
+export type TaskTime = { taskId: string; taskName: string; hours: number };
+
+/**
+ * Logged time for one folder, rolled up per task.
+ *
+ * Per-task is what makes systematic under-estimation visible; the total alone
+ * only tells you the bill. Returns zeros — not an error — when nobody has
+ * tracked time, which is the current state of this workspace.
+ */
+export async function getTimeByTask(
+  folder: ClientFolder,
+  range: { from: Date; to: Date }
+): Promise<{ totalHours: number; perTask: TaskTime[] }> {
   const params = new URLSearchParams({
     start_date: String(range.from.getTime()),
     end_date: String(range.to.getTime()),
     folder_id: folder.clickupFolderId,
   });
-  const data = await get<{ data?: { duration?: string | number }[] }>(
-    `/team/${workspaceId()}/time_entries`,
-    params
-  );
-  const ms = (data.data ?? []).reduce((sum, e) => sum + Number(e.duration ?? 0), 0);
-  return { clientKey: folder.key, hours: ms / 3_600_000 };
+  const data = await get<{
+    data?: { duration?: string | number; task?: { id?: string; name?: string } }[];
+  }>(`/team/${workspaceId()}/time_entries`, params);
+
+  const byTask = new Map<string, TaskTime>();
+  let totalMs = 0;
+
+  for (const entry of data.data ?? []) {
+    const ms = Number(entry.duration ?? 0);
+    if (!Number.isFinite(ms) || ms <= 0) continue;
+    totalMs += ms;
+    const id = entry.task?.id ?? "(no task)";
+    const existing = byTask.get(id);
+    if (existing) existing.hours += ms / 3_600_000;
+    else byTask.set(id, { taskId: id, taskName: entry.task?.name ?? "(not attached to a task)", hours: ms / 3_600_000 });
+  }
+
+  return {
+    totalHours: totalMs / 3_600_000,
+    perTask: [...byTask.values()].sort((a, b) => b.hours - a.hours),
+  };
 }
 
 // ---------------------------------------------------------------------------
