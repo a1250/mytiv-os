@@ -1,3 +1,4 @@
+import { OpsPolicyError, assertWriter, objectInput } from "@/lib/ops-policy";
 import { NextRequest, NextResponse } from "next/server";
 import { guard, ApiGuardError } from "@/lib/api-guard";
 import { getProject, updateProject } from "@/lib/db/queries/projects";
@@ -12,6 +13,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(row);
   } catch (err) {
+    if (err instanceof OpsPolicyError) return NextResponse.json({ error: err.message }, { status: err.status });
     if (err instanceof ApiGuardError) return err.response;
     throw err;
   }
@@ -20,12 +22,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const { businessSlug, projectId } = await params;
-    const { businessId } = await guard(businessSlug);
-    const patch = await req.json();
+    const { businessId, role } = await guard(businessSlug);
+    assertWriter(role);
+    const patch = objectInput(await req.json());
     const row = await updateProject(businessId, projectId, patch);
     if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(row);
   } catch (err) {
+    if (err instanceof OpsPolicyError) return NextResponse.json({ error: err.message }, { status: err.status });
     if (err instanceof ApiGuardError) return err.response;
     // A second project pointing at the same ClickUp folder trips the unique index.
     if (err instanceof Error && /projects_business_clickup_folder_idx/.test(err.message)) {

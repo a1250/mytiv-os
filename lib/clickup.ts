@@ -121,10 +121,10 @@ type CacheEntry = { at: number; value: unknown };
 const cache = new Map<string, CacheEntry>();
 
 /** Cached GET. Writes bypass this entirely — see `send`. */
-async function get<T>(path: string, params?: URLSearchParams): Promise<T> {
+async function get<T>(path: string, params?: URLSearchParams, fresh = false): Promise<T> {
   const url = `${API}${path}${params && [...params].length ? `?${params}` : ""}`;
   const hit = cache.get(url);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value as T;
+  if (!fresh && hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value as T;
 
   const value = await send<T>("GET", url);
   cache.set(url, { at: Date.now(), value });
@@ -140,6 +140,7 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
     },
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (res.status === 429) {
@@ -302,7 +303,7 @@ export function statsFor(open: OpsTask[], thresholdDays: number): OpsStats {
 }
 
 export async function getTask(taskId: string): Promise<RawTask> {
-  return get<RawTask>(`/task/${taskId}`);
+  return get<RawTask>(`/task/${encodeURIComponent(taskId)}`, undefined, true);
 }
 
 export type TaskEvidence = {
@@ -342,8 +343,8 @@ function findRecordings(text: string): string[] {
  */
 export async function getTaskEvidence(taskId: string): Promise<TaskEvidence> {
   const [task, commentData] = await Promise.all([
-    get<RawTask & { attachments?: { title?: string; url?: string; mimetype?: string }[] }>(`/task/${taskId}`),
-    get<{ comments?: { comment_text?: string; user?: { username?: string } }[] }>(`/task/${taskId}/comment`),
+    get<RawTask & { attachments?: { title?: string; url?: string; mimetype?: string }[] }>(`/task/${encodeURIComponent(taskId)}`, undefined, true),
+    get<{ comments?: { comment_text?: string; user?: { username?: string } }[] }>(`/task/${encodeURIComponent(taskId)}/comment`, undefined, true),
   ]);
 
   const comments = (commentData.comments ?? []).map((c) => ({
@@ -379,7 +380,7 @@ export async function resolveListId(folder: ClientFolder, kind: "tasks" | "bugs"
   return lists.find((l) => l.kind === kind)?.id ?? null;
 }
 
-export type FolderList = { id: string; name: string; kind: ListKind; statuses: string[] };
+export type FolderList = { id: string; name: string; kind: ListKind; statuses: string[]; statusTypes: Record<string, string> };
 
 /**
  * The lists inside a client folder, with the statuses each one allows.
@@ -388,14 +389,15 @@ export type FolderList = { id: string; name: string; kind: ListKind; statuses: s
  */
 export async function getFolderLists(folder: ClientFolder): Promise<FolderList[]> {
   const data = await get<{
-    lists?: { id: string; name: string; statuses?: { status?: string }[] }[];
-  }>(`/folder/${folder.clickupFolderId}/list`, new URLSearchParams({ archived: "false" }));
+    lists?: { id: string; name: string; statuses?: { status?: string; type?: string }[] }[];
+  }>(`/folder/${folder.clickupFolderId}/list`, new URLSearchParams({ archived: "false" }), true);
 
   return (data.lists ?? []).map((l) => ({
     id: l.id,
     name: l.name,
     kind: classifyList(l.name),
     statuses: (l.statuses ?? []).map((s) => s.status ?? "").filter(Boolean),
+    statusTypes: Object.fromEntries((l.statuses ?? []).map((s) => [s.status ?? "", s.type ?? "unknown"])),
   }));
 }
 
@@ -406,7 +408,7 @@ export async function getWorkspaceMembers(): Promise<WorkspaceMember[]> {
   const data = await get<{
     teams?: { id: string; members?: { user?: { id: number; username?: string; email?: string } }[] }[];
   }>("/team");
-  const team = data.teams?.find((t) => t.id === workspaceId()) ?? data.teams?.[0];
+  const team = data.teams?.find((t) => t.id === workspaceId());
   return (team?.members ?? [])
     .map((m) => m.user)
     .filter((u): u is { id: number; username?: string; email?: string } => Boolean(u?.id))
@@ -439,7 +441,10 @@ export async function getTimeByTask(
   folder: ClientFolder,
   range: { from: Date; to: Date }
 ): Promise<{ totalHours: number; perTask: TaskTime[] }> {
+  const members = await getWorkspaceMembers();
+  if (!members.length) throw new ClickUpConfigError("Workspace members unavailable; time coverage is unknown.");
   const params = new URLSearchParams({
+    assignee: members.map(m => m.id).join(","),
     start_date: String(range.from.getTime()),
     end_date: String(range.to.getTime()),
     folder_id: folder.clickupFolderId,
@@ -486,6 +491,11 @@ export async function updateTask(
 ) {
   const res = await send<RawTask>("PUT", `${API}/task/${taskId}`, patch);
   invalidate();
+  const verified = await getTask(taskId);
+  if (patch.status && verified.status?.status !== patch.status) throw new ClickUpError(502, 'Update outcome could not be verified; check ClickUp before retry.');
+  const assigned = new Set((verified.assignees ?? []).map(a => a.id));
+  if (patch.assignees?.add?.some(id => !assigned.has(id)) || patch.assignees?.rem?.some(id => assigned.has(id))) throw new ClickUpError(502, 'Assignee outcome could not be verified; check ClickUp before retry.');
+  if (patch.due_date && Number(verified.due_date) !== patch.due_date) throw new ClickUpError(502, 'Due date outcome could not be verified; check ClickUp before retry.');
   return res;
 }
 

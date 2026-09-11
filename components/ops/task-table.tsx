@@ -10,6 +10,7 @@ import type { WorkspaceMember } from "@/lib/clickup";
 
 type Props = {
   businessSlug: string;
+  projectId: string;
   tasks: OpsTask[];
   members: WorkspaceMember[];
   /** Allowed statuses per ClickUp list id — the vocabulary differs per list. */
@@ -25,9 +26,10 @@ type Props = {
  * toast — a silent rollback is indistinguishable from a change that never
  * registered.
  */
-export function TaskTable({ businessSlug, tasks, members, statusesByList, emptyMessage }: Props) {
+export function TaskTable({ businessSlug, projectId, tasks, members, statusesByList, emptyMessage }: Props) {
   const { toast } = useToast();
   const [rows, setRows] = React.useState(tasks);
+  const activeRequests = React.useRef(new Set<string>());
   const [pending, setPending] = React.useState<Record<string, boolean>>({});
 
   // Adjust during render rather than in an effect: when the server sends a
@@ -40,14 +42,17 @@ export function TaskTable({ businessSlug, tasks, members, statusesByList, emptyM
   }
 
   async function patch(task: OpsTask, body: Record<string, unknown>, optimistic: Partial<OpsTask>, label: string) {
-    const before = rows;
+    if (activeRequests.current.has(task.id)) return;
+    if (!window.confirm(`${label}? This will update ClickUp.`)) return;
+    activeRequests.current.add(task.id);
+    const before = task;
     setRows((prev) => prev.map((r) => (r.id === task.id ? { ...r, ...optimistic } : r)));
     setPending((p) => ({ ...p, [task.id]: true }));
     try {
       const res = await fetch(`/api/${businessSlug}/ops/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, projectId, confirmed: true, requestId: crypto.randomUUID() }),
       });
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: "unknown" }));
@@ -55,7 +60,7 @@ export function TaskTable({ businessSlug, tasks, members, statusesByList, emptyM
       }
       toast({ message: label, href: task.url, tone: "ok" });
     } catch (err) {
-      setRows(before);
+      setRows(prev => prev.map(row => row.id === task.id ? before : row));
       const reason = err instanceof Error ? err.message : "unknown";
       toast({
         message:
@@ -65,13 +70,16 @@ export function TaskTable({ businessSlug, tasks, members, statusesByList, emptyM
         tone: "error",
       });
     } finally {
+      activeRequests.current.delete(task.id);
       setPending((p) => ({ ...p, [task.id]: false }));
     }
   }
 
   function onStatus(task: OpsTask, status: string) {
     if (status === task.status) return;
-    patch(task, { status }, { status }, `Status set to “${status}”`);
+    const evidenceUrl = window.prompt('For closing: paste the exact attached recording URL you have reviewed. Otherwise leave blank.', '');
+    if (evidenceUrl === null) return;
+    patch(task, { status, evidence_url: evidenceUrl, evidence_reviewed: Boolean(evidenceUrl) }, { status }, `Status set to “${status}”`);
   }
 
   function onAssignee(task: OpsTask, raw: string) {

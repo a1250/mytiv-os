@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "marketingBusiness": "fixture",
+  "revision": 1,
+  "sourceRevision": "synthetic-fixture-only",
+  "asOf": "2026-09-01T09:00:00Z",
+  "priorities": [{"id":"p1","title":"עדיפות בדיקה — חיזוק אירועים","evidenceRef":"manual-runs/fixture/owner-priority","confidence":"owner_priority"}],
+  "items": [
+    {"id":"content1","title":"הכנת תוכן — נתוני בדיקה","kind":"content","priorityId":"p1","start":"2026-09-10","end":"2026-09-12","dependsOn":[],"sourceRef":"work/fixture/content"},
+    {"id":"campaign1","title":"תכנון קמפיין — נתוני בדיקה","kind":"campaign","priorityId":"p1","start":"2026-09-13","end":"2026-09-22","dependsOn":["content1"],"sourceRef":"work/fixture/campaign"}
+  ],
+  "reviews": [{"id":"review1","title":"סקירה שבועית — נתוני בדיקה","due":"2026-09-20","cadence":"weekly","sourceRef":"manual-runs/fixture/weekly"}]
+}

@@ -96,7 +96,8 @@ export function foldersForBusiness(
   businessSlug: string,
   linkedProjects: { id: string; name: string; clickupFolderId: string | null }[]
 ): ClientFolder[] {
-  const fromDb = linkedProjects.map(folderFromProject).filter((f): f is ClientFolder => f !== null);
+  const allowed = new Set(clientFoldersFor(businessSlug).map(f => f.clickupFolderId));
+  const fromDb = linkedProjects.filter(p => p.clickupFolderId && allowed.has(p.clickupFolderId)).map(folderFromProject).filter((f): f is ClientFolder => f !== null);
   return fromDb.length > 0 ? fromDb : clientFoldersFor(businessSlug);
 }
 

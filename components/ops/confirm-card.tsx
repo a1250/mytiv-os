@@ -31,6 +31,7 @@ const FIELDS: Record<string, { title: string; fields: Field[] }> = {
     title: "Update task in ClickUp?",
     fields: [
       { key: "task_id", label: "Task" },
+      { key: "evidence_url", label: "Reviewed recording URL" },
       { key: "status", label: "Status" },
       { key: "assignee", label: "Owner" },
       { key: "due_date", label: "Due date", type: "date" },
@@ -91,6 +92,10 @@ export function ConfirmCard({
       const raw = values[f.key]?.trim() ?? "";
       if (!raw) continue;
       out[f.key] = f.type === "number" ? Number(raw) : raw;
+    }
+    if (out.evidence_url) {
+      if (!window.confirm("I watched this recording and verified the definition of done.")) return;
+      out.evidence_reviewed = true;
     }
     onConfirm(out);
   }

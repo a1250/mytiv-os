@@ -14,6 +14,8 @@
  * There is no delete tool, by design. Tasks are deleted in ClickUp, by hand.
  */
 import "server-only";
+import { requireScopedTask, requireStatusEvidence } from "@/lib/ops-access";
+import { dateMs, requiredText, OpsPolicyError } from "@/lib/ops-policy";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSecret } from "@/lib/db/queries/secrets";
 import { AI_KEY_SECRET } from "./claude";
@@ -40,6 +42,7 @@ export type OpsContext = {
   bugs: OpsTask[];
   decisions: OpsTask[];
   thresholdDays: number;
+  dataState?: "available" | "unavailable" | "unlinked";
 };
 
 /** Tools that change something in ClickUp. Every one requires a confirmed click. */
@@ -57,6 +60,7 @@ export async function loadOpsContext(businessId: string, projectId: string): Pro
 
   const folder = folderFromProject(project);
   let rows: OpsTask[] = [];
+  let dataState: OpsContext["dataState"] = folder ? "available" : "unlinked";
   if (folder) {
     try {
       rows = await getTasksByFolder(folder);
@@ -64,12 +68,14 @@ export async function loadOpsContext(businessId: string, projectId: string): Pro
       // A ClickUp outage degrades the copilot to spec-only rather than failing
       // the request; the system prompt already tells it to flag missing data.
       rows = [];
+      dataState = "unavailable";
     }
   }
 
   return {
     project,
     folder,
+    dataState,
     tasks: rows.filter((t) => t.listKind === "tasks" || t.listKind === "other"),
     bugs: rows.filter((t) => t.isBug),
     decisions: rows.filter((t) => t.isDecision).slice(0, 10),
@@ -96,6 +102,7 @@ function describeTask(t: OpsTask) {
 
 export function buildCopilotSystem(ctx: OpsContext, businessName: string) {
   const { project, tasks, bugs, decisions, thresholdDays } = ctx;
+  const unavailable = ctx.dataState === "unavailable" || ctx.dataState === "unlinked";
 
   return [
     `You are the operations copilot for ${businessName}, working on one client: ${project.name}.`,
@@ -130,14 +137,15 @@ export function buildCopilotSystem(ctx: OpsContext, businessName: string) {
     "## Spec",
     project.brief?.trim() || "(no spec written yet — say so if the question depends on it)",
     "",
+    `ClickUp data state: ${ctx.dataState ?? "available"}. Unavailable or unlinked means UNKNOWN, never zero work or no blockers.`,
     `## Open tasks (${tasks.length})`,
-    tasks.length ? tasks.map(describeTask).join("\n") : "(none)",
+    unavailable ? "(UNKNOWN — source unavailable)" : tasks.length ? tasks.map(describeTask).join("\n") : "(none)",
     "",
     `## Open bugs (${bugs.length})`,
-    bugs.length ? bugs.map(describeTask).join("\n") : "(none)",
+    unavailable ? "(UNKNOWN — source unavailable)" : bugs.length ? bugs.map(describeTask).join("\n") : "(none)",
     "",
     `## Last decisions (${decisions.length})`,
-    decisions.length ? decisions.map((d) => `[${d.id}] ${d.title} · ${d.status}`).join("\n") : "(none recorded)",
+    unavailable ? "(UNKNOWN — source unavailable)" : decisions.length ? decisions.map((d) => `[${d.id}] ${d.title} · ${d.status}`).join("\n") : "(none recorded)",
   ].join("\n");
 }
 
@@ -272,6 +280,7 @@ type ToolInput = Record<string, unknown>;
 
 /** Reads only. A write never reaches this function. */
 export async function runOpsTool(name: string, input: ToolInput, ctx: OpsContext): Promise<string> {
+  if (ctx.dataState === "unavailable" || ctx.dataState === "unlinked") return "ClickUp data is unavailable: task counts, blockers and decisions are UNKNOWN.";
   switch (name) {
     case "fetch_tasks": {
       const pool = input.list === "bugs" ? ctx.bugs : input.list === "tasks" ? ctx.tasks : [...ctx.tasks, ...ctx.bugs];
@@ -314,6 +323,7 @@ export async function runOpsTool(name: string, input: ToolInput, ctx: OpsContext
     case "verify_completion": {
       const taskId = String(input.task_id ?? "").trim();
       if (!taskId) return "No task id given.";
+      await requireScopedTask(ctx.folder, taskId);
       const evidence = await getTaskEvidence(taskId);
       const lines = [
         `Task: ${evidence.title}`,
@@ -352,17 +362,8 @@ async function resolveAssigneeId(name: string | undefined): Promise<number | nul
   if (!wanted) return null;
   const members = await getWorkspaceMembers();
   const hit =
-    members.find((m) => m.name.toLowerCase() === wanted) ??
-    members.find((m) => m.name.toLowerCase().includes(wanted)) ??
-    members.find((m) => wanted.includes(m.name.toLowerCase().split(" ")[0]));
-  return hit?.id ?? null;
-}
-
-function dueDateMs(value: unknown): number | undefined {
-  const raw = String(value ?? "").trim();
-  if (!raw) return undefined;
-  const ms = new Date(`${raw}T12:00:00Z`).getTime();
-  return Number.isFinite(ms) ? ms : undefined;
+    members.filter((m) => m.name.toLowerCase() === wanted);
+  return hit.length === 1 ? hit[0].id : null;
 }
 
 /**
@@ -380,23 +381,27 @@ export async function executeProposal(ctx: OpsContext, tool: string, input: Tool
 
         const assigneeId = await resolveAssigneeId(input.assignee as string);
         const hours = typeof input.estimate_hours === "number" ? input.estimate_hours : null;
-        const dod = String(input.definition_of_done ?? "").trim();
+        const dod = requiredText(input.definition_of_done, 'definition_of_done');
+        const title = requiredText(input.title, 'title', 500);
+        const due = dateMs(input.due_date);
+        if (!assigneeId) return { ok: false, error: 'An exact, unique ClickUp owner is required.' };
+        if (hours !== null && (!Number.isFinite(hours) || hours <= 0)) return { ok: false, error: 'Invalid estimate.' };
 
         const created = await createTask(listId, {
-          name: String(input.title ?? "").trim(),
+          name: title,
           assignees: assigneeId ? [assigneeId] : undefined,
-          due_date: dueDateMs(input.due_date),
+          due_date: due,
           time_estimate: hours ? Math.round(hours * 3_600_000) : undefined,
           markdown_description: dod ? `**Done when:** ${dod}` : undefined,
         });
 
-        const warn = assigneeId ? "" : ` (no ClickUp member matched "${input.assignee}" — task is unassigned)`;
-        return { ok: true, summary: `Task created in ${kind}${warn}`, url: created.url };
+        return { ok: true, summary: `Task created in ${kind}`, url: created.url };
       }
 
       case "update_task": {
         const taskId = String(input.task_id ?? "").trim();
         if (!taskId) return { ok: false, error: "No task id." };
+        await requireScopedTask(ctx.folder, taskId);
         const patch: { status?: string; assignees?: { add?: number[] }; due_date?: number } = {};
         if (typeof input.status === "string" && input.status.trim()) patch.status = input.status.trim();
         if (typeof input.assignee === "string" && input.assignee.trim()) {
@@ -404,10 +409,11 @@ export async function executeProposal(ctx: OpsContext, tool: string, input: Tool
           if (!id) return { ok: false, error: `No ClickUp member matched "${input.assignee}".` };
           patch.assignees = { add: [id] };
         }
-        const due = dueDateMs(input.due_date);
+        const due = input.due_date ? dateMs(input.due_date) : undefined;
         if (due) patch.due_date = due;
         if (Object.keys(patch).length === 0) return { ok: false, error: "Nothing to change." };
 
+        if (patch.status) await requireStatusEvidence(ctx.folder, taskId, patch.status, input);
         const updated = await updateTask(taskId, patch);
         return { ok: true, summary: "Task updated in ClickUp", url: updated.url };
       }
@@ -416,6 +422,7 @@ export async function executeProposal(ctx: OpsContext, tool: string, input: Tool
         const taskId = String(input.task_id ?? "").trim();
         const text = String(input.text ?? "").trim();
         if (!taskId || !text) return { ok: false, error: "A task id and comment text are both required." };
+        await requireScopedTask(ctx.folder, taskId);
         await addComment(taskId, text);
         return { ok: true, summary: "Comment added in ClickUp", url: `https://app.clickup.com/t/${taskId}` };
       }
@@ -425,9 +432,9 @@ export async function executeProposal(ctx: OpsContext, tool: string, input: Tool
         const listId = await resolveListId(ctx.folder, "decisions");
         if (!listId) return { ok: false, error: "No decision-log list exists in this client's folder." };
         const detail = String(input.detail ?? "").trim();
-        const source = String(input.source ?? "").trim();
+        const source = requiredText(input.source, "source");
         const created = await createTask(listId, {
-          name: String(input.title ?? "").trim(),
+          name: requiredText(input.title, "title", 500),
           markdown_description: [source ? `**Source:** ${source}` : "", detail].filter(Boolean).join("\n\n"),
         });
         return { ok: true, summary: "Decision recorded", url: created.url };
@@ -437,7 +444,7 @@ export async function executeProposal(ctx: OpsContext, tool: string, input: Tool
         return { ok: false, error: `"${tool}" is not something this system can execute.` };
     }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "ClickUp write failed." };
+    return { ok: false, error: err instanceof OpsPolicyError ? err.message : "ClickUp write failed or its result could not be verified. Check the audit and ClickUp before retrying." };
   }
 }
 

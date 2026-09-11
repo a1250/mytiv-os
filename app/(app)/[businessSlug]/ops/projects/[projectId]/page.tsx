@@ -1,3 +1,7 @@
+import { AuditLog } from "@/components/ops/audit-log";
+import { Suspense } from "react";
+import { marketingBinding, latestPlan } from "@/lib/marketing/service";
+import type { MarketingPlan } from "@/lib/marketing/contract";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -17,12 +21,19 @@ export default async function ClientWorkspacePage({
   const { businessSlug, projectId } = await params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
-  const { business } = await resolveBusiness(businessSlug, session.user.id);
+  const { business, role } = await resolveBusiness(businessSlug, session.user.id);
 
   const project = await getProject(business.id, projectId);
   if (!project) notFound();
 
   const folder = folderFromProject(project);
+  const binding = marketingBinding(businessSlug, projectId);
+  let plan: MarketingPlan | null = null;
+  let marketingUnavailable = false;
+  if (binding) {
+    try { plan = await latestPlan(business.id, projectId, binding); }
+    catch { marketingUnavailable = true; }
+  }
 
   let rows: OpsTask[] = [];
   let members: WorkspaceMember[] = [];
@@ -71,12 +82,16 @@ export default async function ClientWorkspacePage({
       <ClientWorkspace
         businessSlug={businessSlug}
         project={project}
+        marketing={{ binding, plan, canImport: role === "owner" || role === "admin", unavailable: marketingUnavailable, now: new Date().toISOString() }}
         tasks={rows.filter((t) => t.listKind === "tasks" || t.listKind === "other")}
         bugs={rows.filter((t) => t.isBug)}
         decisions={rows.filter((t) => t.isDecision)}
         members={members}
         statusesByList={statusesByList}
       />
+      <Suspense fallback={<p className="mt-6 text-xs">טוען היסטוריית אישורים…</p>}>
+        <AuditLog businessId={business.id} projectId={projectId} />
+      </Suspense>
     </div>
   );
 }

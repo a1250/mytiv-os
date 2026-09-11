@@ -42,6 +42,7 @@ export function Copilot({ businessSlug, projectId }: { businessSlug: string; pro
   const [tool, setTool] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const nextId = React.useRef(0);
+  const confirmationIds = React.useRef(new Map<number, string>());
   const endRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -143,12 +144,13 @@ export function Copilot({ businessSlug, projectId }: { businessSlug: string; pro
   }
 
   async function confirmProposal(id: number, tool: string, input: Record<string, unknown>) {
+    if (!confirmationIds.current.has(id)) confirmationIds.current.set(id, crypto.randomUUID());
     setProposalState(id, { status: "running" });
     try {
       const res = await fetch(`/api/${businessSlug}/ops/chat/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, tool, input }),
+        body: JSON.stringify({ projectId, tool, input, confirmed: true, requestId: confirmationIds.current.get(id) }),
       });
       const result = await res.json();
       if (!res.ok || !result.ok) throw new Error(result.error ?? `Failed (${res.status})`);

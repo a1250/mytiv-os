@@ -104,8 +104,8 @@ export function computeClientMoney(args: {
     if (!Number.isFinite(revenue.total) || revenue.total <= 0) gaps.push("budget_unparsed");
   }
 
-  const monthCost = hourlyCost === null ? null : monthHours * hourlyCost;
-  const totalCost = hourlyCost === null ? null : totalHours * hourlyCost;
+  const monthCost = hourlyCost === null || monthHours === 0 ? null : monthHours * hourlyCost;
+  const totalCost = hourlyCost === null || totalHours === 0 ? null : totalHours * hourlyCost;
 
   let monthMargin: number | null = null;
   let monthMarginPct: number | null = null;
@@ -118,7 +118,7 @@ export function computeClientMoney(args: {
     monthMargin = revenue.monthly - monthCost;
     monthMarginPct = revenue.monthly > 0 ? (monthMargin / revenue.monthly) * 100 : null;
   }
-  if (revenue.kind === "budget" && totalCost !== null && revenue.total > 0 && totalHours > 0) {
+  if (revenue.kind === "budget" && totalCost !== null && revenue.total > 0 && totalHours > 0 && !revenue.ambiguous) {
     budgetUsedPct = (totalCost / revenue.total) * 100;
   }
 
