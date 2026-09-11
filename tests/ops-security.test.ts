@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { assertClosure, assertWriter, assertConfirmation, dateMs } from '../lib/ops-policy';
 import { parseMarketingPlan } from '../lib/marketing/contract';
 import { computeClientMoney } from '../lib/money';
-import { foldersForBusiness } from '../lib/ops-config';
+import { foldersForBusiness, folderFromProject, folderState } from '../lib/ops-config';
+import { statusChange, needsReviewConfirmation } from '../lib/ops-closure';
 import { requireScopedTask, requireStatusEvidence } from '../lib/ops-access';
 
 const fixture = () => ({ schemaVersion: 1, marketingBusiness: 'fixture', revision: 1, sourceRevision: 'fixture-rev', asOf: '2026-01-01T00:00:00Z',
@@ -23,6 +24,32 @@ test('closure requires exact current evidence and explicit human review', () => 
   }
   assertClosure('done', 'https://proof.example/a', true, ['https://proof.example/a']);
   assertClosure('open', undefined, false, []);
+});
+test('a pasted recording URL is never a review by itself', () => {
+  const attached = ['https://proof.example/a'];
+  // URL present, explicit review declined or never asked → not reviewed, and the server refuses closure.
+  for (const change of [statusChange('closed', 'https://proof.example/a', false), statusChange('closed', ' https://proof.example/a ', false)]) {
+    assert.equal(change.evidence_reviewed, false);
+    assert.throws(() => assertClosure('closed', change.evidence_url, change.evidence_reviewed, attached));
+  }
+  // Explicit confirmation without a URL is nothing to confirm → still not reviewed, still refused.
+  const bare = statusChange('closed', '', true);
+  assert.equal(bare.evidence_reviewed, false);
+  assert.equal(needsReviewConfirmation(''), false);
+  assert.throws(() => assertClosure('closed', bare.evidence_url, bare.evidence_reviewed, attached));
+  // Only URL + explicit confirmation, and only when that URL is actually attached, closes.
+  const ok = statusChange('closed', 'https://proof.example/a', true);
+  assert.equal(ok.evidence_reviewed, true);
+  assertClosure('closed', ok.evidence_url, ok.evidence_reviewed, attached);
+  assert.throws(() => assertClosure('closed', ok.evidence_url, ok.evidence_reviewed, ['https://proof.example/other']));
+});
+test('a project folder outside the allowlist is named, not read', () => {
+  assert.equal(folderState('mytiv', null), 'unlinked');
+  assert.equal(folderState('mytiv', '901816026303'), 'linked');
+  assert.equal(folderState('mytiv', '000'), 'unauthorized');
+  assert.equal(folderState('other-business', '901816026303'), 'unauthorized');
+  assert.equal(folderFromProject({ id: 'p', name: 'P', clickupFolderId: '000', folderState: 'unauthorized' }), null);
+  assert.ok(folderFromProject({ id: 'p', name: 'P', clickupFolderId: '901816026303', folderState: 'linked' }));
 });
 test('invalid calendar dates are rejected', () => {
   for (const s of ['2026-02-30','2026-13-01','x','2026-1-1']) assert.throws(() => dateMs(s));

@@ -52,7 +52,7 @@ export default async function MoneyPage({
   const window = monthWindow(month);
   const hourlyCost = contractorHourlyCost();
 
-  const projects = (await listProjects(business.id)).filter((p) => p.clickupFolderId);
+  const projects = (await listProjects(business.id)).filter((p) => p.folderState === "linked");
 
   let failure: string | null = null;
   const rows: { money: ClientMoney; overruns: EstimateVsActual[] }[] = [];

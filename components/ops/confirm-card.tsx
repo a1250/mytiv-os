@@ -1,5 +1,6 @@
 "use client";
 
+import { REVIEW_PROMPT } from "@/lib/ops-closure";
 import * as React from "react";
 import { Check, ExternalLink, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -94,7 +95,7 @@ export function ConfirmCard({
       out[f.key] = f.type === "number" ? Number(raw) : raw;
     }
     if (out.evidence_url) {
-      if (!window.confirm("I watched this recording and verified the definition of done.")) return;
+      if (!window.confirm(REVIEW_PROMPT)) return;
       out.evidence_reviewed = true;
     }
     onConfirm(out);

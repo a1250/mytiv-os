@@ -1,7 +1,8 @@
 
 CREATE UNIQUE INDEX "ops_action_business_id_uq" ON "ops_actions" USING btree ("business_id","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "projects_business_id_uq" ON "projects" USING btree ("business_id","id");
---> statement-breakpointALTER TABLE "marketing_snapshots" ADD CONSTRAINT "marketing_snapshots_business_id_project_id_projects_business_id_id_fk" FOREIGN KEY ("business_id","project_id") REFERENCES "public"."projects"("business_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+--> statement-breakpoint
+ALTER TABLE "marketing_snapshots" ADD CONSTRAINT "marketing_snapshots_business_id_project_id_projects_business_id_id_fk" FOREIGN KEY ("business_id","project_id") REFERENCES "public"."projects"("business_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketing_snapshots" ADD CONSTRAINT "marketing_snapshots_business_id_imported_by_business_memberships_business_id_user_id_fk" FOREIGN KEY ("business_id","imported_by") REFERENCES "public"."business_memberships"("business_id","user_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ops_actions" ADD CONSTRAINT "ops_actions_business_id_project_id_projects_business_id_id_fk" FOREIGN KEY ("business_id","project_id") REFERENCES "public"."projects"("business_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ops_actions" ADD CONSTRAINT "ops_actions_business_id_user_id_business_memberships_business_id_user_id_fk" FOREIGN KEY ("business_id","user_id") REFERENCES "public"."business_memberships"("business_id","user_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

@@ -42,7 +42,7 @@ export type OpsContext = {
   bugs: OpsTask[];
   decisions: OpsTask[];
   thresholdDays: number;
-  dataState?: "available" | "unavailable" | "unlinked";
+  dataState?: "available" | "unavailable" | "unlinked" | "unauthorized";
 };
 
 /** Tools that change something in ClickUp. Every one requires a confirmed click. */
@@ -60,7 +60,7 @@ export async function loadOpsContext(businessId: string, projectId: string): Pro
 
   const folder = folderFromProject(project);
   let rows: OpsTask[] = [];
-  let dataState: OpsContext["dataState"] = folder ? "available" : "unlinked";
+  let dataState: OpsContext["dataState"] = folder ? "available" : project.folderState === "unauthorized" ? "unauthorized" : "unlinked";
   if (folder) {
     try {
       rows = await getTasksByFolder(folder);
@@ -102,7 +102,7 @@ function describeTask(t: OpsTask) {
 
 export function buildCopilotSystem(ctx: OpsContext, businessName: string) {
   const { project, tasks, bugs, decisions, thresholdDays } = ctx;
-  const unavailable = ctx.dataState === "unavailable" || ctx.dataState === "unlinked";
+  const unavailable = ctx.dataState !== undefined && ctx.dataState !== "available";
 
   return [
     `You are the operations copilot for ${businessName}, working on one client: ${project.name}.`,
@@ -137,7 +137,7 @@ export function buildCopilotSystem(ctx: OpsContext, businessName: string) {
     "## Spec",
     project.brief?.trim() || "(no spec written yet — say so if the question depends on it)",
     "",
-    `ClickUp data state: ${ctx.dataState ?? "available"}. Unavailable or unlinked means UNKNOWN, never zero work or no blockers.`,
+    `ClickUp data state: ${ctx.dataState ?? "available"}. Unavailable, unlinked or unauthorized means UNKNOWN, never zero work or no blockers.`,
     `## Open tasks (${tasks.length})`,
     unavailable ? "(UNKNOWN — source unavailable)" : tasks.length ? tasks.map(describeTask).join("\n") : "(none)",
     "",
@@ -280,7 +280,7 @@ type ToolInput = Record<string, unknown>;
 
 /** Reads only. A write never reaches this function. */
 export async function runOpsTool(name: string, input: ToolInput, ctx: OpsContext): Promise<string> {
-  if (ctx.dataState === "unavailable" || ctx.dataState === "unlinked") return "ClickUp data is unavailable: task counts, blockers and decisions are UNKNOWN.";
+  if (ctx.dataState !== undefined && ctx.dataState !== "available") return "ClickUp data is unavailable: task counts, blockers and decisions are UNKNOWN.";
   switch (name) {
     case "fetch_tasks": {
       const pool = input.list === "bugs" ? ctx.bugs : input.list === "tasks" ? ctx.tasks : [...ctx.tasks, ...ctx.bugs];

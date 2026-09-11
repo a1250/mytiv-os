@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import type { OpsTask } from "@/lib/clickup";
 import type { WorkspaceMember } from "@/lib/clickup";
+import { REVIEW_PROMPT, needsReviewConfirmation, statusChange } from "@/lib/ops-closure";
 
 type Props = {
   businessSlug: string;
@@ -79,7 +80,17 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
     if (status === task.status) return;
     const evidenceUrl = window.prompt('For closing: paste the exact attached recording URL you have reviewed. Otherwise leave blank.', '');
     if (evidenceUrl === null) return;
-    patch(task, { status, evidence_url: evidenceUrl, evidence_reviewed: Boolean(evidenceUrl) }, { status }, `Status set to “${status}”`);
+    // A URL is not a review. The reviewed flag comes only from this second, explicit answer;
+    // declining aborts here, and the server refuses a closing status without it regardless.
+    let reviewConfirmed = false;
+    if (needsReviewConfirmation(evidenceUrl)) {
+      reviewConfirmed = window.confirm(REVIEW_PROMPT);
+      if (!reviewConfirmed) {
+        toast({ message: "Not sent — closing needs the recording to be reviewed first.", tone: "error" });
+        return;
+      }
+    }
+    patch(task, statusChange(status, evidenceUrl, reviewConfirmed), { status }, `Status set to “${status}”`);
   }
 
   function onAssignee(task: OpsTask, raw: string) {

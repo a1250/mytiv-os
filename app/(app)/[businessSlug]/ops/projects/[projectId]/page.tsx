@@ -69,7 +69,11 @@ export default async function ClientWorkspacePage({
         <h1 className="text-xl font-bold">{project.name}</h1>
         <p className="text-muted-foreground mt-1 text-xs">
           {project.client || "No client name set"}
-          {project.clickupFolderId ? ` · ClickUp folder ${project.clickupFolderId}` : " · not linked to ClickUp"}
+          {project.folderState === "linked"
+            ? ` · ClickUp folder ${project.clickupFolderId}`
+            : project.folderState === "unauthorized"
+              ? ` · ClickUp folder ${project.clickupFolderId} is not authorized for this business — tasks not read`
+              : " · not linked to ClickUp"}
         </p>
       </header>
 

@@ -104,6 +104,10 @@ export function computeClientMoney(args: {
     if (!Number.isFinite(revenue.total) || revenue.total <= 0) gaps.push("budget_unparsed");
   }
 
+  // Zero logged hours is treated as UNKNOWN cost, not ₪0: ClickUp reports the hours that were
+  // tracked, and nobody tracking is not the same as nobody working. The price of that honesty is
+  // that a month with genuinely no work looks identical to a month with no time reporting — the
+  // screen cannot tell them apart until a time-reporting practice exists (see docs/ops-marketing-upgrade.md).
   const monthCost = hourlyCost === null || monthHours === 0 ? null : monthHours * hourlyCost;
   const totalCost = hourlyCost === null || totalHours === 0 ? null : totalHours * hourlyCost;
 

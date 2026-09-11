@@ -69,7 +69,9 @@ export function ClientWorkspace({
           members={members}
           statusesByList={statusesByList}
           emptyMessage={
-            project.clickupFolderId
+            project.folderState === "unauthorized"
+              ? "This project's ClickUp folder is not authorized for this business — tasks were not read."
+              : project.clickupFolderId
               ? "No open tasks in this folder."
               : "This project is not linked to a ClickUp folder yet — add the folder ID in סקירה."
           }
@@ -83,7 +85,7 @@ export function ClientWorkspace({
           tasks={bugs}
           members={members}
           statusesByList={statusesByList}
-          emptyMessage="No open bugs."
+          emptyMessage={project.folderState === "unauthorized" ? "This project's ClickUp folder is not authorized for this business — bugs were not read." : "No open bugs."}
         />
       </TabsContent>
 

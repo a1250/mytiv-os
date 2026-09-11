@@ -38,6 +38,15 @@ const params = { params: Promise.resolve({ businessSlug: 'mytiv', taskId: 'task'
 test('route rejects member before any external write', async () => { mocks.guard.mockResolvedValue({ ...scope, role: 'member' }); expect((await PATCH(request({}), params)).status).toBe(403); expect(writes).toBe(0); });
 test('route rejects project outside guarded business', async () => { mocks.project.mockResolvedValue(null); expect((await PATCH(request({ projectId: 'other', confirmed: true, requestId, status: 'working' }), params)).status).toBe(404); expect(writes).toBe(0); });
 test('route rejects task outside allowed project lists', async () => { listId = 'foreign'; expect((await PATCH(request({ projectId: 'project', confirmed: true, requestId, status: 'working' }), params)).status).toBe(404); expect(writes).toBe(0); });
+test('route refuses closure when a URL is given but review was not explicitly confirmed', async () => {
+  recording = true;
+  const res = await PATCH(request({ projectId: 'project', confirmed: true, requestId, status: 'custom-finished', evidence_url: 'https://proof.example/proof.mp4', evidence_reviewed: false }), params);
+  expect(res.status).toBe(409); expect(writes).toBe(0);
+});
+test('route refuses any write for a project whose folder is outside the allowlist', async () => {
+  mocks.project.mockResolvedValue({ ...project, folderState: 'unauthorized' });
+  expect((await PATCH(request({ projectId: 'project', confirmed: true, requestId, status: 'working' }), params)).status).toBe(404); expect(writes).toBe(0);
+});
 test('route blocks evidence bypass including custom closed status', async () => { expect((await PATCH(request({ projectId: 'project', confirmed: true, requestId, status: 'custom-finished' }), params)).status).toBe(409); expect(writes).toBe(0); });
 test('confirmed evidenced closure executes once with durable receipts', async () => {
   recording = true;

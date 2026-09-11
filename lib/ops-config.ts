@@ -73,17 +73,34 @@ export function clientFoldersFor(businessSlug: string): ClientFolder[] {
 }
 
 /**
+ * Whether a project's folder may be read for this business: nothing set, on the
+ * allowlist, or pointing somewhere this business is not allowed to read.
+ * "unauthorized" is a state the screen must name — it is neither "no tasks" nor
+ * "not linked".
+ */
+export type FolderState = "linked" | "unlinked" | "unauthorized";
+
+export function folderState(businessSlug: string, clickupFolderId: string | null | undefined): FolderState {
+  if (!clickupFolderId) return "unlinked";
+  return clientFoldersFor(businessSlug).some((f) => f.clickupFolderId === clickupFolderId) ? "linked" : "unauthorized";
+}
+
+/**
  * A project row seen as a ClickUp folder. This is the Phase 1 handover: once a
  * business has projects carrying a clickupFolderId, the hardcoded map above
  * stops being consulted. `key` is the project id so every Ops row can link
  * straight back to its client workspace.
+ *
+ * A row annotated `folderState: "unauthorized"` yields no folder at all, so no
+ * caller — page, route or copilot — can read or write that folder by accident.
  */
 export function folderFromProject(project: {
   id: string;
   name: string;
   clickupFolderId: string | null;
+  folderState?: FolderState;
 }): ClientFolder | null {
-  if (!project.clickupFolderId) return null;
+  if (!project.clickupFolderId || project.folderState === "unauthorized") return null;
   return { key: project.id, label: project.name, clickupFolderId: project.clickupFolderId };
 }
 

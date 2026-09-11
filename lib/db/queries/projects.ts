@@ -9,8 +9,16 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../index";
 import { projects, businesses } from "../schema";
 import { sanitizePatch } from "./_patch";
-import { clientFoldersFor } from "@/lib/ops-config";
+import { clientFoldersFor, folderState, type FolderState } from "@/lib/ops-config";
 import { OpsPolicyError } from "@/lib/ops-policy";
+
+/**
+ * Writes refuse a folder outside the business's checked-in allowlist. Reads never throw
+ * for it: a row that already points elsewhere is returned with `folderState: "unauthorized"`
+ * so the screen can say so, while `folderFromProject` refuses to turn it into a ClickUp
+ * folder — no task read, no write, no cross-business data. One bad row must not take the
+ * whole project list down with it.
+ */
 async function allowedFolder(businessId: string, folderId: unknown) {
   if (folderId === null || folderId === undefined || folderId === '') return;
   const [business] = await db.select({ slug: businesses.slug }).from(businesses).where(eq(businesses.id, businessId));
@@ -21,32 +29,38 @@ function projectPatch(data: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(sanitizePatch(data)).filter(([key]) => allowed.includes(key)));
 }
 
-export type ProjectRow = typeof projects.$inferSelect;
+export type ProjectRow = typeof projects.$inferSelect & { folderState: FolderState };
 
-export async function listProjects(businessId: string) {
+/** One query: the project row plus the business slug the allowlist is keyed by. */
+const projectWithSlug = { project: projects, slug: businesses.slug } as const;
+function annotate(row: { project: typeof projects.$inferSelect; slug: string }): ProjectRow {
+  return { ...row.project, folderState: folderState(row.slug, row.project.clickupFolderId) };
+}
+
+export async function listProjects(businessId: string): Promise<ProjectRow[]> {
   const rows = await db
-    .select()
+    .select(projectWithSlug)
     .from(projects)
+    .innerJoin(businesses, eq(businesses.id, projects.businessId))
     .where(eq(projects.businessId, businessId))
     .orderBy(sql`${projects.status} <> 'active'`, asc(projects.name));
-  for (const row of rows) await allowedFolder(businessId, row.clickupFolderId);
-  return rows;
+  return rows.map(annotate);
 }
 
-export async function getProject(businessId: string, id: string) {
+export async function getProject(businessId: string, id: string): Promise<ProjectRow | null> {
   const [row] = await db
-    .select()
+    .select(projectWithSlug)
     .from(projects)
+    .innerJoin(businesses, eq(businesses.id, projects.businessId))
     .where(and(eq(projects.businessId, businessId), eq(projects.id, id)))
     .limit(1);
-  if (row) await allowedFolder(businessId, row.clickupFolderId);
-  return row ?? null;
+  return row ? annotate(row) : null;
 }
 
-/** Projects that are wired to a ClickUp folder — the input to every Ops read. */
+/** Projects that are wired to an authorized ClickUp folder — the input to every Ops read. */
 export async function listLinkedProjects(businessId: string) {
   const rows = await listProjects(businessId);
-  return rows.filter((r) => Boolean(r.clickupFolderId));
+  return rows.filter((r) => r.folderState === "linked");
 }
 
 export async function createProject(
