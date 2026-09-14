@@ -1,6 +1,7 @@
 -- Run only on an isolated database after migrations. All fixture rows roll back.
 BEGIN;
 DO $$
+#variable_conflict use_variable
 DECLARE a uuid := gen_random_uuid(); b uuid := gen_random_uuid(); u uuid := gen_random_uuid(); p uuid := gen_random_uuid(); action_id uuid := gen_random_uuid(); rid uuid := gen_random_uuid(); violated text;
 BEGIN
   -- The composite tenant/project foreign keys are what stop a project from being attached to another
@@ -54,6 +55,9 @@ BEGIN
     RAISE EXCEPTION 'claim deletion accepted';
   EXCEPTION WHEN raise_exception THEN IF SQLERRM <> 'Ops history is append-only' THEN RAISE; END IF; END;
   INSERT INTO ops_audit_events(business_id,action_id,event,detail) VALUES(a,action_id,'confirmed','{}');
+  -- A rollback appends its receipt to the ORIGINAL action. Appending is the only way history grows.
+  INSERT INTO ops_audit_events(business_id,action_id,event,detail) VALUES(a,action_id,'succeeded','{"pre_state":{},"post_state":{}}'),(a,action_id,'rolled_back','{"by_request_id":"x"}');
+  IF (SELECT count(*) FROM ops_audit_events e WHERE e.action_id=action_id) <> 3 THEN RAISE EXCEPTION 'appended events not all present'; END IF;
   BEGIN
     UPDATE ops_audit_events SET event='rewritten' WHERE business_id=a;
     RAISE EXCEPTION 'audit edit accepted';
@@ -71,6 +75,6 @@ BEGIN
     INSERT INTO marketing_snapshots(business_id,project_id,revision,payload,imported_by) VALUES(a,p,0,'{}',u);
     RAISE EXCEPTION 'older revision accepted';
   EXCEPTION WHEN raise_exception THEN IF SQLERRM <> 'stale_or_conflicting_revision' THEN RAISE; END IF; END;
-  RAISE NOTICE 'PASS: composite project FKs present and enforced, duplicate claims, project/receipt isolation, immutable claims/audit/snapshots, unique revisions';
+  RAISE NOTICE 'PASS: composite project FKs present and enforced, duplicate claims, project/receipt isolation, append-only rollback receipts, immutable claims/audit/snapshots, unique revisions';
 END $$;
 ROLLBACK;

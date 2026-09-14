@@ -31,3 +31,17 @@ export function assertClosure(statusType: string, evidenceUrl: unknown, reviewed
     throw new OpsPolicyError('Review an attached recording and provide its exact URL before closing.', 409);
   }
 }
+
+/**
+ * The `date_updated` marker a caller claims to have seen, from the ISO `updatedAt` on a board row.
+ * `undefined` = no claim made (no changed-since check); an empty row marker = "" is treated as null.
+ * ClickUp's marker is milliseconds as a string, which is how `OpsTask.updatedAt` was derived.
+ */
+export function expectedMarker(updatedAt: unknown): string | null | undefined {
+  if (updatedAt === undefined) return undefined;
+  if (updatedAt === null || updatedAt === '') return null;
+  if (typeof updatedAt !== 'string') throw new OpsPolicyError('invalid_expected_updated_at');
+  const ms = Date.parse(updatedAt);
+  if (!Number.isFinite(ms)) throw new OpsPolicyError('invalid_expected_updated_at');
+  return String(ms);
+}

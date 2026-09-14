@@ -12,8 +12,9 @@ export async function requireScopedTask(folder: ClientFolder | null, taskId: str
   if (!list) throw new OpsPolicyError('not_found', 404);
   return { task, list };
 }
-export async function requireStatusEvidence(folder: ClientFolder | null, taskId: string, status: string, input: Record<string, unknown>) {
-  const { list } = await requireScopedTask(folder, taskId);
+/** `scoped` lets a caller that already did the fresh scoped read pass it in instead of fetching twice. */
+export async function requireStatusEvidence(folder: ClientFolder | null, taskId: string, status: string, input: Record<string, unknown>, scoped?: Awaited<ReturnType<typeof requireScopedTask>>) {
+  const { list } = scoped ?? await requireScopedTask(folder, taskId);
   const type = list.statusTypes[status];
   if (!type || type === 'unknown') throw new OpsPolicyError('invalid_or_unknown_status');
   if (['done', 'closed'].includes(type)) {

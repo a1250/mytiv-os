@@ -53,10 +53,12 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
       const res = await fetch(`/api/${businessSlug}/ops/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, projectId, confirmed: true, requestId: crypto.randomUUID() }),
+        // The marker this row was rendered from: the server refuses the write if the task moved on since.
+        body: JSON.stringify({ ...body, projectId, confirmed: true, requestId: crypto.randomUUID(), expectedUpdatedAt: task.updatedAt }),
       });
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: "unknown" }));
+        if (error === "task_changed_since_read") throw new Error("the task changed in ClickUp since it was loaded — refresh and try again");
         throw new Error(error);
       }
       toast({ message: label, href: task.url, tone: "ok" });

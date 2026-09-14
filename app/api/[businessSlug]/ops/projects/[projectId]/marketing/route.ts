@@ -21,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ bus
     const body = objectInput(JSON.parse(text)); assertConfirmation(req, body);
     const plan = parseMarketingPlan(body.plan, binding);
     for (const item of plan.items) if (item.clickupTaskId) await requireScopedTask(folderFromProject(project), item.clickupTaskId);
-    const result = await auditedAction(scope, projectId, body.requestId as string, 'marketing_import', plan, () => importPlan(scope.businessId, projectId, scope.userId, plan));
+    const result = await auditedAction(scope, projectId, body.requestId as string, 'marketing_import', plan, () => importPlan(scope.businessId, projectId, scope.userId, plan), { target: { kind: 'project', id: projectId } });
     return Response.json(result);
   } catch (err) {
     if (err instanceof ApiGuardError) return err.response;

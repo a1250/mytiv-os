@@ -15,11 +15,14 @@
  */
 import "server-only";
 import { requireScopedTask, requireStatusEvidence } from "@/lib/ops-access";
-import { dateMs, requiredText, OpsPolicyError } from "@/lib/ops-policy";
+import { dateMs, requiredText, expectedMarker, OpsPolicyError } from "@/lib/ops-policy";
+import { snapshotTask, type TaskSnapshot } from "@/lib/ops-snapshot";
+import type { AuditTarget, ExternalRef } from "@/lib/ops-audit";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSecret } from "@/lib/db/queries/secrets";
 import { AI_KEY_SECRET } from "./claude";
 import {
+  ClickUpWriteUnverifiedError,
   addComment,
   createTask,
   getTaskEvidence,
@@ -355,7 +358,9 @@ export async function runOpsTool(name: string, input: ToolInput, ctx: OpsContext
 // Executing a confirmed proposal
 // ---------------------------------------------------------------------------
 
-export type ExecuteResult = { ok: true; summary: string; url?: string } | { ok: false; error: string };
+export type ExecuteResult =
+  | { ok: true; summary: string; url?: string; audit?: { target: AuditTarget; pre?: TaskSnapshot; post?: TaskSnapshot; ref?: ExternalRef } }
+  | { ok: false; error: string };
 
 async function resolveAssigneeId(name: string | undefined): Promise<number | null> {
   const wanted = (name ?? "").trim().toLowerCase();
@@ -370,7 +375,11 @@ async function resolveAssigneeId(name: string | undefined): Promise<number | nul
  * Runs a proposal the user clicked Confirm on. Called only from the confirm
  * route — the chat stream has no path into this function.
  */
-export async function executeProposal(ctx: OpsContext, tool: string, input: ToolInput): Promise<ExecuteResult> {
+/**
+ * `onPre` fires the instant the pre-write snapshot exists, before the external write — so the
+ * audit record keeps it even when the write itself fails or its outcome is unknown.
+ */
+export async function executeProposal(ctx: OpsContext, tool: string, input: ToolInput, onPre?: (pre: TaskSnapshot) => void): Promise<ExecuteResult> {
   try {
     switch (tool) {
       case "create_task": {
@@ -395,13 +404,13 @@ export async function executeProposal(ctx: OpsContext, tool: string, input: Tool
           markdown_description: dod ? `**Done when:** ${dod}` : undefined,
         });
 
-        return { ok: true, summary: `Task created in ${kind}`, url: created.url };
+        return { ok: true, summary: `Task created in ${kind}`, url: created.url, audit: { target: { kind: "list", id: listId }, ref: { taskId: created.id, url: created.url } } };
       }
 
       case "update_task": {
         const taskId = String(input.task_id ?? "").trim();
         if (!taskId) return { ok: false, error: "No task id." };
-        await requireScopedTask(ctx.folder, taskId);
+        const scoped = await requireScopedTask(ctx.folder, taskId);
         const patch: { status?: string; assignees?: { add?: number[] }; due_date?: number } = {};
         if (typeof input.status === "string" && input.status.trim()) patch.status = input.status.trim();
         if (typeof input.assignee === "string" && input.assignee.trim()) {
@@ -413,9 +422,15 @@ export async function executeProposal(ctx: OpsContext, tool: string, input: Tool
         if (due) patch.due_date = due;
         if (Object.keys(patch).length === 0) return { ok: false, error: "Nothing to change." };
 
-        if (patch.status) await requireStatusEvidence(ctx.folder, taskId, patch.status, input);
-        const updated = await updateTask(taskId, patch);
-        return { ok: true, summary: "Task updated in ClickUp", url: updated.url };
+        if (patch.status) await requireStatusEvidence(ctx.folder, taskId, patch.status, input, scoped);
+        // The model reasoned over the board in `ctx`; if that board carried this task, the write is
+        // refused when the task has changed since — the proposal was made about a different task state.
+        const seen = [...ctx.tasks, ...ctx.bugs].find((t) => t.id === taskId);
+        const expectedDateUpdated = seen ? expectedMarker(seen.updatedAt) : undefined;
+        let pre: TaskSnapshot | undefined;
+        const { raw, post } = await updateTask(taskId, patch, { expectedDateUpdated, onPre: (t) => { pre = snapshotTask(t); onPre?.(pre); } });
+        return { ok: true, summary: "Task updated in ClickUp", url: raw.url,
+          audit: { target: { kind: "task", id: taskId }, pre, post: snapshotTask(post), ref: { taskId, url: raw.url, date_updated: post.date_updated ?? null } } };
       }
 
       case "add_comment": {
@@ -423,8 +438,8 @@ export async function executeProposal(ctx: OpsContext, tool: string, input: Tool
         const text = String(input.text ?? "").trim();
         if (!taskId || !text) return { ok: false, error: "A task id and comment text are both required." };
         await requireScopedTask(ctx.folder, taskId);
-        await addComment(taskId, text);
-        return { ok: true, summary: "Comment added in ClickUp", url: `https://app.clickup.com/t/${taskId}` };
+        const comment = await addComment(taskId, text);
+        return { ok: true, summary: "Comment added in ClickUp", url: `https://app.clickup.com/t/${taskId}`, audit: { target: { kind: "task", id: taskId }, ref: { taskId, url: `https://app.clickup.com/t/${taskId}#comment-${comment.id}` } } };
       }
 
       case "add_decision": {
@@ -437,13 +452,16 @@ export async function executeProposal(ctx: OpsContext, tool: string, input: Tool
           name: requiredText(input.title, "title", 500),
           markdown_description: [source ? `**Source:** ${source}` : "", detail].filter(Boolean).join("\n\n"),
         });
-        return { ok: true, summary: "Decision recorded", url: created.url };
+        return { ok: true, summary: "Decision recorded", url: created.url, audit: { target: { kind: "list", id: listId }, ref: { taskId: created.id, url: created.url } } };
       }
 
       default:
         return { ok: false, error: `"${tool}" is not something this system can execute.` };
     }
   } catch (err) {
+    // An unverified write is "sent, unconfirmed" — it must reach the audit layer as a thrown error
+    // (phase after_write_unverified), never be flattened into a plain `ok: false` that reads as "not written".
+    if (err instanceof ClickUpWriteUnverifiedError) throw err;
     return { ok: false, error: err instanceof OpsPolicyError ? err.message : "ClickUp write failed or its result could not be verified. Check the audit and ClickUp before retrying." };
   }
 }

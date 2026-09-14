@@ -10,6 +10,7 @@
  * error for the UI to explain rather than retried into the ground.
  */
 import "server-only";
+import { OpsPolicyError } from "./ops-policy";
 import {
   BLOCKED_ON_FIELD,
   BLOCKED_ON_VALUES,
@@ -39,6 +40,15 @@ export class ClickUpError extends Error {
   constructor(public status: number, message: string) {
     super(message);
   }
+}
+
+/**
+ * The PUT was sent — and may well have landed — but the read-back did not confirm it. This is
+ * the one failure the audit log must distinguish from "nothing was written": the caller records
+ * it as unknown-after-write, and rollback refuses it because there is no verified post-state.
+ */
+export class ClickUpWriteUnverifiedError extends ClickUpError {
+  constructor(message: string) { super(502, message); }
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +179,7 @@ type RawCustomField = {
   type_config?: { options?: { id?: string; name?: string; orderindex?: number }[] };
 };
 
-type RawTask = {
+export type RawTask = {
   id: string;
   name: string;
   url?: string;
@@ -485,18 +495,42 @@ export async function createTask(
   return res;
 }
 
+export type UpdateTaskPatch = { status?: string; assignees?: { add?: number[]; rem?: number[] }; due_date?: number | null };
+
+/**
+ * A governed write, bracketed by two fresh reads.
+ *
+ * `pre` is the task as it stood the instant before the PUT; `post` is the verification read
+ * after it. Both are returned so the audit log can keep them. When the caller says which
+ * `date_updated` it looked at (`expectedDateUpdated`), a task that has moved on since is
+ * refused before anything is written — nobody's newer work gets overwritten on the strength
+ * of a stale screen. `undefined` means the caller made no such claim; `null` means "I saw a
+ * task with no marker".
+ */
 export async function updateTask(
   taskId: string,
-  patch: { status?: string; assignees?: { add?: number[]; rem?: number[] }; due_date?: number }
-) {
-  const res = await send<RawTask>("PUT", `${API}/task/${taskId}`, patch);
+  patch: UpdateTaskPatch,
+  opts: { expectedDateUpdated?: string | null; onPre?: (pre: RawTask) => void } = {}
+): Promise<{ raw: RawTask; pre: RawTask; post: RawTask }> {
+  const pre = await getTask(taskId);
+  opts.onPre?.(pre);
+  if (opts.expectedDateUpdated !== undefined) {
+    const now = pre.date_updated == null ? null : String(pre.date_updated);
+    if (now !== opts.expectedDateUpdated) throw new OpsPolicyError("task_changed_since_read", 409);
+  }
+  const res = await send<RawTask>("PUT", `${API}/task/${encodeURIComponent(taskId)}`, patch);
   invalidate();
-  const verified = await getTask(taskId);
-  if (patch.status && verified.status?.status !== patch.status) throw new ClickUpError(502, 'Update outcome could not be verified; check ClickUp before retry.');
-  const assigned = new Set((verified.assignees ?? []).map(a => a.id));
-  if (patch.assignees?.add?.some(id => !assigned.has(id)) || patch.assignees?.rem?.some(id => assigned.has(id))) throw new ClickUpError(502, 'Assignee outcome could not be verified; check ClickUp before retry.');
-  if (patch.due_date && Number(verified.due_date) !== patch.due_date) throw new ClickUpError(502, 'Due date outcome could not be verified; check ClickUp before retry.');
-  return res;
+  let post: RawTask;
+  try { post = await getTask(taskId); }
+  catch (err) { throw new ClickUpWriteUnverifiedError(err instanceof Error ? err.message : "verification read failed"); }
+  if (patch.status && post.status?.status !== patch.status) throw new ClickUpWriteUnverifiedError('Update outcome could not be verified; check ClickUp before retry.');
+  const assigned = new Set((post.assignees ?? []).map(a => a.id));
+  if (patch.assignees?.add?.some(id => !assigned.has(id)) || patch.assignees?.rem?.some(id => assigned.has(id))) throw new ClickUpWriteUnverifiedError('Assignee outcome could not be verified; check ClickUp before retry.');
+  if (patch.due_date !== undefined) {
+    const landed = post.due_date == null || post.due_date === "" ? null : Number(post.due_date);
+    if (landed !== patch.due_date) throw new ClickUpWriteUnverifiedError('Due date outcome could not be verified; check ClickUp before retry.');
+  }
+  return { raw: res, pre, post };
 }
 
 export async function addComment(taskId: string, text: string) {

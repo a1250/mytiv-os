@@ -94,7 +94,7 @@ export default async function ClientWorkspacePage({
         statusesByList={statusesByList}
       />
       <Suspense fallback={<p className="mt-6 text-xs">טוען היסטוריית אישורים…</p>}>
-        <AuditLog businessId={business.id} projectId={projectId} />
+        <AuditLog businessSlug={businessSlug} businessId={business.id} projectId={projectId} canWrite={role === "owner" || role === "admin"} />
       </Suspense>
     </div>
   );

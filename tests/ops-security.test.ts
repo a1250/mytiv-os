@@ -5,6 +5,8 @@ import { parseMarketingPlan } from '../lib/marketing/contract';
 import { computeClientMoney } from '../lib/money';
 import { foldersForBusiness, folderFromProject, folderState } from '../lib/ops-config';
 import { statusChange, needsReviewConfirmation } from '../lib/ops-closure';
+import { snapshotTask, reversePatch, assertUnchanged, rollbackEligibility, isTaskSnapshot } from '../lib/ops-snapshot';
+import { expectedMarker } from '../lib/ops-policy';
 import { requireScopedTask, requireStatusEvidence } from '../lib/ops-access';
 
 const fixture = () => ({ schemaVersion: 1, marketingBusiness: 'fixture', revision: 1, sourceRevision: 'fixture-rev', asOf: '2026-01-01T00:00:00Z',
@@ -50,6 +52,39 @@ test('a project folder outside the allowlist is named, not read', () => {
   assert.equal(folderState('other-business', '901816026303'), 'unauthorized');
   assert.equal(folderFromProject({ id: 'p', name: 'P', clickupFolderId: '000', folderState: 'unauthorized' }), null);
   assert.ok(folderFromProject({ id: 'p', name: 'P', clickupFolderId: '901816026303', folderState: 'linked' }));
+});
+test('a task snapshot keeps identifiers only and round-trips through jsonb', () => {
+  const raw = { id: 't1', name: 'Secret title', url: 'u', list: { id: 'l1' }, status: { status: 'working' }, assignees: [{ id: 2, username: 'Dana', email: 'dana@x.invalid' }, { id: 1 }], due_date: '1700000000000', date_updated: '1000' };
+  const snap = snapshotTask(raw);
+  assert.deepEqual(snap, { taskId: 't1', listId: 'l1', status: 'working', assigneeIds: [1, 2], dueDate: 1700000000000, dateUpdated: '1000' });
+  assert.ok(!JSON.stringify(snap).includes('Dana') && !JSON.stringify(snap).includes('Secret'));
+  assert.ok(isTaskSnapshot(JSON.parse(JSON.stringify(snap))));
+  assert.ok(!isTaskSnapshot({ taskId: 't1' }));
+  assert.deepEqual(snapshotTask({ id: 't2', name: '', due_date: null, date_updated: null }).dueDate, null);
+});
+test('reverse patch undoes exactly what changed, nothing more', () => {
+  const pre = { taskId: 't', listId: 'l', status: 'working', assigneeIds: [1], dueDate: null, dateUpdated: '1' };
+  const post = { ...pre, status: 'review', assigneeIds: [1, 2], dueDate: 5, dateUpdated: '2' };
+  assert.deepEqual(reversePatch(pre, post), { status: 'working', assignees: { rem: [2] }, due_date: null });
+  assert.deepEqual(reversePatch({ ...pre, assigneeIds: [3] }, { ...pre, assigneeIds: [1] }), { assignees: { add: [3], rem: [1] } });
+  assert.deepEqual(reversePatch({ ...pre, dueDate: 9 }, { ...pre, dueDate: null }), { due_date: 9 });
+  assert.equal(reversePatch(pre, { ...pre, dateUpdated: '2' }), null);
+});
+test('unchanged-since check compares the exact change marker', () => {
+  assert.throws(() => assertUnchanged('1000', { id: 't', name: '', date_updated: '1001' }), /task_changed_since_read/);
+  assert.throws(() => assertUnchanged(null, { id: 't', name: '', date_updated: '1001' }));
+  assertUnchanged('1000', { id: 't', name: '', date_updated: '1000' });
+  assertUnchanged(null, { id: 't', name: '', date_updated: null });
+  assert.equal(expectedMarker(new Date(1000).toISOString()), '1000');
+  assert.equal(expectedMarker(undefined), undefined);
+  assert.equal(expectedMarker(''), null);
+  assert.throws(() => expectedMarker('yesterday'));
+});
+test('only task updates are reversible; creations never are, because nothing here can delete', () => {
+  assert.equal(rollbackEligibility('update_task'), 'eligible');
+  for (const a of ['create_task', 'add_comment', 'add_decision']) assert.deepEqual(rollbackEligibility(a), { not: 'no_delete_capability' });
+  assert.deepEqual(rollbackEligibility('marketing_import'), { not: 'not_a_task_update' });
+  assert.deepEqual(rollbackEligibility('rollback_task'), { not: 'not_a_task_update' });
 });
 test('invalid calendar dates are rejected', () => {
   for (const s of ['2026-02-30','2026-13-01','x','2026-1-1']) assert.throws(() => dateMs(s));

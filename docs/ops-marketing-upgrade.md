@@ -117,3 +117,59 @@ No rollback / pre_state / post_state, no new feature, no schema change, no produ
 ### Results after the fixes
 
 `tsc` clean · `npm test` **20 + 14 pass** (was 18 + 12) · changed-file lint clean · production build passes (fixture env, client bundle clean) · `tests/ops-database.sql` PASS on a fresh isolated database built from the fixed migrations.
+
+## Audit record and controlled rollback — 2026-09-14
+
+No schema change. Everything below lives in the existing `ops_actions` / `ops_audit_events` tables (jsonb `detail`), still append-only by trigger. No production migration, deploy or ClickUp write was performed; ClickUp was an in-memory fixture behind a mocked transport.
+
+### Data model (per governed write)
+
+`ops_actions` row = the claim: actor (`user_id`), business, project, `request_id` (unique per business), `action`, payload hash, timestamp.
+`ops_audit_events` rows, in order:
+
+| event | detail |
+|---|---|
+| `confirmed` | `actor`, `approval { requestId, evidence_url, evidence_reviewed }`, `action`, `target { kind: task \| list \| project \| action, id }`, `payloadHash`, `rollback_eligibility` (`"eligible"` only for `update_task`; creations carry `{ not: "no_delete_capability" }`) |
+| `succeeded` | `result` (ClickUp response summary/url), `external_ref { taskId, url, date_updated }`, `pre_state`, `post_state` |
+| `rejected_or_unknown` | the operation itself declined (`ok: false`); nothing verified as written |
+| `refused_before_write` | deterministic policy refusal before any external call (the rollback guards) |
+| `failed_or_unknown` | `phase` ∈ `before_write` / `write_outcome_unknown` / `after_write_unverified`, plus `pre_state` when it was read before the failure |
+| `rolled_back` | appended to the **original** action by a later `rollback_task`: `by_request_id`, `restored_to`, `restored_state` |
+
+`pre_state` / `post_state` are `TaskSnapshot`s: task id, list id, status, assignee ids, due date (ms), `date_updated`. Identifiers only — no names, emails, titles or comments ever enter the log (`lib/ops-snapshot.ts`, tested).
+
+### Write flow (`update_task`, both the Tasks tab and the copilot confirm)
+
+guard → writer role → same-origin + `confirmed` + UUID request → project in this business → fresh scoped task read (list membership) → closure evidence if closing → **claim** → `confirmed` event → `updateTask`: fresh read (**pre**) → if the caller said which `date_updated` it saw (`expectedUpdatedAt` from the board row; the copilot uses the task in its own context) and the task moved on → `409 task_changed_since_read`, nothing sent → PUT → read-back (**post**) verified against the patch; a read-back that fails or disagrees throws `ClickUpWriteUnverifiedError` → HTTP 502 `write_unverified_check_audit_before_retry` and `failed_or_unknown { phase: after_write_unverified, pre_state }` → otherwise `succeeded { pre_state, post_state, external_ref }`.
+
+### Rollback flow (`POST /api/[business]/ops/actions/[actionId]/rollback`)
+
+Human-only; not in `CONFIRM_REQUIRED`, so the copilot cannot propose it (`tool: rollback_task` via `/chat/confirm` → `invalid_action`). Same gate as every write. The rollback is itself a claimed `rollback_task` action, so a refusal leaves a receipt and the same request id can never be replayed. Order, fail-closed:
+
+1. action exists for **this business and project** — otherwise 404, and no ClickUp call is made
+2. `action === update_task`, else 400 `rollback_unsupported_for_action`
+3. not already `rolled_back`, else 409
+4. has a `succeeded` event with verified `pre_state` and `post_state`, else 409 `outcome_unknown` (a partial/unverified write is never auto-reversed)
+5. task still exists and is in this project's folder, else 409 `target_missing`
+6. task `date_updated` equals the original `post_state`'s, else 409 `task_changed_since_action` — covers a ClickUp edit, a later Ops write, and any double rollback
+7. reverse patch computed from the stored states (only fields that changed); nothing to undo → 409; a reverse that would set a `done`/`closed` status → 409 `rollback_would_close_task_use_normal_flow`
+8. the reverse write goes through the same `updateTask` with `expectedDateUpdated = post_state.dateUpdated` (re-checked at the instant of writing), captures its own pre/post, and appends `rolled_back` to the original.
+
+There is no delete anywhere in this path or in the codebase.
+
+### Tests (all green: `npm test` = 24 node + 26 vitest; `tests/ops-database.sql` PASS on isolated PostgreSQL 17)
+
+`tests/rollback.vitest.ts` drives the real routes against an in-memory ClickUp task and audit store with the SQL's tenant scoping:
+(0) a governed write records actor, approval, target, eligibility, pre/post and external ref, with no personal data · a stale row is refused before any PUT · creations are recorded non-reversible and rollback of one is 400 ·
+(1) normal update + rollback — exactly one reverse PUT `{status, assignees.rem}`, task restored, rollback action has its own pre/post, original carries `rolled_back` · a reverse that would close is refused ·
+(2) partial external failure — PUT landed, read-back 404 → 502, `after_write_unverified` with `pre_state`; rollback refused `outcome_unknown` ·
+(3) target deleted externally → 409 `target_missing`, zero writes, `refused_before_write` receipt ·
+(4) state changed after the original write (external edit, and a later governed write) → 409 `task_changed_since_action`, zero writes ·
+(5) duplicate rollback — same request id → 409 claimed; new request id after success → 409 `already_rolled_back`; exactly one `rolled_back` event ·
+(6) unauthorized — member 403, unconfirmed 400, cross-origin 403, copilot `invalid_action` ·
+(7) cross-tenant — another business's owner → 404 with **zero** ClickUp calls; wrong project in the same business → 404.
+`tests/ops-security.test.ts` adds pure checks for snapshot shape/leak-freedom, reverse-patch minimality, the change-marker comparison and eligibility.
+
+### Not verified here (remains for O2/O3)
+
+Real ClickUp acceptance of `due_date: null` to clear a date, real `date_updated` semantics on assignee-only changes, and the Tasks-tab / audit-log UI under a real session. These are exactly the things a mocked transport cannot prove.
