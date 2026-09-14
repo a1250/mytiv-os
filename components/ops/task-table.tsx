@@ -16,6 +16,8 @@ type Props = {
   members: WorkspaceMember[];
   /** Allowed statuses per ClickUp list id — the vocabulary differs per list. */
   statusesByList: Record<string, string[]>;
+  /** Members can look but not write; the server refuses anyway (403), this just says so up front. */
+  readOnly?: boolean;
   emptyMessage: string;
 };
 
@@ -27,7 +29,7 @@ type Props = {
  * toast — a silent rollback is indistinguishable from a change that never
  * registered.
  */
-export function TaskTable({ businessSlug, projectId, tasks, members, statusesByList, emptyMessage }: Props) {
+export function TaskTable({ businessSlug, projectId, tasks, members, statusesByList, emptyMessage, readOnly = false }: Props) {
   const { toast } = useToast();
   const [rows, setRows] = React.useState(tasks);
   const activeRequests = React.useRef(new Set<string>());
@@ -144,7 +146,8 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <select
                 value={task.status}
-                disabled={busy}
+                disabled={busy || readOnly}
+                title={readOnly ? "Owners and admins only" : undefined}
                 onChange={(e) => onStatus(task, e.target.value)}
                 aria-label="Status"
                 className="border-border bg-muted text-foreground rounded-lg border px-2 py-1 text-xs"
@@ -158,7 +161,8 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
 
               <select
                 value={task.assignee?.id ?? ""}
-                disabled={busy}
+                disabled={busy || readOnly}
+                title={readOnly ? "Owners and admins only" : undefined}
                 onChange={(e) => onAssignee(task, e.target.value)}
                 aria-label="Assignee"
                 className="border-border bg-muted text-foreground rounded-lg border px-2 py-1 text-xs"

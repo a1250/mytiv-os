@@ -20,6 +20,7 @@ type Props = {
   members: WorkspaceMember[];
   statusesByList: Record<string, string[]>;
   marketing: { binding: string | null; plan: MarketingPlan | null; canImport: boolean; unavailable: boolean; now: string };
+  canWrite: boolean;
 };
 
 function Count({ n }: { n: number }) {
@@ -36,6 +37,7 @@ export function ClientWorkspace({
   members,
   statusesByList,
   marketing,
+  canWrite,
 }: Props) {
   return (
     <Tabs defaultValue="overview">
@@ -68,6 +70,7 @@ export function ClientWorkspace({
           tasks={tasks}
           members={members}
           statusesByList={statusesByList}
+          readOnly={!canWrite}
           emptyMessage={
             project.folderState === "unauthorized"
               ? "This project's ClickUp folder is not authorized for this business — tasks were not read."
@@ -85,6 +88,7 @@ export function ClientWorkspace({
           tasks={bugs}
           members={members}
           statusesByList={statusesByList}
+          readOnly={!canWrite}
           emptyMessage={project.folderState === "unauthorized" ? "This project's ClickUp folder is not authorized for this business — bugs were not read." : "No open bugs."}
         />
       </TabsContent>

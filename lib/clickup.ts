@@ -20,7 +20,11 @@ import {
   type ListKind,
 } from "./ops-config";
 
-const API = "https://api.clickup.com/api/v2";
+/**
+ * Staging only: point the whole transport at a local stand-in (scripts/staging/clickup-mock.mjs)
+ * so a full HTTP/browser verification never reaches a real client task. Unset = the real API.
+ */
+const API = process.env.CLICKUP_API_BASE?.replace(/\/$/, "") || "https://api.clickup.com/api/v2";
 const CACHE_TTL_MS = 60_000;
 const DAY_MS = 86_400_000;
 
@@ -251,9 +255,16 @@ function normalise(raw: RawTask, folder: ClientFolder, now: number): OpsTask {
 // ---------------------------------------------------------------------------
 
 /** Every open task in one folder, following pagination to the end. */
+/**
+ * `fresh` bypasses the 60s read cache. The cache is per process: a write handled by one
+ * instance does not invalidate another's copy, so the one screen that writes (the client
+ * workspace) reads fresh — otherwise a reload right after a write can show the old status,
+ * and the next write would be refused as "changed since read" against a marker that was
+ * never current. Dashboards that only read keep the cache.
+ */
 export async function getTasksByFolder(
   folder: ClientFolder,
-  filters: { includeClosed?: boolean } = {}
+  filters: { includeClosed?: boolean; fresh?: boolean } = {}
 ): Promise<OpsTask[]> {
   const now = Date.now();
   const out: OpsTask[] = [];
@@ -266,7 +277,7 @@ export async function getTasksByFolder(
     });
     params.append("project_ids[]", folder.clickupFolderId);
 
-    const data = await get<{ tasks?: RawTask[]; last_page?: boolean }>(`/team/${workspaceId()}/task`, params);
+    const data = await get<{ tasks?: RawTask[]; last_page?: boolean }>(`/team/${workspaceId()}/task`, params, Boolean(filters.fresh));
     for (const raw of data.tasks ?? []) out.push(normalise(raw, folder, now));
     if (data.last_page !== false || !data.tasks?.length) break;
   }

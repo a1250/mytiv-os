@@ -173,3 +173,92 @@ There is no delete anywhere in this path or in the codebase.
 ### Not verified here (remains for O2/O3)
 
 Real ClickUp acceptance of `due_date: null` to clear a date, real `date_updated` semantics on assignee-only changes, and the Tasks-tab / audit-log UI under a real session. These are exactly the things a mocked transport cannot prove.
+
+## O2 — staging verification — 2026-09-14
+
+### Staging topology
+
+| Layer | What | Isolation |
+|---|---|---|
+| Database | Neon project `green-feather-79805522`, **branch `ops-staging`** (`br-jolly-forest-awdg2zbo`), endpoint `ep-aged-glitter-…` — created as a **schema-only** branch (no production rows), then `public`/`drizzle` schemas dropped and **migrations 0000–0007 applied with `drizzle-kit migrate`** (8 recorded). `tests/ops-database.sql` PASS there; 2 composite project FKs and all 7 append-only/order triggers present. | Production endpoint `ep-orange-fog-…` untouched: still 5 migrations, no ops tables (SELECT-only check). A dedicated Neon *project* was refused by the API ("organization is managed by Vercel"). |
+| Fixtures | `scripts/staging/seed-staging.mjs`: Business A `mytiv` (Mytiv — staging; owner-a, member-a; projects UMINO-staging→folder 901816026303 *linked*, Unauthorized-folder→999000111, Unlinked), Business B `second-business` (owner-b; B project→999000111 *unauthorized*). Fixed, distinct UUIDs (`aaaaaaaa-…` / `bbbbbbbb-…`). 3 users, 2 businesses, 3 memberships, 4 projects, nothing else. | No production data. Fixture password lives only in `.env.staging` (gitignored). |
+| App | `scripts/staging/dev.sh` → `next dev -p 3100` with `.env.staging` over the process env (beats `.env.local`); **refuses to start** if `DATABASE_URL` equals production or `CLICKUP_API_BASE` is not the local mock. | Startup line observed: `db host ep-aged-glitter-…-pooler · clickup http://127.0.0.1:4545/api/v2`. |
+| ClickUp | `scripts/staging/clickup-mock.mjs` on 127.0.0.1:4545 — stateful stand-in (PUT bumps `date_updated`, comments too, 404 on missing task, `/__state`, `/__reset`). `CLICKUP_API_BASE` is the only app change needed. | **No real ClickUp task was read or modified.** Mock request log: 95 requests, 8 writes, **0 touching the unauthorized folder/list/task**; `X-1` unchanged. |
+| Binding | `OPS_MARKETING_BINDINGS='{"mytiv:aaaaaaaa-1111-4000-8000-0000000000a1":"umino"}'` (single-quoted — see bug #1). | |
+
+### Auth matrix (real HTTP, `docs/staging/o2-http-matrix-2026-09-14.md`, 67/67)
+
+| Session | Pages `/mytiv/ops*` | Reads `/api/mytiv/ops/*` | Writes | Rollback |
+|---|---|---|---|---|
+| D · unauthenticated | 307 → `/login` | 401 | 401 | 401 |
+| A · UMINO owner (owner-a) | 200 | 200 | allowed, governed | allowed, governed |
+| B · UMINO member (member-a) | 200 | 200 | **403 `approval_role_required`** on task PATCH, copilot confirm, project POST/PATCH, marketing import | **403** |
+| C · owner of second business (owner-b) | **404** (`/mytiv/ops`, hub, workspace) | **404 not found** (projects, project, members) | 404 on A's task | **404** via A's slug; **404** via own slug with A's action id |
+
+Also: owner-a → `/second-business/ops` 404; owner-a → B's project id through A's API 404; owner-b → own project 200; owner-b → `/api/second-business/ops/members` **503 `clickup_not_configured`** (no allowlist → not configured, not an empty list).
+
+### Route matrix — governance (owner-a)
+
+| Check | Result |
+|---|---|
+| missing `confirmed` | 400 `explicit_confirmation_required` |
+| task under a project whose folder is outside the allowlist | 404, task never looked up (mock log) |
+| closing status without reviewed evidence | 409 (server message) |
+| repoint a project to a non-allowlisted folder | 403 `folder_not_authorized` |
+| marketing import on an unbound project | 409 `marketing_not_connected` |
+| stale row (`expectedUpdatedAt` older than the task) | **409 `task_changed_since_read`, 0 writes**, `failed_or_unknown{before_write, pre_state}` recorded |
+| governed write | 200; mock task `review / [1001,1002]`; audit `confirmed{eligible, target task:STG-1} → succeeded{pre_state, post_state, external_ref}` |
+| same `requestId` replayed | 409 `request_already_claimed_check_audit_before_retry` |
+| copilot `add_comment` confirmed | 200; audit eligibility `{not: no_delete_capability}` |
+| copilot `rollback_task` / `delete_task` | 400 `invalid_action` |
+| rollback (owner) | **200**, mock task back to `working / [1001]`, `rollback_task` action with own pre/post, `rolled_back` on the original |
+| same rollback request replayed / second rollback | 409 claimed / 409 `already_rolled_back` |
+| rollback after the task changed in ClickUp | 409 `task_changed_since_action`, 0 writes — *a comment added since also blocks it, by design (`date_updated` moves)* |
+| rollback by member / cross-tenant / wrong project / unconfirmed | 403 / 404 / 404 / 400 |
+
+Audit rows read back from the **staging DB** (not the mock): 9 actions, 19 events, both businesses; no name/email/title anywhere in `detail` (regex scan = 0).
+
+### Browser QA (Browser pane, real sessions, fixture accounts)
+
+| Screen | owner-a | member-a | owner-b |
+|---|---|---|---|
+| Ops Home | counts from the linked folder only | same | **"—" for all four tiles** + "No project is linked…" (was `0` — bug #4, fixed) |
+| Project Hub | UMINO staging `0 stuck / 3 open / 1 overdue`; Unauthorized folder **"— / —" + "ClickUp folder not authorized … tasks not read"**; Unlinked "— / —" | same | B project "— / —", not authorized |
+| Workspace tabs (A1) | סקירה · משימות 2 · תקלות 1 · החלטות 1 · שיווק · קופיילוט | same, **task controls disabled** ("Owners and admins only" — bug #5, fixed); a forced change → 403 + "Change reverted" | 404 |
+| Unauthorized folder workspace (A2 / B1) | header "…is not authorized for this business — tasks not read"; משימות tab: "tasks were not read" (not "No open tasks") | same | same on B1 |
+| Evidence review wording | closing with a pasted URL asks **"I watched this recording and verified the definition of done."**; declined → toast "Not sent — closing needs the recording to be reviewed first.", **no request**; accepted → PATCH 200, task `done`, audit `approval{evidence_reviewed:true, evidence_url}` | controls disabled | — |
+| Rollback | שחזר shown only on eligible rows; confirm text "לשחזר את המשימה למצב שלפני הפעולה? ClickUp יעודכן."; declined → no request; accepted → POST 200, task restored, row now "rolled back …"; on a changed task → 409 with "המשימה השתנתה ב־ClickUp מאז הפעולה — לא שוחזר…" | **0 buttons** | — |
+| Approval card (copilot) | "No Claude API key is configured for this business" — **not exercisable** without a key (blocker) | — | — |
+| Marketing tab | bound: "טרם יובאה תוכנית… לא מוצגים נתוני דוגמה"; plan for `fixture` refused ("אינה מתאימה לעסק המקושר"); plan for `umino` previewed → imported (POST 200) → schedule rendered, item linked to STG-2 shows `review · ללא אחראי`; unbound project: "לא חובר" | import control hidden | — |
+| Money | `0 hours logged`, cost/revenue/margin **"—"**, "cost per client is unknown — not zero", "No time tracked in ClickUp, so cost is unknown rather than zero"; only the linked project listed | — | — |
+
+Native dialogs are suppressed in the pane; they were observed via a `confirm`/`prompt` stub that records the wording — the declined path is the pane's default (returns false).
+
+### Tenant isolation
+
+Cross-business pages/API/writes/rollback → 404 (no existence disclosure); B's own audit shows its probe as `rollback_task · refused_before_write (not_found)`; the unauthorized folder (`999000111`) received **zero** requests across the HTTP matrix and the whole browser session; composite `(business_id, project_id)` FKs enforced on the staging DB (`ops-database.sql`).
+
+### Bugs found in staging — all fixed in this commit
+
+1. **`OPS_MARKETING_BINDINGS` malformed → every marketing call answered `400 invalid_json`.** Root cause in staging: `bash` sourcing stripped the JSON quotes. App-side: `marketingBinding` threw a raw `SyntaxError`. Now fails closed to "not connected" with a server log; moved to the pure `lib/marketing/binding.ts` and unit-tested.
+2. **Stale board after a write.** The ClickUp read cache is per process; a write in one instance does not invalidate another's copy, so a reload right after a write showed the old status (STG-1 "review" while ClickUp said "working"), and the next write would be refused as changed-since-read against a stale marker. The client workspace (the only screen that writes) now reads the board fresh; dashboards keep the cache.
+3. **Rollback success feedback vanished** (the button unmounts once the action is no longer eligible). Feedback now goes through the page toaster; refusal reasons also appear inline and in the audit rows (`refused_before_write (task_changed_since_action)`).
+4. **Ops Home rendered `0 / 0 / 0 / 0` when nothing was read** (no linked folder, ClickUp down). `StatTiles` now takes `null` and renders "—".
+5. **Members were offered task controls the server refuses.** Status/owner selects are disabled for members with "Owners and admins only"; the server 403 remains the enforcement.
+
+Not bugs, recorded: a comment on a task moves `date_updated` in ClickUp, so rollback after a comment is refused — strict by design; Money shows `0 hours logged` next to "—" cost (the documented no-work vs no-reporting ambiguity).
+
+### O3 fixture plan
+
+`docs/o3-clickup-fixture-spec.md` — folder `OPS-STAGING` (owner-created, added to the allowlist as `internal`), list `Tasks` with `to do/working/review/done`, task `STAGING-ROLLBACK-1` (`working`, one owner assignee, no due date, DoD in description, one `.mp4` attached); expected update `working→review` + second assignee + due date +7d; expected rollback reverses all three including `due_date: null`; cleanup by hand in ClickUp. Not run.
+
+### Remaining blockers
+
+| # | Blocker | Owner |
+|---|---|---|
+| 1 | **O3** — real ClickUp write/rollback on the fixture task: needs the folder created, the allowlist line reviewed, and explicit approval | owner |
+| 2 | Claude key for the business (approval card not exercisable), contractor rate, project specs, time-reporting practice | owner |
+| 3 | Production: migrations 0005–0007 (`drizzle-kit migrate` — the exact command proven on staging), env `OPS_MARKETING_BINDINGS` with the **real** UMINO project UUID, deploy, verify deployed commit | owner |
+| 4 | Neon: a truly separate staging *project* is not creatable via API in a Vercel-managed org; the schema-only branch is the isolation we have | owner (Vercel dashboard) if wanted |
+
+**O2 STAGING VERIFIED — READY FOR OWNER APPROVAL FOR O3**

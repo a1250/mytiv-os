@@ -57,7 +57,8 @@ export default async function OpsHomePage({ params }: { params: Promise<{ busine
     }
   }
 
-  const stats: OpsStats = open ? statsFor(open, thresholdDays) : { stuck: 0, overdue: 0, openTasks: 0, openBugs: 0 };
+  // No read → no numbers. StatTiles renders unknown as "—".
+  const stats: OpsStats | null = open ? statsFor(open, thresholdDays) : null;
   const stuck = (open ?? [])
     .filter((t) => t.daysIdle >= thresholdDays)
     .sort((a, b) => b.daysIdle - a.daysIdle);

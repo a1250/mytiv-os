@@ -7,6 +7,7 @@ import { foldersForBusiness, folderFromProject, folderState } from '../lib/ops-c
 import { statusChange, needsReviewConfirmation } from '../lib/ops-closure';
 import { snapshotTask, reversePatch, assertUnchanged, rollbackEligibility, isTaskSnapshot } from '../lib/ops-snapshot';
 import { expectedMarker } from '../lib/ops-policy';
+import { marketingBinding } from '../lib/marketing/binding';
 import { requireScopedTask, requireStatusEvidence } from '../lib/ops-access';
 
 const fixture = () => ({ schemaVersion: 1, marketingBusiness: 'fixture', revision: 1, sourceRevision: 'fixture-rev', asOf: '2026-01-01T00:00:00Z',
@@ -85,6 +86,16 @@ test('only task updates are reversible; creations never are, because nothing her
   for (const a of ['create_task', 'add_comment', 'add_decision']) assert.deepEqual(rollbackEligibility(a), { not: 'no_delete_capability' });
   assert.deepEqual(rollbackEligibility('marketing_import'), { not: 'not_a_task_update' });
   assert.deepEqual(rollbackEligibility('rollback_task'), { not: 'not_a_task_update' });
+});
+test('a malformed binding table resolves nothing, and never surfaces as a JSON error', () => {
+  const prev = process.env.OPS_MARKETING_BINDINGS;
+  process.env.OPS_MARKETING_BINDINGS = '{mytiv:not-json}';
+  assert.equal(marketingBinding('mytiv', 'p'), null);
+  process.env.OPS_MARKETING_BINDINGS = JSON.stringify({ 'mytiv:p': 'umino', 'mytiv:q': 'Bad Slug!' });
+  assert.equal(marketingBinding('mytiv', 'p'), 'umino');
+  assert.equal(marketingBinding('mytiv', 'q'), null);
+  assert.equal(marketingBinding('other', 'p'), null);
+  process.env.OPS_MARKETING_BINDINGS = prev;
 });
 test('invalid calendar dates are rejected', () => {
   for (const s of ['2026-02-30','2026-13-01','x','2026-1-1']) assert.throws(() => dateMs(s));

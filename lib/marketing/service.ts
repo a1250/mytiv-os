@@ -5,12 +5,7 @@ import { marketingSnapshots } from '../db/schema';
 import { parseMarketingPlan, type MarketingPlan } from './contract';
 import { OpsPolicyError } from '../ops-policy';
 
-/** Configured by deployment operator, never through a request body or editable project field. */
-export function marketingBinding(businessSlug: string, projectId: string): string | null {
-  const mappings = JSON.parse(process.env.OPS_MARKETING_BINDINGS || '{}') as Record<string, unknown>;
-  const value = mappings[`${businessSlug}:${projectId}`];
-  return typeof value === 'string' && /^[a-z0-9_-]+$/.test(value) ? value : null;
-}
+export { marketingBinding } from './binding';
 export async function latestPlan(businessId: string, projectId: string, marketingBusiness: string): Promise<MarketingPlan | null> {
   const [row] = await db.select().from(marketingSnapshots).where(and(eq(marketingSnapshots.businessId, businessId), eq(marketingSnapshots.projectId, projectId))).orderBy(desc(marketingSnapshots.revision)).limit(1);
   return row ? parseMarketingPlan(row.payload, marketingBusiness) : null;

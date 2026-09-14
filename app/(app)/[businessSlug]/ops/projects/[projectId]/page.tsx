@@ -43,7 +43,7 @@ export default async function ClientWorkspacePage({
   if (folder) {
     try {
       const [tasks, lists, people] = await Promise.all([
-        getTasksByFolder(folder),
+        getTasksByFolder(folder, { fresh: true }),
         getFolderLists(folder),
         getWorkspaceMembers(),
       ]);
@@ -87,6 +87,7 @@ export default async function ClientWorkspacePage({
         businessSlug={businessSlug}
         project={project}
         marketing={{ binding, plan, canImport: role === "owner" || role === "admin", unavailable: marketingUnavailable, now: new Date().toISOString() }}
+        canWrite={role === "owner" || role === "admin"}
         tasks={rows.filter((t) => t.listKind === "tasks" || t.listKind === "other")}
         bugs={rows.filter((t) => t.isBug)}
         decisions={rows.filter((t) => t.isDecision)}

@@ -10,6 +10,8 @@ function outcome(a: AuditActionView) {
   const last = [...a.events].reverse().find((e) => e.event !== 'confirmed' && e.event !== 'rolled_back');
   if (!last) return 'claimed — outcome not recorded';
   if (last.event === 'failed_or_unknown') return `failed_or_unknown (${String(last.detail.phase ?? '')})`;
+  const result = last.detail.result as { error?: unknown } | undefined;
+  if (last.event === 'refused_before_write' || last.event === 'rejected_or_unknown') return `${last.event}${result?.error ? ` (${String(result.error)})` : ''}`;
   return last.event;
 }
 /** Eligible = the write itself said so at claim time, it succeeded with both states, and nobody reversed it yet. */
@@ -29,7 +31,7 @@ export async function AuditLog({ businessSlug, businessId, projectId, canWrite }
       const success = r.events.find((e) => e.event === 'succeeded');
       const pre = success?.detail.pre_state as TaskSnapshot | undefined, post = success?.detail.post_state as TaskSnapshot | undefined;
       const rolledBack = r.events.find((e) => e.event === 'rolled_back');
-      return <li key={r.id} className="border-border border-b pb-2 text-xs">
+      return <li key={r.id} data-action-id={r.id} className="border-border border-b pb-2 text-xs">
         <p>{r.action} · {outcome(r)} · {r.confirmedAt.toISOString()}{rolledBack ? ` · rolled back ${rolledBack.at.toISOString()}` : ''}</p>
         {pre && post && <p className="text-muted-foreground" dir="ltr">before: {describe(pre)}<br />after: {describe(post)}</p>}
         <p className="text-muted-foreground break-all">Request: {r.requestId} · Actor: {r.actor}</p>
