@@ -2,7 +2,6 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { type MarketingPlan } from '@/lib/marketing/contract';
-import { validateMarketingPlan } from '@/lib/marketing/validate';
 import { timelineBars } from '@/lib/marketing/timeline';
 import type { OpsTask } from '@/lib/clickup';
 
@@ -28,9 +27,14 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
   const nowMs = Date.parse(now);
   const bars = timelineBars(plan?.items ?? []);
   const stale = plan && Date.parse(now) - Date.parse(plan.asOf) > 7 * 86400000;
-  function preview() {
-    try { requestId.current = crypto.randomUUID(); setCandidate(validateMarketingPlan(JSON.parse(raw), binding!)); setMessage(''); }
-    catch (e) { setCandidate(null); setMessage(importError(e)); }
+  async function preview() {
+    // Composed validator (ajv structural + parser) is loaded on demand so the ajv runtime
+    // stays out of the main client chunk; structural-first, parser-second order is preserved.
+    try {
+      requestId.current = crypto.randomUUID();
+      const { validateMarketingPlan } = await import('@/lib/marketing/validate');
+      setCandidate(validateMarketingPlan(JSON.parse(raw), binding!)); setMessage('');
+    } catch (e) { setCandidate(null); setMessage(importError(e)); }
   }
   async function importPlan() {
     if (!candidate) return;

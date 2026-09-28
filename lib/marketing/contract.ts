@@ -32,14 +32,17 @@ function ref(v: unknown) {
 function array(v: unknown): unknown[] { if (!Array.isArray(v) || v.length > 250) throw new OpsPolicyError('invalid_collection'); return v; }
 function unique<T extends { id: string }>(rows: T[]) { if (new Set(rows.map(r => r.id)).size !== rows.length) throw new OpsPolicyError('duplicate_id'); return rows; }
 function isoDateTime(v: unknown, name = 'date') {
-  const s = requiredText(v, name, 40);
-  const m = ISO_UTC.exec(s);
+  // Match the canonical zod .datetime() exactly: the RAW string (no trim — surrounding
+  // whitespace is invalid), no length cap (arbitrary fractional precision is allowed), and
+  // calendar-valid. The `^...$`-anchored regex bounds the structure.
+  if (typeof v !== 'string') throw new OpsPolicyError(`invalid_${name}`);
+  const m = ISO_UTC.exec(v);
   if (!m) throw new OpsPolicyError(`invalid_${name}`);
   const y = +m[1], mo = +m[2], d = +m[3], h = +m[4], mi = +m[5], se = +m[6];
   const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
   const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth[mo - 1] || h > 23 || mi > 59 || se > 59) throw new OpsPolicyError(`invalid_${name}`);
-  return s;
+  return v;
 }
 export function parseMarketingPlan(value: unknown, expectedBusiness: string): MarketingPlan {
   const o = objectInput(value);

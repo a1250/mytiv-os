@@ -12,12 +12,14 @@ export function timelineBars<T extends { start: string; end: string }>(items: T[
   return {
     from,
     span,
-    /** left/width as percentages of the full span; always finite for valid ISO timestamps. */
+    /** left/width as percentages of the full span; finite for valid ISO timestamps, and
+     *  clamped so a bar never extends past the track (left + width <= 100), while keeping a
+     *  visible 0.5% minimum wherever the remaining track allows it. */
     bar(item: T) {
-      return {
-        left: ((dayIndex(item.start) - from) / span) * 100,
-        width: Math.max(0.5, ((dayIndex(item.end) - dayIndex(item.start) + 1) / span) * 100),
-      };
+      const left = ((dayIndex(item.start) - from) / span) * 100;
+      const natural = ((dayIndex(item.end) - dayIndex(item.start) + 1) / span) * 100;
+      const remaining = Math.max(0, 100 - left);
+      return { left, width: Math.min(remaining, Math.max(0.5, natural)) };
     },
   };
 }

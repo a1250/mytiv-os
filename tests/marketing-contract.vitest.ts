@@ -100,8 +100,22 @@ test('composed validator rejects calendar-invalid / offset / bare date-times, ac
   const good = vectors.valid[0] as Record<string, unknown>;
   const item0 = (good.items as Record<string, unknown>[])[0];
   const withStart = (start: string) => ({ ...good, items: [{ ...item0, start }] });
-  for (const bad of ['2026-02-30T00:00:00.000Z', '2025-02-29T00:00:00.000Z', '2026-13-01T00:00:00.000Z', '2026-01-01T00:00:00+05:00', '2026-01-01T00:00:00']) {
+  for (const bad of ['2026-02-30T00:00:00.000Z', '2025-02-29T00:00:00.000Z', '2026-13-01T00:00:00.000Z', '2026-01-01T00:00:00+05:00', '2026-01-01T00:00:00', ' 2026-01-05T00:00:00.000Z', '2026-01-05T00:00:00.000Z ']) {
     expect(() => validateMarketingPlan(withStart(bad), BIZ), bad).toThrow();
   }
   expect(() => validateMarketingPlan(withStart('2024-02-29T00:00:00.000Z'), BIZ)).not.toThrow(); // real leap day
+  expect(() => validateMarketingPlan(withStart('2026-01-05T00:00:00.123456789Z'), BIZ)).not.toThrow(); // arbitrary fractional precision, no length cap
+});
+
+test('timeline bars never extend past the track (left + width <= 100)', () => {
+  const items = [
+    { start: '2026-01-01T00:00:00.000Z', end: '2026-01-10T00:00:00.000Z' },
+    { start: '2026-01-10T00:00:00.000Z', end: '2026-01-10T00:00:00.000Z' }, // zero-duration at the max endpoint
+  ];
+  const t = timelineBars(items);
+  for (const i of items) {
+    const b = t.bar(i);
+    expect(b.width).toBeGreaterThanOrEqual(0);
+    expect(b.left + b.width).toBeLessThanOrEqual(100 + 1e-9);
+  }
 });
