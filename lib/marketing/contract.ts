@@ -12,8 +12,9 @@ export type MarketingPlan = { schemaVersion: 1; marketingBusiness: string; revis
 
 const CONFIDENCE = ['KNOWN', 'ESTIMATED', 'UNKNOWN'];
 const PROVENANCE = ['owner_supplied', 'source_verified', 'owner_verified'];
-// ISO-8601 date-time (canonical C1 uses full timestamps for item start/end and review due).
-const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+// Canonical C1 uses zod `z.string().datetime()`: UTC "Z" only (no offset), seconds required,
+// optional fractional seconds, and CALENDAR-valid (rejects 2026-02-30, non-leap 2026-02-29, month 13…).
+const ISO_UTC = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/;
 
 function keys(o: Record<string, unknown>, allowed: string[]) {
   if (Object.keys(o).some(k => !allowed.includes(k))) throw new OpsPolicyError('unknown_contract_field');
@@ -30,9 +31,14 @@ function ref(v: unknown) {
 }
 function array(v: unknown): unknown[] { if (!Array.isArray(v) || v.length > 250) throw new OpsPolicyError('invalid_collection'); return v; }
 function unique<T extends { id: string }>(rows: T[]) { if (new Set(rows.map(r => r.id)).size !== rows.length) throw new OpsPolicyError('duplicate_id'); return rows; }
-function dateTime(v: unknown) {
-  const s = requiredText(v, 'date', 40);
-  if (!DATE_TIME.test(s) || !Number.isFinite(Date.parse(s))) throw new OpsPolicyError('invalid_date');
+function isoDateTime(v: unknown, name = 'date') {
+  const s = requiredText(v, name, 40);
+  const m = ISO_UTC.exec(s);
+  if (!m) throw new OpsPolicyError(`invalid_${name}`);
+  const y = +m[1], mo = +m[2], d = +m[3], h = +m[4], mi = +m[5], se = +m[6];
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+  const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth[mo - 1] || h > 23 || mi > 59 || se > 59) throw new OpsPolicyError(`invalid_${name}`);
   return s;
 }
 export function parseMarketingPlan(value: unknown, expectedBusiness: string): MarketingPlan {
@@ -40,8 +46,8 @@ export function parseMarketingPlan(value: unknown, expectedBusiness: string): Ma
   keys(o, ['schemaVersion','marketingBusiness','revision','sourceRevision','asOf','priorities','items','reviews']);
   if (o.schemaVersion !== 1 || o.marketingBusiness !== expectedBusiness) throw new OpsPolicyError('contract_scope_or_version_mismatch');
   if (!Number.isSafeInteger(o.revision) || (o.revision as number) < 1) throw new OpsPolicyError('invalid_revision');
-  const asOf = requiredText(o.asOf, 'as_of', 40);
-  if (!DATE_TIME.test(asOf) || !Number.isFinite(Date.parse(asOf)) || Date.parse(asOf) > Date.now() + 300000) throw new OpsPolicyError('invalid_as_of');
+  const asOf = isoDateTime(o.asOf, 'as_of');
+  if (Date.parse(asOf) > Date.now() + 300000) throw new OpsPolicyError('invalid_as_of');
   const priorities = unique(array(o.priorities).map(v => {
     const r = objectInput(v); keys(r, ['id','title','evidenceRef','confidence','provenance','owner']);
     if (!CONFIDENCE.includes(String(r.confidence))) throw new OpsPolicyError('invalid_confidence');
@@ -53,7 +59,7 @@ export function parseMarketingPlan(value: unknown, expectedBusiness: string): Ma
   const items = unique(array(o.items).map(v => {
     const r = objectInput(v); keys(r, ['id','title','kind','priorityId','start','end','dependsOn','sourceRef','approvalRef','clickupTaskId']);
     const kind = requiredText(r.kind, 'kind', 100); // canonical C1: a non-empty free-form kind, no enum
-    const start = dateTime(r.start), end = dateTime(r.end);
+    const start = isoDateTime(r.start), end = isoDateTime(r.end);
     if (Date.parse(start) > Date.parse(end)) throw new OpsPolicyError('reversed_schedule');
     const priorityId = id(r.priorityId);
     if (!priorities.some(p => p.id === priorityId)) throw new OpsPolicyError('missing_priority');
@@ -80,7 +86,7 @@ export function parseMarketingPlan(value: unknown, expectedBusiness: string): Ma
   const reviews = unique(array(o.reviews).map(v => {
     const r = objectInput(v); keys(r, ['id','title','due','cadence','sourceRef']);
     const cadence = requiredText(r.cadence, 'cadence', 100); // canonical C1: a non-empty free-form cadence, no enum
-    return { id: id(r.id), title: requiredText(r.title, 'title', 500), due: dateTime(r.due), cadence, sourceRef: ref(r.sourceRef) };
+    return { id: id(r.id), title: requiredText(r.title, 'title', 500), due: isoDateTime(r.due), cadence, sourceRef: ref(r.sourceRef) };
   }));
   return { schemaVersion: 1, marketingBusiness: expectedBusiness, revision: o.revision as number, sourceRevision: requiredText(o.sourceRevision, 'source_revision', 100), asOf, priorities, items, reviews };
 }
