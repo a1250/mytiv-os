@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guard, ApiGuardError } from "@/lib/api-guard";
 import { foldersForBusiness, stuckThresholdDays } from "@/lib/ops-config";
 import { listLinkedProjects } from "@/lib/db/queries/projects";
-import { ClickUpConfigError, ClickUpRateLimitError, getOpenTasks, statsFor } from "@/lib/clickup";
+import { ClickUpConfigError, ClickUpRateLimitError, getOpenTasksWithCompleteness, statsFor } from "@/lib/clickup";
 
 /**
  * Stats plus the stuck list in one response — the Ops Home payload.
@@ -25,14 +25,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ busi
         thresholdDays,
         stats: { stuck: 0, overdue: 0, openTasks: 0, openBugs: 0 },
         stuck: [],
+        incomplete: false,
         note: "no_folders_mapped",
       });
     }
 
-    const open = await getOpenTasks(folders);
-    const stuck = open.filter((t) => t.daysIdle >= thresholdDays).sort((a, b) => b.daysIdle - a.daysIdle);
+    const { tasks, incomplete } = await getOpenTasksWithCompleteness(folders);
+    // A truncated read (20-page cap) is unknown, not partial: no numbers, no stuck list.
+    if (incomplete) {
+      return NextResponse.json({ thresholdDays, stats: null, stuck: [], incomplete: true, note: "read_incomplete" });
+    }
+    const stuck = tasks.filter((t) => t.daysIdle >= thresholdDays).sort((a, b) => b.daysIdle - a.daysIdle);
 
-    return NextResponse.json({ thresholdDays, stats: statsFor(open, thresholdDays), stuck });
+    return NextResponse.json({ thresholdDays, stats: statsFor(tasks, thresholdDays), stuck, incomplete: false });
   } catch (err) {
     if (err instanceof ApiGuardError) return err.response;
     if (err instanceof ClickUpConfigError) return NextResponse.json({ error: "clickup_not_configured" }, { status: 503 });

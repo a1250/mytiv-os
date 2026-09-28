@@ -5,7 +5,7 @@ import { listProjects } from "@/lib/db/queries/projects";
 import { listAcceptedProposalsForProject } from "@/lib/db/queries/proposals";
 import { computeTotals } from "@/lib/pdf-helpers";
 import { folderFromProject } from "@/lib/ops-config";
-import { getTasksByFolder, getTimeByTask } from "@/lib/clickup";
+import { getTasksByFolderWithCompleteness, getTimeByTask } from "@/lib/clickup";
 import {
   allTimeWindow,
   compareEstimates,
@@ -55,7 +55,8 @@ export default async function MoneyPage({
   const projects = (await listProjects(business.id)).filter((p) => p.folderState === "linked");
 
   let failure: string | null = null;
-  const rows: { money: ClientMoney; overruns: EstimateVsActual[] }[] = [];
+  let anyTasksIncomplete = false;
+  const rows: { money: ClientMoney; overruns: EstimateVsActual[]; incomplete: boolean }[] = [];
 
   for (const project of projects) {
     const folder = folderFromProject(project);
@@ -86,7 +87,8 @@ export default async function MoneyPage({
       const monthTime = await getTimeByTask(folder, window);
       const allTime = revenue.kind === "budget" ? await getTimeByTask(folder, allTimeWindow()) : monthTime;
 
-      const tasks = await getTasksByFolder(folder, { includeClosed: true });
+      const { tasks, incomplete } = await getTasksByFolderWithCompleteness(folder, { includeClosed: true });
+      if (incomplete) anyTasksIncomplete = true;
       const estimates = new Map(
         tasks.map((t) => [t.id, { name: t.title, estimateHours: t.estimateHours }])
       );
@@ -103,6 +105,7 @@ export default async function MoneyPage({
         overruns: compareEstimates(monthTime.perTask, estimates).filter(
           (e) => e.overrunPct !== null && e.overrunPct > 0
         ),
+        incomplete,
       });
     } catch (err) {
       failure = err instanceof Error ? err.message : "ClickUp request failed.";
@@ -118,7 +121,9 @@ export default async function MoneyPage({
     (s, r) => s + (r.money.revenue.kind === "proposal" ? r.money.revenue.monthly : 0),
     0
   );
-  const overruns = rows.flatMap((r) => r.overruns);
+  // Estimate vs actual is task-derived: a truncated client's tasks are unknown, so it is
+  // excluded from the comparison entirely rather than shown as a partial figure (MKT-INT06).
+  const overruns = rows.filter((r) => !r.incomplete).flatMap((r) => r.overruns);
   const noTimeClients = rows.filter((r) => r.money.totalHours === 0);
 
   return (
@@ -182,6 +187,14 @@ export default async function MoneyPage({
             </div>
 
             <ul className="text-muted-foreground mt-4 flex flex-col gap-1.5 text-xs leading-relaxed">
+              {anyTasksIncomplete && (
+                <li>
+                  <span className="text-warning font-medium">
+                    Some clients have more tasks than one read can return (20-page cap)
+                  </span>{" "}
+                  — estimate vs actual below can miss tasks, so it is a floor, not a full accounting.
+                </li>
+              )}
               {noTimeClients.length > 0 && (
                 <li>
                   <span className="text-warning font-medium">
@@ -223,12 +236,19 @@ export default async function MoneyPage({
             </h2>
             {overruns.length === 0 ? (
               <div className="bg-card border-border text-muted-foreground rounded-xl border px-6 py-8 text-center text-sm">
-                {totalHours === 0
+                {anyTasksIncomplete
+                  ? "—  Some clients' task lists were truncated (20-page cap), so estimate vs actual can't be computed for them."
+                  : totalHours === 0
                   ? "Nothing to compare — no time was logged this month."
                   : "No task ran over its estimate this month."}
               </div>
             ) : (
               <div className="border-border bg-card overflow-hidden rounded-xl border">
+                {anyTasksIncomplete && (
+                  <p className="text-warning border-border border-b px-4 py-2 text-xs">
+                    Partial — clients with a truncated task list are excluded; rows below cover only fully-read clients.
+                  </p>
+                )}
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-border text-muted-foreground border-b text-left text-xs">
