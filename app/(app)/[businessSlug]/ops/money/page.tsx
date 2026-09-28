@@ -56,7 +56,7 @@ export default async function MoneyPage({
 
   let failure: string | null = null;
   let anyTasksIncomplete = false;
-  const rows: { money: ClientMoney; overruns: EstimateVsActual[] }[] = [];
+  const rows: { money: ClientMoney; overruns: EstimateVsActual[]; incomplete: boolean }[] = [];
 
   for (const project of projects) {
     const folder = folderFromProject(project);
@@ -105,6 +105,7 @@ export default async function MoneyPage({
         overruns: compareEstimates(monthTime.perTask, estimates).filter(
           (e) => e.overrunPct !== null && e.overrunPct > 0
         ),
+        incomplete,
       });
     } catch (err) {
       failure = err instanceof Error ? err.message : "ClickUp request failed.";
@@ -120,7 +121,9 @@ export default async function MoneyPage({
     (s, r) => s + (r.money.revenue.kind === "proposal" ? r.money.revenue.monthly : 0),
     0
   );
-  const overruns = rows.flatMap((r) => r.overruns);
+  // Estimate vs actual is task-derived: a truncated client's tasks are unknown, so it is
+  // excluded from the comparison entirely rather than shown as a partial figure (MKT-INT06).
+  const overruns = rows.filter((r) => !r.incomplete).flatMap((r) => r.overruns);
   const noTimeClients = rows.filter((r) => r.money.totalHours === 0);
 
   return (
@@ -233,12 +236,19 @@ export default async function MoneyPage({
             </h2>
             {overruns.length === 0 ? (
               <div className="bg-card border-border text-muted-foreground rounded-xl border px-6 py-8 text-center text-sm">
-                {totalHours === 0
+                {anyTasksIncomplete
+                  ? "—  Some clients' task lists were truncated (20-page cap), so estimate vs actual can't be computed for them."
+                  : totalHours === 0
                   ? "Nothing to compare — no time was logged this month."
                   : "No task ran over its estimate this month."}
               </div>
             ) : (
               <div className="border-border bg-card overflow-hidden rounded-xl border">
+                {anyTasksIncomplete && (
+                  <p className="text-warning border-border border-b px-4 py-2 text-xs">
+                    Partial — clients with a truncated task list are excluded; rows below cover only fully-read clients.
+                  </p>
+                )}
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-border text-muted-foreground border-b text-left text-xs">

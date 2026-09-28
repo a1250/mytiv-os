@@ -25,8 +25,10 @@ type Props = {
   incomplete: boolean;
 };
 
-function Count({ n, hide }: { n: number; hide?: boolean }) {
-  if (hide || n === 0) return null;
+function Count({ n, unknown }: { n: number; unknown?: boolean }) {
+  // A truncated read cannot know the count — show "—", never a partial number or a silent 0.
+  if (unknown) return <span className="text-muted-foreground ml-1.5 text-xs">—</span>;
+  if (n === 0) return null;
   return <span className="text-muted-foreground ml-1.5 text-xs tabular-nums">{n}</span>;
 }
 
@@ -54,15 +56,15 @@ export function ClientWorkspace({
         <TabsTrigger value="overview">סקירה</TabsTrigger>
         <TabsTrigger value="tasks">
           משימות
-          <Count n={tasks.length} hide={incomplete} />
+          <Count n={tasks.length} unknown={incomplete} />
         </TabsTrigger>
         <TabsTrigger value="bugs">
           תקלות
-          <Count n={bugs.length} hide={incomplete} />
+          <Count n={bugs.length} unknown={incomplete} />
         </TabsTrigger>
         <TabsTrigger value="decisions">
           החלטות
-          <Count n={decisions.length} hide={incomplete} />
+          <Count n={decisions.length} unknown={incomplete} />
         </TabsTrigger>
         <TabsTrigger value="marketing">שיווק</TabsTrigger>
         <TabsTrigger value="copilot">קופיילוט</TabsTrigger>
@@ -81,7 +83,9 @@ export function ClientWorkspace({
           statusesByList={statusesByList}
           readOnly={!canWrite}
           emptyMessage={
-            project.folderState === "unauthorized"
+            incomplete
+              ? "Task list is partial (20-page cap) — open tasks can't be determined."
+              : project.folderState === "unauthorized"
               ? "This project's ClickUp folder is not authorized for this business — tasks were not read."
               : project.clickupFolderId
               ? "No open tasks in this folder."
@@ -98,14 +102,14 @@ export function ClientWorkspace({
           members={members}
           statusesByList={statusesByList}
           readOnly={!canWrite}
-          emptyMessage={project.folderState === "unauthorized" ? "This project's ClickUp folder is not authorized for this business — bugs were not read." : "No open bugs."}
+          emptyMessage={incomplete ? "Bug list is partial (20-page cap) — open bugs can't be determined." : project.folderState === "unauthorized" ? "This project's ClickUp folder is not authorized for this business — bugs were not read." : "No open bugs."}
         />
       </TabsContent>
 
       <TabsContent value="decisions">
         {decisions.length === 0 ? (
           <div className="bg-card border-border text-muted-foreground rounded-xl border px-6 py-10 text-center text-sm">
-            No decisions recorded yet.
+            {incomplete ? "Decision list is partial (20-page cap) — can't be determined." : "No decisions recorded yet."}
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
