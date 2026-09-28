@@ -2,13 +2,15 @@ import 'server-only';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db';
 import { marketingSnapshots } from '../db/schema';
-import { parseMarketingPlan, type MarketingPlan } from './contract';
+import { type MarketingPlan } from './contract';
+import { validateMarketingPlan } from './validate';
 import { OpsPolicyError } from '../ops-policy';
 
 export { marketingBinding } from './binding';
 export async function latestPlan(businessId: string, projectId: string, marketingBusiness: string): Promise<MarketingPlan | null> {
   const [row] = await db.select().from(marketingSnapshots).where(and(eq(marketingSnapshots.businessId, businessId), eq(marketingSnapshots.projectId, projectId))).orderBy(desc(marketingSnapshots.revision)).limit(1);
-  return row ? parseMarketingPlan(row.payload, marketingBusiness) : null;
+  // Composed C1 validation (AJV structural + reference parser) — never parseMarketingPlan directly.
+  return row ? validateMarketingPlan(row.payload, marketingBusiness) : null;
 }
 export async function importPlan(businessId: string, projectId: string, userId: string, plan: MarketingPlan) {
   const current = await latestPlan(businessId, projectId, plan.marketingBusiness);

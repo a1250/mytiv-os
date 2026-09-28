@@ -1,0 +1,187 @@
+{
+  "$ref": "#/definitions/C1",
+  "definitions": {
+    "C1": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "priorities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidenceRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "KNOWN",
+                  "ESTIMATED",
+                  "UNKNOWN"
+                ]
+              },
+              "provenance": {
+                "type": "string",
+                "enum": [
+                  "owner_supplied",
+                  "source_verified",
+                  "owner_verified"
+                ]
+              },
+              "owner": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "evidenceRef",
+              "confidence",
+              "provenance"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "minLength": 1
+              },
+              "priorityId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "start": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "end": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "sourceRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "approvalRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "clickupTaskId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "kind",
+              "priorityId",
+              "start",
+              "end",
+              "sourceRef"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "reviews": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "due": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "cadence": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sourceRef": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "due",
+              "cadence",
+              "sourceRef"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness",
+        "revision",
+        "priorities",
+        "items",
+        "reviews"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

@@ -12,8 +12,8 @@ import { requireScopedTask, requireStatusEvidence } from '../lib/ops-access';
 import { getTasksByFolderWithCompleteness } from '../lib/clickup';
 
 const fixture = () => ({ schemaVersion: 1, marketingBusiness: 'fixture', revision: 1, sourceRevision: 'fixture-rev', asOf: '2026-01-01T00:00:00Z',
-  priorities: [{ id: 'priority', title: 'Fixture priority', evidenceRef: 'brain/priority', confidence: 'owner_priority' }],
-  items: [{ id: 'campaign', title: 'Fixture campaign', kind: 'campaign', priorityId: 'priority', start: '2026-01-02', end: '2026-01-03', dependsOn: [], sourceRef: 'work/campaign' }], reviews: [] });
+  priorities: [{ id: 'priority', title: 'Fixture priority', evidenceRef: 'brain/priority', confidence: 'KNOWN', provenance: 'owner_supplied' }],
+  items: [{ id: 'campaign', title: 'Fixture campaign', kind: 'campaign', priorityId: 'priority', start: '2026-01-02T00:00:00.000Z', end: '2026-01-03T00:00:00.000Z', dependsOn: [], sourceRef: 'work/campaign' }], reviews: [] });
 
 test('members cannot approve external writes', () => assert.throws(() => assertWriter('member')));
 test('owners and admins can approve', () => { assertWriter('owner'); assertWriter('admin'); });

@@ -63,7 +63,7 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {plan.priorities.map(p => <article key={p.id} className="bg-card border-border rounded-xl border p-4">
-          <p className="text-muted-foreground text-xs">{p.confidence === 'verified_gap' ? 'פער מאומת לפי המקור' : p.confidence === 'owner_priority' ? 'עדיפות בעלים לפי המקור' : 'טרם אומת'}</p>
+          <p className="text-muted-foreground text-xs">{p.confidence === 'KNOWN' ? 'ידוע' : p.confidence === 'ESTIMATED' ? 'משוער' : 'לא ידוע'} · {p.provenance === 'source_verified' ? 'מאומת מול המקור' : p.provenance === 'owner_verified' ? 'אומת ע״י הבעלים' : 'נמסר ע״י הבעלים'}</p>
           <h3 className="mt-2 font-semibold">{p.title}</h3><p className="text-muted-foreground mt-2 break-words text-xs">מקור: {p.evidenceRef}</p>
         </article>)}
       </div>
