@@ -25,6 +25,7 @@
     "@react-pdf/renderer": "^4.5.1",
     "@upstash/qstash": "^2.11.3",
     "@vercel/blob": "^2.6.1",
+    "ajv": "^8.20.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

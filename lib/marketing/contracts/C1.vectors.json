@@ -1,0 +1,347 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "revision": 1,
+      "priorities": [
+        {
+          "id": "p1",
+          "title": "Growth",
+          "evidenceRef": "brain/goals.yaml",
+          "confidence": "KNOWN",
+          "provenance": "owner_supplied"
+        }
+      ],
+      "items": [
+        {
+          "id": "i1",
+          "title": "Launch",
+          "kind": "campaign",
+          "priorityId": "p1",
+          "start": "2026-01-01T00:00:00.000Z",
+          "end": "2026-01-10T00:00:00.000Z",
+          "dependsOn": [],
+          "sourceRef": "brain/plan.yaml"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "r1",
+          "title": "Weekly",
+          "due": "2026-01-05T00:00:00.000Z",
+          "cadence": "weekly",
+          "sourceRef": "brain/plan.yaml"
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "revision": 0,
+      "priorities": [
+        {
+          "id": "p1",
+          "title": "Growth",
+          "evidenceRef": "brain/goals.yaml",
+          "confidence": "KNOWN",
+          "provenance": "owner_supplied"
+        }
+      ],
+      "items": [
+        {
+          "id": "i1",
+          "title": "Launch",
+          "kind": "campaign",
+          "priorityId": "p1",
+          "start": "2026-01-01T00:00:00.000Z",
+          "end": "2026-01-10T00:00:00.000Z",
+          "dependsOn": [],
+          "sourceRef": "brain/plan.yaml"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "r1",
+          "title": "Weekly",
+          "due": "2026-01-05T00:00:00.000Z",
+          "cadence": "weekly",
+          "sourceRef": "brain/plan.yaml"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "revision": 1,
+      "priorities": [
+        {
+          "id": "p1",
+          "title": "Growth",
+          "evidenceRef": "brain/goals.yaml",
+          "confidence": "KNOWN",
+          "provenance": "owner_supplied"
+        }
+      ],
+      "items": [
+        {
+          "id": "i1",
+          "title": "Launch",
+          "kind": "campaign",
+          "priorityId": "p1",
+          "start": "2026-01-01T00:00:00.000Z",
+          "end": "2026-01-10T00:00:00.000Z",
+          "dependsOn": [],
+          "sourceRef": "brain/plan.yaml"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "r1",
+          "title": "Weekly",
+          "due": "2026-01-05T00:00:00.000Z",
+          "cadence": "weekly",
+          "sourceRef": "brain/plan.yaml"
+        }
+      ],
+      "bogus": true
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "revision": 1,
+      "priorities": [
+        {
+          "id": "p1",
+          "title": "t",
+          "evidenceRef": "../secrets",
+          "confidence": "ESTIMATED",
+          "provenance": "owner_supplied"
+        }
+      ],
+      "items": [],
+      "reviews": []
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2999-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "revision": 1,
+      "priorities": [
+        {
+          "id": "p1",
+          "title": "Growth",
+          "evidenceRef": "brain/goals.yaml",
+          "confidence": "KNOWN",
+          "provenance": "owner_supplied"
+        }
+      ],
+      "items": [
+        {
+          "id": "i1",
+          "title": "Launch",
+          "kind": "campaign",
+          "priorityId": "p1",
+          "start": "2026-01-01T00:00:00.000Z",
+          "end": "2026-01-10T00:00:00.000Z",
+          "dependsOn": [],
+          "sourceRef": "brain/plan.yaml"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "r1",
+          "title": "Weekly",
+          "due": "2026-01-05T00:00:00.000Z",
+          "cadence": "weekly",
+          "sourceRef": "brain/plan.yaml"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "revision": 1,
+      "priorities": [
+        {
+          "id": "p1",
+          "title": "Growth",
+          "evidenceRef": "brain/goals.yaml",
+          "confidence": "KNOWN",
+          "provenance": "owner_supplied"
+        }
+      ],
+      "items": [
+        {
+          "id": "i1",
+          "title": "Launch",
+          "kind": "campaign",
+          "priorityId": "ghost",
+          "start": "2026-01-01T00:00:00.000Z",
+          "end": "2026-01-10T00:00:00.000Z",
+          "dependsOn": [],
+          "sourceRef": "brain/plan.yaml"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "r1",
+          "title": "Weekly",
+          "due": "2026-01-05T00:00:00.000Z",
+          "cadence": "weekly",
+          "sourceRef": "brain/plan.yaml"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "revision": 1,
+      "priorities": [
+        {
+          "id": "p1",
+          "title": "Growth",
+          "evidenceRef": "brain/goals.yaml",
+          "confidence": "KNOWN",
+          "provenance": "owner_supplied"
+        }
+      ],
+      "items": [
+        {
+          "id": "i1",
+          "title": "Launch",
+          "kind": "campaign",
+          "priorityId": "p1",
+          "start": "2026-01-01T00:00:00.000Z",
+          "end": "2026-01-01T00:00:00.000Z",
+          "dependsOn": [
+            "i2"
+          ],
+          "sourceRef": "brain/plan.yaml"
+        },
+        {
+          "id": "i2",
+          "title": "Launch",
+          "kind": "campaign",
+          "priorityId": "p1",
+          "start": "2026-01-01T00:00:00.000Z",
+          "end": "2026-01-01T00:00:00.000Z",
+          "dependsOn": [
+            "i1"
+          ],
+          "sourceRef": "brain/plan.yaml"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "r1",
+          "title": "Weekly",
+          "due": "2026-01-05T00:00:00.000Z",
+          "cadence": "weekly",
+          "sourceRef": "brain/plan.yaml"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "revision": 1,
+      "priorities": [
+        {
+          "id": "p1",
+          "title": "Growth",
+          "evidenceRef": "brain/goals.yaml",
+          "confidence": "KNOWN",
+          "provenance": "owner_supplied"
+        }
+      ],
+      "items": [
+        {
+          "id": "i1",
+          "title": "Launch",
+          "kind": "campaign",
+          "priorityId": "p1",
+          "start": "2026-01-01T00:00:00.000Z",
+          "end": "2026-01-20T00:00:00.000Z",
+          "dependsOn": [],
+          "sourceRef": "brain/plan.yaml"
+        },
+        {
+          "id": "i2",
+          "title": "Launch",
+          "kind": "campaign",
+          "priorityId": "p1",
+          "start": "2026-01-05T00:00:00.000Z",
+          "end": "2026-01-25T00:00:00.000Z",
+          "dependsOn": [
+            "i1"
+          ],
+          "sourceRef": "brain/plan.yaml"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "r1",
+          "title": "Weekly",
+          "due": "2026-01-05T00:00:00.000Z",
+          "cadence": "weekly",
+          "sourceRef": "brain/plan.yaml"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "revision": 1,
+      "priorities": [
+        {
+          "id": "p1",
+          "title": "Growth",
+          "evidenceRef": "brain/goals.yaml",
+          "confidence": "KNOWN",
+          "provenance": "owner_supplied"
+        }
+      ],
+      "items": [
+        {
+          "id": "i1",
+          "title": "Launch",
+          "kind": "campaign",
+          "priorityId": "p1",
+          "start": "2026-01-01T00:00:00.000Z",
+          "end": "2026-01-10T00:00:00.000Z",
+          "dependsOn": [],
+          "sourceRef": "https://user:pass@example.com/x"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "r1",
+          "title": "Weekly",
+          "due": "2026-01-05T00:00:00.000Z",
+          "cadence": "weekly",
+          "sourceRef": "brain/plan.yaml"
+        }
+      ]
+    }
+  ]
+}

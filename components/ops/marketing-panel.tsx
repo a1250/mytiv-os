@@ -1,7 +1,8 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { parseMarketingPlan, type MarketingPlan } from '@/lib/marketing/contract';
+import { type MarketingPlan } from '@/lib/marketing/contract';
+import { timelineBars } from '@/lib/marketing/timeline';
 import type { OpsTask } from '@/lib/clickup';
 
 function importError(error: unknown): string {
@@ -14,7 +15,6 @@ function importError(error: unknown): string {
   if (code.includes('unavailable')) return 'הייבוא אינו זמין כרגע. יש לבדוק את היסטוריית האישורים לפני ניסיון נוסף.';
   return 'לא ניתן לקרוא את התוכנית. יש לבדוק את מבנה הקובץ, התאריכים וההפניות למקורות.';
 }
-const day = (date: string) => Date.parse(`${date}T00:00:00Z`) / 86400000;
 export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, canImport, unavailable, now }: {
   businessSlug: string; projectId: string; binding: string | null; plan: MarketingPlan | null; tasks: OpsTask[]; canImport: boolean; unavailable: boolean; now: string;
 }) {
@@ -24,14 +24,25 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const requestId = useRef(crypto.randomUUID());
-  const today = now.slice(0, 10);
-  const from = plan?.items.length ? Math.min(...plan.items.map(i => day(i.start))) : 0;
-  const to = plan?.items.length ? Math.max(...plan.items.map(i => day(i.end))) : 1;
-  const span = Math.max(1, to - from + 1);
+  const previewSeq = useRef(0); // guards the async (dynamic-import) preview against stale textarea content
+  const nowMs = Date.parse(now);
+  const bars = timelineBars(plan?.items ?? []);
   const stale = plan && Date.parse(now) - Date.parse(plan.asOf) > 7 * 86400000;
-  function preview() {
-    try { requestId.current = crypto.randomUUID(); setCandidate(parseMarketingPlan(JSON.parse(raw), binding!)); setMessage(''); }
-    catch (e) { setCandidate(null); setMessage(importError(e)); }
+  async function preview() {
+    // Composed validator (ajv structural + parser) is loaded on demand so the ajv runtime
+    // stays out of the main client chunk; structural-first, parser-second order is preserved.
+    // The seq guard drops the result if the textarea changed while the import was in flight,
+    // so an in-flight preview can never restore a candidate for stale content.
+    const seq = ++previewSeq.current;
+    const snapshot = raw;
+    try {
+      const { validateMarketingPlan } = await import('@/lib/marketing/validate');
+      if (seq !== previewSeq.current) return;
+      const parsed = validateMarketingPlan(JSON.parse(snapshot), binding!);
+      if (seq !== previewSeq.current) return;
+      requestId.current = crypto.randomUUID();
+      setCandidate(parsed); setMessage('');
+    } catch (e) { if (seq === previewSeq.current) { setCandidate(null); setMessage(importError(e)); } }
   }
   async function importPlan() {
     if (!candidate) return;
@@ -63,7 +74,7 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {plan.priorities.map(p => <article key={p.id} className="bg-card border-border rounded-xl border p-4">
-          <p className="text-muted-foreground text-xs">{p.confidence === 'verified_gap' ? 'פער מאומת לפי המקור' : p.confidence === 'owner_priority' ? 'עדיפות בעלים לפי המקור' : 'טרם אומת'}</p>
+          <p className="text-muted-foreground text-xs">{p.confidence === 'KNOWN' ? 'ידוע' : p.confidence === 'ESTIMATED' ? 'משוער' : 'לא ידוע'} · {p.provenance === 'source_verified' ? 'מאומת מול המקור' : p.provenance === 'owner_verified' ? 'אומת ע״י הבעלים' : 'נמסר ע״י הבעלים'}</p>
           <h3 className="mt-2 font-semibold">{p.title}</h3><p className="text-muted-foreground mt-2 break-words text-xs">מקור: {p.evidenceRef}</p>
         </article>)}
       </div>
@@ -73,12 +84,13 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
           {plan.items.map(i => {
             const task = tasks.find(t => t.id === i.clickupTaskId);
             const priority = plan.priorities.find(p => p.id === i.priorityId);
+            const b = bars.bar(i);
             return <article key={i.id} className="border-border grid grid-cols-[210px_1fr] gap-4 border-b py-4 last:border-0">
               <div dir="rtl"><h4 className="font-medium">{i.title}</h4><p className="text-muted-foreground text-xs">{i.kind} · {priority?.title}</p>
                 <p className="mt-2 text-xs">{task ? <a href={task.url} target="_blank" rel="noreferrer" className="underline">{task.status} · {task.assignee?.name || 'ללא אחראי'}</a> : i.clickupTaskId ? 'מצב הביצוע לא זמין ברשימה הנוכחית' : 'טרם קושרה משימת ביצוע'}</p>
               </div>
-              <div><p className="text-muted-foreground mb-2 text-xs">{i.start} → {i.end}</p>
-                <div className="bg-muted relative h-6 rounded"><div className="bg-foreground/70 absolute h-6 rounded" style={{ left: `${(day(i.start) - from) / span * 100}%`, width: `${Math.max(0.5, (day(i.end) - day(i.start) + 1) / span * 100)}%` }} /></div>
+              <div><p className="text-muted-foreground mb-2 text-xs">{i.start.slice(0, 10)} → {i.end.slice(0, 10)}</p>
+                <div className="bg-muted relative h-6 rounded"><div className="bg-foreground/70 absolute h-6 rounded" style={{ left: `${b.left}%`, width: `${b.width}%` }} /></div>
                 <p className="text-muted-foreground mt-2 break-words text-xs">Source: {i.sourceRef}{i.dependsOn.length ? ` · Depends on: ${i.dependsOn.join(', ')}` : ''}</p>
                 <p className="text-muted-foreground text-xs">Approval reference: {i.approvalRef || 'not provided'} (reference only)</p>
               </div>
@@ -89,7 +101,7 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
       </section>
       <section><h3 className="mb-3 font-semibold">קצב הבקרה</h3><ul className="space-y-2">
         {plan.reviews.map(r => <li key={r.id} className="bg-card border-border flex flex-wrap justify-between gap-2 rounded-lg border p-3">
-          <span>{r.title} · {r.cadence === 'weekly' ? 'שבועי' : 'חודשי'}</span><span className={r.due < today ? 'text-warning' : 'text-muted-foreground'}>{r.due}{r.due < today ? ' · מועד הסקירה חלף' : ''}</span>
+          <span>{r.title} · {r.cadence === 'weekly' ? 'שבועי' : r.cadence === 'monthly' ? 'חודשי' : r.cadence}</span><span className={Date.parse(r.due) < nowMs ? 'text-warning' : 'text-muted-foreground'}>{r.due.slice(0, 10)}{Date.parse(r.due) < nowMs ? ' · מועד הסקירה חלף' : ''}</span>
           <span className="text-muted-foreground w-full text-xs">מקור: {r.sourceRef}</span>
         </li>)}
       </ul></section>
@@ -97,10 +109,10 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
     {binding && canImport && <details className="border-border rounded-xl border p-4"><summary className="cursor-pointer font-medium">ייבוא תוכנית מ־Marketing OS</summary>
       <p className="text-muted-foreground my-3 text-sm">ייבוא עותק לתצוגה בלבד. התוכנית אינה יוצרת משימות ואינה מאשרת הוצאה או פרסום.</p>
       <label htmlFor="marketing-json" className="text-sm">קובץ התוכנית בפורמט JSON</label>
-      <textarea id="marketing-json" dir="ltr" value={raw} onChange={e => { setRaw(e.target.value); setCandidate(null); }} className="bg-muted mt-2 w-full rounded border p-3 font-mono text-xs" rows={6} />
+      <textarea id="marketing-json" dir="ltr" value={raw} onChange={e => { previewSeq.current++; setRaw(e.target.value); setCandidate(null); }} className="bg-muted mt-2 w-full rounded border p-3 font-mono text-xs" rows={6} />
       <button onClick={preview} disabled={busy || !raw} className="bg-muted rounded px-4 py-2 text-sm disabled:opacity-40">בדיקת התוכנית</button>
       {candidate && <div className="mt-4 space-y-3"><p>גרסה {candidate.revision} · {candidate.priorities.length} עדיפויות · {candidate.items.length} פריטים · {candidate.reviews.length} סקירות</p>
-        <ul className="text-sm">{candidate.items.map(i => <li key={i.id}>{i.title} · {i.start}–{i.end}</li>)}</ul>
+        <ul className="text-sm">{candidate.items.map(i => <li key={i.id}>{i.title} · {i.start.slice(0, 10)}–{i.end.slice(0, 10)}</li>)}</ul>
         <button onClick={importPlan} disabled={busy} className="bg-foreground text-background rounded px-4 py-2">{busy ? 'מייבא…' : 'אישור ייבוא התוכנית'}</button>
       </div>}
     </details>}
