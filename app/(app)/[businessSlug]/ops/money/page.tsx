@@ -5,7 +5,7 @@ import { listProjects } from "@/lib/db/queries/projects";
 import { listAcceptedProposalsForProject } from "@/lib/db/queries/proposals";
 import { computeTotals } from "@/lib/pdf-helpers";
 import { folderFromProject } from "@/lib/ops-config";
-import { getTasksByFolder, getTimeByTask } from "@/lib/clickup";
+import { getTasksByFolderWithCompleteness, getTimeByTask } from "@/lib/clickup";
 import {
   allTimeWindow,
   compareEstimates,
@@ -55,6 +55,7 @@ export default async function MoneyPage({
   const projects = (await listProjects(business.id)).filter((p) => p.folderState === "linked");
 
   let failure: string | null = null;
+  let anyTasksIncomplete = false;
   const rows: { money: ClientMoney; overruns: EstimateVsActual[] }[] = [];
 
   for (const project of projects) {
@@ -86,7 +87,8 @@ export default async function MoneyPage({
       const monthTime = await getTimeByTask(folder, window);
       const allTime = revenue.kind === "budget" ? await getTimeByTask(folder, allTimeWindow()) : monthTime;
 
-      const tasks = await getTasksByFolder(folder, { includeClosed: true });
+      const { tasks, incomplete } = await getTasksByFolderWithCompleteness(folder, { includeClosed: true });
+      if (incomplete) anyTasksIncomplete = true;
       const estimates = new Map(
         tasks.map((t) => [t.id, { name: t.title, estimateHours: t.estimateHours }])
       );
@@ -182,6 +184,14 @@ export default async function MoneyPage({
             </div>
 
             <ul className="text-muted-foreground mt-4 flex flex-col gap-1.5 text-xs leading-relaxed">
+              {anyTasksIncomplete && (
+                <li>
+                  <span className="text-warning font-medium">
+                    Some clients have more tasks than one read can return (20-page cap)
+                  </span>{" "}
+                  — estimate vs actual below can miss tasks, so it is a floor, not a full accounting.
+                </li>
+              )}
               {noTimeClients.length > 0 && (
                 <li>
                   <span className="text-warning font-medium">

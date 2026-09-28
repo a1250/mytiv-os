@@ -15,7 +15,7 @@ import { foldersForBusiness, stuckThresholdDays } from "@/lib/ops-config";
 import {
   ClickUpConfigError,
   ClickUpRateLimitError,
-  getOpenTasks,
+  getOpenTasksWithCompleteness,
   statsFor,
   type OpsStats,
   type OpsTask,
@@ -40,6 +40,7 @@ export default async function OpsHomePage({ params }: { params: Promise<{ busine
   const thresholdDays = stuckThresholdDays();
 
   let open: OpsTask[] | null = null;
+  let incomplete = false;
   let failure: React.ReactNode = null;
 
   if (folders.length === 0) {
@@ -48,7 +49,9 @@ export default async function OpsHomePage({ params }: { params: Promise<{ busine
     );
   } else {
     try {
-      open = await getOpenTasks(folders);
+      const result = await getOpenTasksWithCompleteness(folders);
+      open = result.tasks;
+      incomplete = result.incomplete;
     } catch (err) {
       if (err instanceof ClickUpConfigError) failure = <ClickUpNotConfigured />;
       else if (err instanceof ClickUpRateLimitError)
@@ -57,11 +60,12 @@ export default async function OpsHomePage({ params }: { params: Promise<{ busine
     }
   }
 
-  // No read → no numbers. StatTiles renders unknown as "—".
-  const stats: OpsStats | null = open ? statsFor(open, thresholdDays) : null;
-  const stuck = (open ?? [])
-    .filter((t) => t.daysIdle >= thresholdDays)
-    .sort((a, b) => b.daysIdle - a.daysIdle);
+  // No read → no numbers; a truncated read is "unknown" too — show "—", never a
+  // partial count (MKT-INT06). StatTiles renders null as "—".
+  const stats: OpsStats | null = open && !incomplete ? statsFor(open, thresholdDays) : null;
+  const stuck = open && !incomplete
+    ? open.filter((t) => t.daysIdle >= thresholdDays).sort((a, b) => b.daysIdle - a.daysIdle)
+    : [];
 
   return (
     <div className="ops-root">
@@ -77,6 +81,11 @@ export default async function OpsHomePage({ params }: { params: Promise<{ busine
 
       <div className="mt-6">
         <StatTiles stats={stats} />
+        {incomplete && (
+          <p className="text-warning mt-2 text-xs">
+            More open tasks than a single read can return (20-page cap) — counts are hidden rather than shown short.
+          </p>
+        )}
       </div>
 
       <section className="mt-8">
@@ -84,7 +93,11 @@ export default async function OpsHomePage({ params }: { params: Promise<{ busine
           Stuck {stuck.length > 0 && <span className="tabular-nums">({stuck.length})</span>}
         </h2>
 
-        {failure ?? (stuck.length === 0 ? <NothingStuck thresholdDays={thresholdDays} /> : <StuckList tasks={stuck} />)}
+        {failure ?? (incomplete ? (
+          <div className="bg-card border-border text-muted-foreground rounded-xl border px-6 py-8 text-center text-sm">
+            Too many open tasks to read in one pass — the stuck list is hidden rather than shown partial. Narrow the folders or raise the cap.
+          </div>
+        ) : stuck.length === 0 ? <NothingStuck thresholdDays={thresholdDays} /> : <StuckList tasks={stuck} />)}
       </section>
     </div>
   );

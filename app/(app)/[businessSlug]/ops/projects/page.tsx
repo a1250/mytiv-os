@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { resolveBusiness } from "@/lib/tenant";
 import { listProjects } from "@/lib/db/queries/projects";
 import { folderFromProject, stuckThresholdDays } from "@/lib/ops-config";
-import { getTasksByFolder, type OpsTask } from "@/lib/clickup";
+import { getTasksByFolderWithCompleteness, type OpsTask } from "@/lib/clickup";
 import { NewProject } from "@/components/ops/new-project";
 import { Badge } from "@/components/ui/badge";
 
@@ -21,12 +21,12 @@ export default async function ProjectHubPage({ params }: { params: Promise<{ bus
   const summaries = await Promise.all(
     projects.map(async (project) => {
       const folder = folderFromProject(project);
-      if (!folder) return { project, open: [] as OpsTask[], failed: false, state: project.folderState };
+      if (!folder) return { project, open: [] as OpsTask[], failed: false, incomplete: false, state: project.folderState };
       try {
-        const rows = (await getTasksByFolder(folder)).filter((t) => !t.isDecision);
-        return { project, open: rows, failed: false, state: project.folderState };
+        const { tasks, incomplete } = await getTasksByFolderWithCompleteness(folder);
+        return { project, open: tasks.filter((t) => !t.isDecision), failed: false, incomplete, state: project.folderState };
       } catch {
-        return { project, open: [] as OpsTask[], failed: true, state: project.folderState };
+        return { project, open: [] as OpsTask[], failed: true, incomplete: false, state: project.folderState };
       }
     })
   );
@@ -49,12 +49,12 @@ export default async function ProjectHubPage({ params }: { params: Promise<{ bus
         </div>
       ) : (
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {summaries.map(({ project, open, failed, state }) => {
+          {summaries.map(({ project, open, failed, incomplete, state }) => {
             const stuck = open.filter((t) => t.daysIdle >= thresholdDays).sort((a, b) => b.daysIdle - a.daysIdle);
             const overdue = open.filter((t) => t.overdue).length;
-            // Counts are shown only when ClickUp was actually read. Anything else is
-            // unknown, and unknown is not zero.
-            const counted = state === "linked" && !failed;
+            // Counts are shown only when ClickUp was actually read in full. A truncated
+            // read (20-page cap) is unknown too, and unknown is not zero.
+            const counted = state === "linked" && !failed && !incomplete;
 
             const nextAction = state === "unlinked"
               ? "Not linked to a ClickUp folder"
@@ -62,6 +62,8 @@ export default async function ProjectHubPage({ params }: { params: Promise<{ bus
                 ? "ClickUp folder not authorized for this business — tasks not read"
               : failed
                 ? "ClickUp unavailable"
+              : incomplete
+                ? "Too many tasks to read (20-page cap) — counts hidden"
                 : stuck.length > 0
                   ? `Worst: ${stuck[0].title}`
                   : overdue > 0

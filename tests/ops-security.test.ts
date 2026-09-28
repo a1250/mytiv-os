@@ -9,6 +9,7 @@ import { snapshotTask, reversePatch, assertUnchanged, rollbackEligibility, isTas
 import { expectedMarker } from '../lib/ops-policy';
 import { marketingBinding } from '../lib/marketing/binding';
 import { requireScopedTask, requireStatusEvidence } from '../lib/ops-access';
+import { getTasksByFolderWithCompleteness } from '../lib/clickup';
 
 const fixture = () => ({ schemaVersion: 1, marketingBusiness: 'fixture', revision: 1, sourceRevision: 'fixture-rev', asOf: '2026-01-01T00:00:00Z',
   priorities: [{ id: 'priority', title: 'Fixture priority', evidenceRef: 'brain/priority', confidence: 'owner_priority' }],
@@ -148,5 +149,32 @@ test('real ClickUp adapter enforces fresh list membership and closure metadata',
     await requireStatusEvidence(folder, 'task', 'working', {});
     taskList = 'foreign'; await assert.rejects(requireScopedTask(folder, 'task'), /not_found/);
     assert.ok(requests.filter(p => p.includes('/task/task')).length >= 5, 'authorization never relies on stale cached membership');
+  } finally { globalThis.fetch = original; }
+});
+
+test('getTasksByFolder flags an incomplete read at the 20-page cap (MKT-INT06)', async () => {
+  process.env.CLICKUP_API_TOKEN = 'fixture-only'; process.env.CLICKUP_WORKSPACE_ID = 'fixture-only';
+  const original = globalThis.fetch;
+  const folder = { key: 'p', label: 'Fixture', clickupFolderId: 'folder' };
+  const pageOf = (url: unknown) => Number(new URL(String(url)).searchParams.get('page'));
+  const oneTask = (page: number) => ({ id: `t-${page}`, name: 'T', status: { status: 'open', type: 'open' } });
+  try {
+    // Source never signals a last page → the read stops at the 20-page cap with more behind.
+    globalThis.fetch = async (url) => Response.json({ tasks: [oneTask(pageOf(url))], last_page: false });
+    const capped = await getTasksByFolderWithCompleteness(folder, { fresh: true });
+    assert.equal(capped.incomplete, true);
+    assert.equal(capped.tasks.length, 20, 'reads exactly the 20-page cap, no more');
+
+    // Source signals the last page on page 2 → complete read of three pages.
+    globalThis.fetch = async (url) => { const p = pageOf(url); return Response.json({ tasks: [oneTask(p)], last_page: p >= 2 }); };
+    const full = await getTasksByFolderWithCompleteness(folder, { fresh: true });
+    assert.equal(full.incomplete, false);
+    assert.equal(full.tasks.length, 3);
+
+    // An empty page ends the read cleanly — that is complete, not a truncation.
+    globalThis.fetch = async () => Response.json({ tasks: [], last_page: false });
+    const empty = await getTasksByFolderWithCompleteness(folder, { fresh: true });
+    assert.equal(empty.incomplete, false);
+    assert.equal(empty.tasks.length, 0);
   } finally { globalThis.fetch = original; }
 });

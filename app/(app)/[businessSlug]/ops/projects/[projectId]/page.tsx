@@ -9,7 +9,7 @@ import { auth } from "@/lib/auth";
 import { resolveBusiness } from "@/lib/tenant";
 import { getProject } from "@/lib/db/queries/projects";
 import { folderFromProject } from "@/lib/ops-config";
-import { getFolderLists, getTasksByFolder, getWorkspaceMembers, type OpsTask, type WorkspaceMember } from "@/lib/clickup";
+import { getFolderLists, getTasksByFolderWithCompleteness, getWorkspaceMembers, type OpsTask, type WorkspaceMember } from "@/lib/clickup";
 import { ClientWorkspace } from "@/components/ops/client-workspace";
 import { ClickUpFailed } from "@/components/ops/notice";
 
@@ -36,18 +36,20 @@ export default async function ClientWorkspacePage({
   }
 
   let rows: OpsTask[] = [];
+  let tasksIncomplete = false;
   let members: WorkspaceMember[] = [];
   let statusesByList: Record<string, string[]> = {};
   let failure: string | null = null;
 
   if (folder) {
     try {
-      const [tasks, lists, people] = await Promise.all([
-        getTasksByFolder(folder, { fresh: true }),
+      const [taskResult, lists, people] = await Promise.all([
+        getTasksByFolderWithCompleteness(folder, { fresh: true }),
         getFolderLists(folder),
         getWorkspaceMembers(),
       ]);
-      rows = tasks;
+      rows = taskResult.tasks;
+      tasksIncomplete = taskResult.incomplete;
       members = people;
       statusesByList = Object.fromEntries(lists.map((l) => [l.id, l.statuses]));
     } catch (err) {
@@ -88,6 +90,7 @@ export default async function ClientWorkspacePage({
         project={project}
         marketing={{ binding, plan, canImport: role === "owner" || role === "admin", unavailable: marketingUnavailable, now: new Date().toISOString() }}
         canWrite={role === "owner" || role === "admin"}
+        incomplete={tasksIncomplete}
         tasks={rows.filter((t) => t.listKind === "tasks" || t.listKind === "other")}
         bugs={rows.filter((t) => t.isBug)}
         decisions={rows.filter((t) => t.isDecision)}

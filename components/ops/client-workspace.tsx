@@ -21,10 +21,12 @@ type Props = {
   statusesByList: Record<string, string[]>;
   marketing: { binding: string | null; plan: MarketingPlan | null; canImport: boolean; unavailable: boolean; now: string };
   canWrite: boolean;
+  /** True when the ClickUp read hit the 20-page cap — tab counts are then hidden, not shown short (MKT-INT06). */
+  incomplete: boolean;
 };
 
-function Count({ n }: { n: number }) {
-  if (n === 0) return null;
+function Count({ n, hide }: { n: number; hide?: boolean }) {
+  if (hide || n === 0) return null;
   return <span className="text-muted-foreground ml-1.5 text-xs tabular-nums">{n}</span>;
 }
 
@@ -38,22 +40,29 @@ export function ClientWorkspace({
   statusesByList,
   marketing,
   canWrite,
+  incomplete,
 }: Props) {
   return (
-    <Tabs defaultValue="overview">
+    <>
+      {incomplete && (
+        <p className="text-warning mb-2 text-xs">
+          Partial task read (20-page cap) — tab counts are hidden rather than shown short.
+        </p>
+      )}
+      <Tabs defaultValue="overview">
       <TabsList>
         <TabsTrigger value="overview">סקירה</TabsTrigger>
         <TabsTrigger value="tasks">
           משימות
-          <Count n={tasks.length} />
+          <Count n={tasks.length} hide={incomplete} />
         </TabsTrigger>
         <TabsTrigger value="bugs">
           תקלות
-          <Count n={bugs.length} />
+          <Count n={bugs.length} hide={incomplete} />
         </TabsTrigger>
         <TabsTrigger value="decisions">
           החלטות
-          <Count n={decisions.length} />
+          <Count n={decisions.length} hide={incomplete} />
         </TabsTrigger>
         <TabsTrigger value="marketing">שיווק</TabsTrigger>
         <TabsTrigger value="copilot">קופיילוט</TabsTrigger>
@@ -136,5 +145,6 @@ export function ClientWorkspace({
         <Copilot businessSlug={businessSlug} projectId={project.id} />
       </TabsContent>
     </Tabs>
+    </>
   );
 }

@@ -106,6 +106,13 @@ export type OpsStats = {
   openBugs: number;
 };
 
+/**
+ * A folder's tasks plus whether the read stopped at the 20-page cap before ClickUp
+ * signalled the last page. `incomplete: true` means the list is short by an unknown
+ * amount — callers must show "—", never a partial count (MKT-INT06).
+ */
+export type FolderTasks = { tasks: OpsTask[]; incomplete: boolean };
+
 export type TimeEntrySummary = {
   clientKey: string;
   hours: number;
@@ -262,12 +269,15 @@ function normalise(raw: RawTask, folder: ClientFolder, now: number): OpsTask {
  * and the next write would be refused as "changed since read" against a marker that was
  * never current. Dashboards that only read keep the cache.
  */
-export async function getTasksByFolder(
+export async function getTasksByFolderWithCompleteness(
   folder: ClientFolder,
   filters: { includeClosed?: boolean; fresh?: boolean } = {}
-): Promise<OpsTask[]> {
+): Promise<FolderTasks> {
   const now = Date.now();
   const out: OpsTask[] = [];
+  // Stays true only if the loop exhausts the 20-page cap without ClickUp ever
+  // signalling a last page — i.e. there was more we did not read.
+  let incomplete = true;
 
   for (let page = 0; page < 20; page++) {
     const params = new URLSearchParams({
@@ -279,19 +289,38 @@ export async function getTasksByFolder(
 
     const data = await get<{ tasks?: RawTask[]; last_page?: boolean }>(`/team/${workspaceId()}/task`, params, Boolean(filters.fresh));
     for (const raw of data.tasks ?? []) out.push(normalise(raw, folder, now));
-    if (data.last_page !== false || !data.tasks?.length) break;
+    if (data.last_page !== false || !data.tasks?.length) { incomplete = false; break; }
   }
 
-  return out;
+  return { tasks: out, incomplete };
+}
+
+/**
+ * Backward-compatible array form for callers that do not surface completeness
+ * (the AI copilot and CLI checks). Screens that show counts use
+ * `getTasksByFolderWithCompleteness` so they can render "—" when truncated.
+ */
+export async function getTasksByFolder(
+  folder: ClientFolder,
+  filters: { includeClosed?: boolean; fresh?: boolean } = {}
+): Promise<OpsTask[]> {
+  return (await getTasksByFolderWithCompleteness(folder, filters)).tasks;
 }
 
 /**
  * Open *work* across every configured client folder — one fetch per folder.
  * Decision-log entries are excluded: see `OpsTask.isDecision`.
  */
+export async function getOpenTasksWithCompleteness(folders: ClientFolder[]): Promise<FolderTasks> {
+  const perFolder = await Promise.all(folders.map((f) => getTasksByFolderWithCompleteness(f)));
+  return {
+    tasks: perFolder.flatMap((r) => r.tasks).filter((t) => !t.isDecision),
+    incomplete: perFolder.some((r) => r.incomplete),
+  };
+}
+
 export async function getOpenTasks(folders: ClientFolder[]): Promise<OpsTask[]> {
-  const perFolder = await Promise.all(folders.map((f) => getTasksByFolder(f)));
-  return perFolder.flat().filter((t) => !t.isDecision);
+  return (await getOpenTasksWithCompleteness(folders)).tasks;
 }
 
 /**
