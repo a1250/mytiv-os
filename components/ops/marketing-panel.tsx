@@ -24,17 +24,25 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const requestId = useRef(crypto.randomUUID());
+  const previewSeq = useRef(0); // guards the async (dynamic-import) preview against stale textarea content
   const nowMs = Date.parse(now);
   const bars = timelineBars(plan?.items ?? []);
   const stale = plan && Date.parse(now) - Date.parse(plan.asOf) > 7 * 86400000;
   async function preview() {
     // Composed validator (ajv structural + parser) is loaded on demand so the ajv runtime
     // stays out of the main client chunk; structural-first, parser-second order is preserved.
+    // The seq guard drops the result if the textarea changed while the import was in flight,
+    // so an in-flight preview can never restore a candidate for stale content.
+    const seq = ++previewSeq.current;
+    const snapshot = raw;
     try {
-      requestId.current = crypto.randomUUID();
       const { validateMarketingPlan } = await import('@/lib/marketing/validate');
-      setCandidate(validateMarketingPlan(JSON.parse(raw), binding!)); setMessage('');
-    } catch (e) { setCandidate(null); setMessage(importError(e)); }
+      if (seq !== previewSeq.current) return;
+      const parsed = validateMarketingPlan(JSON.parse(snapshot), binding!);
+      if (seq !== previewSeq.current) return;
+      requestId.current = crypto.randomUUID();
+      setCandidate(parsed); setMessage('');
+    } catch (e) { if (seq === previewSeq.current) { setCandidate(null); setMessage(importError(e)); } }
   }
   async function importPlan() {
     if (!candidate) return;
@@ -101,7 +109,7 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
     {binding && canImport && <details className="border-border rounded-xl border p-4"><summary className="cursor-pointer font-medium">ייבוא תוכנית מ־Marketing OS</summary>
       <p className="text-muted-foreground my-3 text-sm">ייבוא עותק לתצוגה בלבד. התוכנית אינה יוצרת משימות ואינה מאשרת הוצאה או פרסום.</p>
       <label htmlFor="marketing-json" className="text-sm">קובץ התוכנית בפורמט JSON</label>
-      <textarea id="marketing-json" dir="ltr" value={raw} onChange={e => { setRaw(e.target.value); setCandidate(null); }} className="bg-muted mt-2 w-full rounded border p-3 font-mono text-xs" rows={6} />
+      <textarea id="marketing-json" dir="ltr" value={raw} onChange={e => { previewSeq.current++; setRaw(e.target.value); setCandidate(null); }} className="bg-muted mt-2 w-full rounded border p-3 font-mono text-xs" rows={6} />
       <button onClick={preview} disabled={busy || !raw} className="bg-muted rounded px-4 py-2 text-sm disabled:opacity-40">בדיקת התוכנית</button>
       {candidate && <div className="mt-4 space-y-3"><p>גרסה {candidate.revision} · {candidate.priorities.length} עדיפויות · {candidate.items.length} פריטים · {candidate.reviews.length} סקירות</p>
         <ul className="text-sm">{candidate.items.map(i => <li key={i.id}>{i.title} · {i.start.slice(0, 10)}–{i.end.slice(0, 10)}</li>)}</ul>
