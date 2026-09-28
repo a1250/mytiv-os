@@ -52,7 +52,7 @@ export default async function MoneyPage({
   const window = monthWindow(month);
   const hourlyCost = contractorHourlyCost();
 
-  const projects = (await listProjects(business.id)).filter((p) => p.clickupFolderId);
+  const projects = (await listProjects(business.id)).filter((p) => p.folderState === "linked");
 
   let failure: string | null = null;
   const rows: { money: ClientMoney; overruns: EstimateVsActual[] }[] = [];
@@ -111,6 +111,8 @@ export default async function MoneyPage({
   }
 
   const totalHours = rows.reduce((s, r) => s + r.money.monthHours, 0);
+  const completeCosts = rows.length > 0 && rows.every(r => r.money.monthCost !== null);
+  const matchingRevenue = rows.length > 0 && rows.every(r => r.money.revenue.kind === "proposal");
   const totalCost = rows.reduce((s, r) => s + (r.money.monthCost ?? 0), 0);
   const totalRetainer = rows.reduce(
     (s, r) => s + (r.money.revenue.kind === "proposal" ? r.money.revenue.monthly : 0),
@@ -152,7 +154,7 @@ export default async function MoneyPage({
                 <div className="text-muted-foreground text-[11px]">hours logged</div>
               </div>
               <div>
-                <div className="text-2xl font-bold tabular-nums">{hourlyCost === null ? "—" : formatMoney(totalCost)}</div>
+                <div className="text-2xl font-bold tabular-nums">{!completeCosts ? "—" : formatMoney(totalCost)}</div>
                 <div className="text-muted-foreground text-[11px]">contractor cost</div>
               </div>
               <div>
@@ -164,14 +166,14 @@ export default async function MoneyPage({
               <div>
                 <div
                   className={`text-2xl font-bold tabular-nums ${
-                    totalRetainer > 0 && hourlyCost !== null && totalHours > 0
+                    totalRetainer > 0 && completeCosts && matchingRevenue
                       ? totalRetainer - totalCost < 0
                         ? "text-danger"
                         : "text-success"
                       : "text-muted-foreground"
                   }`}
                 >
-                  {totalRetainer > 0 && hourlyCost !== null && totalHours > 0
+                  {totalRetainer > 0 && completeCosts && matchingRevenue
                     ? formatMoney(totalRetainer - totalCost)
                     : "—"}
                 </div>

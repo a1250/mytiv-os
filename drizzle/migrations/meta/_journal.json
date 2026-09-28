@@ -36,6 +36,27 @@
       "when": 1786446913016,
       "tag": "0004_wise_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789071979105,
+      "tag": "0005_lyrical_yellow_claw",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789072244401,
+      "tag": "0006_public_menace",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789072620635,
+      "tag": "0007_calm_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }

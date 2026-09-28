@@ -1,43 +1,60 @@
-import { NextRequest, NextResponse } from "next/server";
-import { guard, ApiGuardError } from "@/lib/api-guard";
-import { ClickUpConfigError, ClickUpRateLimitError, updateTask } from "@/lib/clickup";
+import { NextRequest } from 'next/server';
+import { guard, ApiGuardError } from '@/lib/api-guard';
+import { getProject } from '@/lib/db/queries/projects';
+import { folderFromProject } from '@/lib/ops-config';
+import { ClickUpWriteUnverifiedError, getWorkspaceMembers, updateTask } from '@/lib/clickup';
+import { snapshotTask } from '@/lib/ops-snapshot';
+import { expectedMarker } from '@/lib/ops-policy';
+import { requireScopedTask, requireStatusEvidence } from '@/lib/ops-access';
+import { OpsPolicyError, assertWriter, assertConfirmation, objectInput, requiredText } from '@/lib/ops-policy';
+import { auditedAction } from '@/lib/ops-audit';
 
-type Params = { params: Promise<{ businessSlug: string; taskId: string }> };
-
-/**
- * Status and assignee changes made directly in the Tasks tab.
- *
- * This is a deliberate click on a specific row, so it applies immediately —
- * unlike a Copilot write, which previews first. There is no delete: tasks are
- * deleted in ClickUp, by hand, on purpose.
- */
-export async function PATCH(req: NextRequest, { params }: Params) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ businessSlug: string; taskId: string }> }) {
   try {
     const { businessSlug, taskId } = await params;
-    await guard(businessSlug);
-
-    const body = (await req.json()) as {
-      status?: string;
-      assignee?: { add?: number[]; rem?: number[] };
-    };
-
-    const patch: { status?: string; assignees?: { add?: number[]; rem?: number[] } } = {};
-    if (typeof body.status === "string" && body.status.trim()) patch.status = body.status;
-    if (body.assignee && (body.assignee.add?.length || body.assignee.rem?.length)) {
-      patch.assignees = body.assignee;
+    const scope = await guard(businessSlug);
+    assertWriter(scope.role);
+    const body = objectInput(await req.json());
+    assertConfirmation(req, body);
+    const projectId = requiredText(body.projectId, 'project_id', 100);
+    const project = await getProject(scope.businessId, projectId);
+    if (!project) throw new OpsPolicyError('not_found', 404);
+    const folder = folderFromProject(project);
+    const scoped = await requireScopedTask(folder, taskId);
+    const patch: Parameters<typeof updateTask>[1] = {};
+    if (body.status !== undefined) {
+      patch.status = requiredText(body.status, 'status', 100);
+      await requireStatusEvidence(folder, taskId, patch.status, body, scoped);
     }
-    if (Object.keys(patch).length === 0) {
-      return NextResponse.json({ error: "nothing_to_update" }, { status: 400 });
+    if (body.assignee !== undefined) {
+      const value = objectInput(body.assignee);
+      const members = new Set((await getWorkspaceMembers()).map(m => m.id));
+      const parseIds = (input: unknown): number[] => {
+        if (input === undefined) return [];
+        if (!Array.isArray(input) || input.length > 50 || input.some(id => !Number.isSafeInteger(id) || !members.has(id))) throw new OpsPolicyError('invalid_assignee');
+        return input;
+      };
+      patch.assignees = { add: parseIds(value.add), rem: parseIds(value.rem) };
     }
-
-    await updateTask(taskId, patch);
-    return NextResponse.json({ ok: true });
+    if (!Object.keys(patch).length) throw new OpsPolicyError('nothing_to_update');
+    // The row the human acted on carries the `date_updated` they saw; a task that moved on
+    // since is refused before the write. Absent the claim, pre/post are still recorded.
+    const expectedDateUpdated = expectedMarker(body.expectedUpdatedAt);
+    const result = await auditedAction(scope, projectId, body.requestId as string, 'update_task',
+      { taskId, patch, evidence_url: body.evidence_url, evidence_reviewed: body.evidence_reviewed, expectedUpdatedAt: body.expectedUpdatedAt },
+      async (capture) => {
+        const { post, raw } = await updateTask(taskId, patch, { expectedDateUpdated, onPre: (pre) => capture.pre(snapshotTask(pre)) });
+        capture.post(snapshotTask(post));
+        capture.ref({ taskId, url: raw.url, date_updated: post.date_updated ?? null });
+        return { ok: true };
+      },
+      { target: { kind: 'task', id: taskId }, approval: { evidence_url: body.evidence_url ?? null, evidence_reviewed: body.evidence_reviewed === true } });
+    return Response.json(result);
   } catch (err) {
     if (err instanceof ApiGuardError) return err.response;
-    if (err instanceof ClickUpConfigError) return NextResponse.json({ error: "clickup_not_configured" }, { status: 503 });
-    if (err instanceof ClickUpRateLimitError) {
-      return NextResponse.json({ error: "clickup_rate_limited" }, { status: 429 });
-    }
-    throw err;
+    if (err instanceof OpsPolicyError) return Response.json({ error: err.message }, { status: err.status });
+    if (err instanceof SyntaxError) return Response.json({ error: 'invalid_json' }, { status: 400 });
+    if (err instanceof ClickUpWriteUnverifiedError) return Response.json({ error: 'write_unverified_check_audit_before_retry' }, { status: 502 });
+    return Response.json({ error: 'operation_unavailable_check_audit_before_retry' }, { status: 503 });
   }
 }

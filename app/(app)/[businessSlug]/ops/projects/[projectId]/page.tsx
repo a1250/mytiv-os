@@ -1,3 +1,7 @@
+import { AuditLog } from "@/components/ops/audit-log";
+import { Suspense } from "react";
+import { marketingBinding, latestPlan } from "@/lib/marketing/service";
+import type { MarketingPlan } from "@/lib/marketing/contract";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -17,12 +21,19 @@ export default async function ClientWorkspacePage({
   const { businessSlug, projectId } = await params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
-  const { business } = await resolveBusiness(businessSlug, session.user.id);
+  const { business, role } = await resolveBusiness(businessSlug, session.user.id);
 
   const project = await getProject(business.id, projectId);
   if (!project) notFound();
 
   const folder = folderFromProject(project);
+  const binding = marketingBinding(businessSlug, projectId);
+  let plan: MarketingPlan | null = null;
+  let marketingUnavailable = false;
+  if (binding) {
+    try { plan = await latestPlan(business.id, projectId, binding); }
+    catch { marketingUnavailable = true; }
+  }
 
   let rows: OpsTask[] = [];
   let members: WorkspaceMember[] = [];
@@ -32,7 +43,7 @@ export default async function ClientWorkspacePage({
   if (folder) {
     try {
       const [tasks, lists, people] = await Promise.all([
-        getTasksByFolder(folder),
+        getTasksByFolder(folder, { fresh: true }),
         getFolderLists(folder),
         getWorkspaceMembers(),
       ]);
@@ -58,7 +69,11 @@ export default async function ClientWorkspacePage({
         <h1 className="text-xl font-bold">{project.name}</h1>
         <p className="text-muted-foreground mt-1 text-xs">
           {project.client || "No client name set"}
-          {project.clickupFolderId ? ` · ClickUp folder ${project.clickupFolderId}` : " · not linked to ClickUp"}
+          {project.folderState === "linked"
+            ? ` · ClickUp folder ${project.clickupFolderId}`
+            : project.folderState === "unauthorized"
+              ? ` · ClickUp folder ${project.clickupFolderId} is not authorized for this business — tasks not read`
+              : " · not linked to ClickUp"}
         </p>
       </header>
 
@@ -71,12 +86,17 @@ export default async function ClientWorkspacePage({
       <ClientWorkspace
         businessSlug={businessSlug}
         project={project}
+        marketing={{ binding, plan, canImport: role === "owner" || role === "admin", unavailable: marketingUnavailable, now: new Date().toISOString() }}
+        canWrite={role === "owner" || role === "admin"}
         tasks={rows.filter((t) => t.listKind === "tasks" || t.listKind === "other")}
         bugs={rows.filter((t) => t.isBug)}
         decisions={rows.filter((t) => t.isDecision)}
         members={members}
         statusesByList={statusesByList}
       />
+      <Suspense fallback={<p className="mt-6 text-xs">טוען היסטוריית אישורים…</p>}>
+        <AuditLog businessSlug={businessSlug} businessId={business.id} projectId={projectId} canWrite={role === "owner" || role === "admin"} />
+      </Suspense>
     </div>
   );
 }

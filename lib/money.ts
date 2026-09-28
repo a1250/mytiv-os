@@ -104,8 +104,12 @@ export function computeClientMoney(args: {
     if (!Number.isFinite(revenue.total) || revenue.total <= 0) gaps.push("budget_unparsed");
   }
 
-  const monthCost = hourlyCost === null ? null : monthHours * hourlyCost;
-  const totalCost = hourlyCost === null ? null : totalHours * hourlyCost;
+  // Zero logged hours is treated as UNKNOWN cost, not ₪0: ClickUp reports the hours that were
+  // tracked, and nobody tracking is not the same as nobody working. The price of that honesty is
+  // that a month with genuinely no work looks identical to a month with no time reporting — the
+  // screen cannot tell them apart until a time-reporting practice exists (see docs/ops-marketing-upgrade.md).
+  const monthCost = hourlyCost === null || monthHours === 0 ? null : monthHours * hourlyCost;
+  const totalCost = hourlyCost === null || totalHours === 0 ? null : totalHours * hourlyCost;
 
   let monthMargin: number | null = null;
   let monthMarginPct: number | null = null;
@@ -118,7 +122,7 @@ export function computeClientMoney(args: {
     monthMargin = revenue.monthly - monthCost;
     monthMarginPct = revenue.monthly > 0 ? (monthMargin / revenue.monthly) * 100 : null;
   }
-  if (revenue.kind === "budget" && totalCost !== null && revenue.total > 0 && totalHours > 0) {
+  if (revenue.kind === "budget" && totalCost !== null && revenue.total > 0 && totalHours > 0 && !revenue.ambiguous) {
     budgetUsedPct = (totalCost / revenue.total) * 100;
   }
 

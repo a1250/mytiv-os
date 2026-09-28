@@ -3,6 +3,8 @@
 import { ExternalLink } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { MarketingPanel } from "./marketing-panel";
+import type { MarketingPlan } from "@/lib/marketing/contract";
 import { Copilot } from "./copilot";
 import { SpecEditor } from "./spec-editor";
 import { TaskTable } from "./task-table";
@@ -17,6 +19,8 @@ type Props = {
   decisions: OpsTask[];
   members: WorkspaceMember[];
   statusesByList: Record<string, string[]>;
+  marketing: { binding: string | null; plan: MarketingPlan | null; canImport: boolean; unavailable: boolean; now: string };
+  canWrite: boolean;
 };
 
 function Count({ n }: { n: number }) {
@@ -32,6 +36,8 @@ export function ClientWorkspace({
   decisions,
   members,
   statusesByList,
+  marketing,
+  canWrite,
 }: Props) {
   return (
     <Tabs defaultValue="overview">
@@ -49,6 +55,7 @@ export function ClientWorkspace({
           החלטות
           <Count n={decisions.length} />
         </TabsTrigger>
+        <TabsTrigger value="marketing">שיווק</TabsTrigger>
         <TabsTrigger value="copilot">קופיילוט</TabsTrigger>
       </TabsList>
 
@@ -59,11 +66,15 @@ export function ClientWorkspace({
       <TabsContent value="tasks">
         <TaskTable
           businessSlug={businessSlug}
+          projectId={project.id}
           tasks={tasks}
           members={members}
           statusesByList={statusesByList}
+          readOnly={!canWrite}
           emptyMessage={
-            project.clickupFolderId
+            project.folderState === "unauthorized"
+              ? "This project's ClickUp folder is not authorized for this business — tasks were not read."
+              : project.clickupFolderId
               ? "No open tasks in this folder."
               : "This project is not linked to a ClickUp folder yet — add the folder ID in סקירה."
           }
@@ -73,10 +84,12 @@ export function ClientWorkspace({
       <TabsContent value="bugs">
         <TaskTable
           businessSlug={businessSlug}
+          projectId={project.id}
           tasks={bugs}
           members={members}
           statusesByList={statusesByList}
-          emptyMessage="No open bugs."
+          readOnly={!canWrite}
+          emptyMessage={project.folderState === "unauthorized" ? "This project's ClickUp folder is not authorized for this business — bugs were not read." : "No open bugs."}
         />
       </TabsContent>
 
@@ -113,6 +126,10 @@ export function ClientWorkspace({
         <p className="text-muted-foreground mt-3 text-xs">
           Read-only here. Decisions are written in ClickUp until the Copilot can add them under confirmation.
         </p>
+      </TabsContent>
+
+      <TabsContent value="marketing">
+        <MarketingPanel businessSlug={businessSlug} projectId={project.id} tasks={[...tasks, ...bugs]} {...marketing} />
       </TabsContent>
 
       <TabsContent value="copilot">

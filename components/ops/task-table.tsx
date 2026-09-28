@@ -7,13 +7,17 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import type { OpsTask } from "@/lib/clickup";
 import type { WorkspaceMember } from "@/lib/clickup";
+import { REVIEW_PROMPT, needsReviewConfirmation, statusChange } from "@/lib/ops-closure";
 
 type Props = {
   businessSlug: string;
+  projectId: string;
   tasks: OpsTask[];
   members: WorkspaceMember[];
   /** Allowed statuses per ClickUp list id — the vocabulary differs per list. */
   statusesByList: Record<string, string[]>;
+  /** Members can look but not write; the server refuses anyway (403), this just says so up front. */
+  readOnly?: boolean;
   emptyMessage: string;
 };
 
@@ -25,9 +29,10 @@ type Props = {
  * toast — a silent rollback is indistinguishable from a change that never
  * registered.
  */
-export function TaskTable({ businessSlug, tasks, members, statusesByList, emptyMessage }: Props) {
+export function TaskTable({ businessSlug, projectId, tasks, members, statusesByList, emptyMessage, readOnly = false }: Props) {
   const { toast } = useToast();
   const [rows, setRows] = React.useState(tasks);
+  const activeRequests = React.useRef(new Set<string>());
   const [pending, setPending] = React.useState<Record<string, boolean>>({});
 
   // Adjust during render rather than in an effect: when the server sends a
@@ -40,22 +45,27 @@ export function TaskTable({ businessSlug, tasks, members, statusesByList, emptyM
   }
 
   async function patch(task: OpsTask, body: Record<string, unknown>, optimistic: Partial<OpsTask>, label: string) {
-    const before = rows;
+    if (activeRequests.current.has(task.id)) return;
+    if (!window.confirm(`${label}? This will update ClickUp.`)) return;
+    activeRequests.current.add(task.id);
+    const before = task;
     setRows((prev) => prev.map((r) => (r.id === task.id ? { ...r, ...optimistic } : r)));
     setPending((p) => ({ ...p, [task.id]: true }));
     try {
       const res = await fetch(`/api/${businessSlug}/ops/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        // The marker this row was rendered from: the server refuses the write if the task moved on since.
+        body: JSON.stringify({ ...body, projectId, confirmed: true, requestId: crypto.randomUUID(), expectedUpdatedAt: task.updatedAt }),
       });
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: "unknown" }));
+        if (error === "task_changed_since_read") throw new Error("the task changed in ClickUp since it was loaded — refresh and try again");
         throw new Error(error);
       }
       toast({ message: label, href: task.url, tone: "ok" });
     } catch (err) {
-      setRows(before);
+      setRows(prev => prev.map(row => row.id === task.id ? before : row));
       const reason = err instanceof Error ? err.message : "unknown";
       toast({
         message:
@@ -65,13 +75,26 @@ export function TaskTable({ businessSlug, tasks, members, statusesByList, emptyM
         tone: "error",
       });
     } finally {
+      activeRequests.current.delete(task.id);
       setPending((p) => ({ ...p, [task.id]: false }));
     }
   }
 
   function onStatus(task: OpsTask, status: string) {
     if (status === task.status) return;
-    patch(task, { status }, { status }, `Status set to “${status}”`);
+    const evidenceUrl = window.prompt('For closing: paste the exact attached recording URL you have reviewed. Otherwise leave blank.', '');
+    if (evidenceUrl === null) return;
+    // A URL is not a review. The reviewed flag comes only from this second, explicit answer;
+    // declining aborts here, and the server refuses a closing status without it regardless.
+    let reviewConfirmed = false;
+    if (needsReviewConfirmation(evidenceUrl)) {
+      reviewConfirmed = window.confirm(REVIEW_PROMPT);
+      if (!reviewConfirmed) {
+        toast({ message: "Not sent — closing needs the recording to be reviewed first.", tone: "error" });
+        return;
+      }
+    }
+    patch(task, statusChange(status, evidenceUrl, reviewConfirmed), { status }, `Status set to “${status}”`);
   }
 
   function onAssignee(task: OpsTask, raw: string) {
@@ -123,7 +146,8 @@ export function TaskTable({ businessSlug, tasks, members, statusesByList, emptyM
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <select
                 value={task.status}
-                disabled={busy}
+                disabled={busy || readOnly}
+                title={readOnly ? "Owners and admins only" : undefined}
                 onChange={(e) => onStatus(task, e.target.value)}
                 aria-label="Status"
                 className="border-border bg-muted text-foreground rounded-lg border px-2 py-1 text-xs"
@@ -137,7 +161,8 @@ export function TaskTable({ businessSlug, tasks, members, statusesByList, emptyM
 
               <select
                 value={task.assignee?.id ?? ""}
-                disabled={busy}
+                disabled={busy || readOnly}
+                title={readOnly ? "Owners and admins only" : undefined}
                 onChange={(e) => onAssignee(task, e.target.value)}
                 aria-label="Assignee"
                 className="border-border bg-muted text-foreground rounded-lg border px-2 py-1 text-xs"

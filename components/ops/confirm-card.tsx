@@ -1,5 +1,6 @@
 "use client";
 
+import { REVIEW_PROMPT } from "@/lib/ops-closure";
 import * as React from "react";
 import { Check, ExternalLink, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ const FIELDS: Record<string, { title: string; fields: Field[] }> = {
     title: "Update task in ClickUp?",
     fields: [
       { key: "task_id", label: "Task" },
+      { key: "evidence_url", label: "Reviewed recording URL" },
       { key: "status", label: "Status" },
       { key: "assignee", label: "Owner" },
       { key: "due_date", label: "Due date", type: "date" },
@@ -91,6 +93,10 @@ export function ConfirmCard({
       const raw = values[f.key]?.trim() ?? "";
       if (!raw) continue;
       out[f.key] = f.type === "number" ? Number(raw) : raw;
+    }
+    if (out.evidence_url) {
+      if (!window.confirm(REVIEW_PROMPT)) return;
+      out.evidence_reviewed = true;
     }
     onConfirm(out);
   }

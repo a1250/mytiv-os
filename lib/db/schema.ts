@@ -14,9 +14,9 @@ import {
   boolean,
   timestamp,
   jsonb,
-  real,
   uniqueIndex,
   index,
+  foreignKey,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
@@ -129,6 +129,7 @@ export const projects = pgTable(
   },
   (t) => [
     index("projects_business_idx").on(t.businessId),
+    uniqueIndex("projects_business_id_uq").on(t.businessId, t.id),
     /**
      * Two projects claiming the same ClickUp folder would double-count every
      * task on Ops Home. Postgres treats NULLs as distinct, so any number of
@@ -967,3 +968,41 @@ export const discoveryJobs = pgTable(
 export type Business = typeof businesses.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type BusinessMembership = typeof businessMemberships.$inferSelect;
+
+// Immutable execution claims and append-only receipts. Never store credentials or contact data.
+export const opsActions = pgTable('ops_actions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  requestId: uuid('request_id').notNull(),
+  action: text('action').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('ops_action_request_uq').on(t.businessId, t.requestId),
+  uniqueIndex('ops_action_business_id_uq').on(t.businessId, t.id),
+  foreignKey({ columns: [t.businessId, t.projectId], foreignColumns: [projects.businessId, projects.id] }),
+  foreignKey({ columns: [t.businessId, t.userId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+]);
+export const opsAuditEvents = pgTable('ops_audit_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id),
+  actionId: uuid('action_id').notNull().references(() => opsActions.id),
+  event: text('event').notNull(),
+  detail: jsonb('detail').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [foreignKey({ columns: [t.businessId, t.actionId], foreignColumns: [opsActions.businessId, opsActions.id] })]);
+
+// Append-only projections; no task status or assignee columns. ClickUp owns execution.
+export const marketingSnapshots = pgTable('marketing_snapshots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  revision: integer('revision').notNull(),
+  payload: jsonb('payload').notNull(),
+  importedBy: uuid('imported_by').notNull().references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('marketing_snapshot_revision_uq').on(t.businessId, t.projectId, t.revision),
+  foreignKey({ columns: [t.businessId, t.projectId], foreignColumns: [projects.businessId, projects.id] }),
+  foreignKey({ columns: [t.businessId, t.importedBy], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+]);

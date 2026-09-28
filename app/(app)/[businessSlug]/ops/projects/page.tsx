@@ -21,12 +21,12 @@ export default async function ProjectHubPage({ params }: { params: Promise<{ bus
   const summaries = await Promise.all(
     projects.map(async (project) => {
       const folder = folderFromProject(project);
-      if (!folder) return { project, open: [] as OpsTask[], failed: false, linked: false };
+      if (!folder) return { project, open: [] as OpsTask[], failed: false, state: project.folderState };
       try {
         const rows = (await getTasksByFolder(folder)).filter((t) => !t.isDecision);
-        return { project, open: rows, failed: false, linked: true };
+        return { project, open: rows, failed: false, state: project.folderState };
       } catch {
-        return { project, open: [] as OpsTask[], failed: true, linked: true };
+        return { project, open: [] as OpsTask[], failed: true, state: project.folderState };
       }
     })
   );
@@ -49,12 +49,17 @@ export default async function ProjectHubPage({ params }: { params: Promise<{ bus
         </div>
       ) : (
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {summaries.map(({ project, open, failed, linked }) => {
+          {summaries.map(({ project, open, failed, state }) => {
             const stuck = open.filter((t) => t.daysIdle >= thresholdDays).sort((a, b) => b.daysIdle - a.daysIdle);
             const overdue = open.filter((t) => t.overdue).length;
+            // Counts are shown only when ClickUp was actually read. Anything else is
+            // unknown, and unknown is not zero.
+            const counted = state === "linked" && !failed;
 
-            const nextAction = !linked
+            const nextAction = state === "unlinked"
               ? "Not linked to a ClickUp folder"
+              : state === "unauthorized"
+                ? "ClickUp folder not authorized for this business — tasks not read"
               : failed
                 ? "ClickUp unavailable"
                 : stuck.length > 0
@@ -81,12 +86,12 @@ export default async function ProjectHubPage({ params }: { params: Promise<{ bus
                     <div
                       className={`text-3xl font-bold tabular-nums ${stuck.length > 0 ? "text-warning" : "text-muted-foreground"}`}
                     >
-                      {stuck.length}
+                      {counted ? stuck.length : "—"}
                     </div>
                     <div className="text-muted-foreground text-[11px]">stuck</div>
                   </div>
                   <div>
-                    <div className="text-lg font-semibold tabular-nums">{open.length}</div>
+                    <div className="text-lg font-semibold tabular-nums">{counted ? open.length : "—"}</div>
                     <div className="text-muted-foreground text-[11px]">open</div>
                   </div>
                   {project.deadline && (

@@ -10,6 +10,7 @@
  * error for the UI to explain rather than retried into the ground.
  */
 import "server-only";
+import { OpsPolicyError } from "./ops-policy";
 import {
   BLOCKED_ON_FIELD,
   BLOCKED_ON_VALUES,
@@ -19,7 +20,11 @@ import {
   type ListKind,
 } from "./ops-config";
 
-const API = "https://api.clickup.com/api/v2";
+/**
+ * Staging only: point the whole transport at a local stand-in (scripts/staging/clickup-mock.mjs)
+ * so a full HTTP/browser verification never reaches a real client task. Unset = the real API.
+ */
+const API = process.env.CLICKUP_API_BASE?.replace(/\/$/, "") || "https://api.clickup.com/api/v2";
 const CACHE_TTL_MS = 60_000;
 const DAY_MS = 86_400_000;
 
@@ -39,6 +44,15 @@ export class ClickUpError extends Error {
   constructor(public status: number, message: string) {
     super(message);
   }
+}
+
+/**
+ * The PUT was sent — and may well have landed — but the read-back did not confirm it. This is
+ * the one failure the audit log must distinguish from "nothing was written": the caller records
+ * it as unknown-after-write, and rollback refuses it because there is no verified post-state.
+ */
+export class ClickUpWriteUnverifiedError extends ClickUpError {
+  constructor(message: string) { super(502, message); }
 }
 
 // ---------------------------------------------------------------------------
@@ -121,10 +135,10 @@ type CacheEntry = { at: number; value: unknown };
 const cache = new Map<string, CacheEntry>();
 
 /** Cached GET. Writes bypass this entirely — see `send`. */
-async function get<T>(path: string, params?: URLSearchParams): Promise<T> {
+async function get<T>(path: string, params?: URLSearchParams, fresh = false): Promise<T> {
   const url = `${API}${path}${params && [...params].length ? `?${params}` : ""}`;
   const hit = cache.get(url);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value as T;
+  if (!fresh && hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value as T;
 
   const value = await send<T>("GET", url);
   cache.set(url, { at: Date.now(), value });
@@ -140,6 +154,7 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
     },
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (res.status === 429) {
@@ -168,7 +183,7 @@ type RawCustomField = {
   type_config?: { options?: { id?: string; name?: string; orderindex?: number }[] };
 };
 
-type RawTask = {
+export type RawTask = {
   id: string;
   name: string;
   url?: string;
@@ -240,9 +255,16 @@ function normalise(raw: RawTask, folder: ClientFolder, now: number): OpsTask {
 // ---------------------------------------------------------------------------
 
 /** Every open task in one folder, following pagination to the end. */
+/**
+ * `fresh` bypasses the 60s read cache. The cache is per process: a write handled by one
+ * instance does not invalidate another's copy, so the one screen that writes (the client
+ * workspace) reads fresh — otherwise a reload right after a write can show the old status,
+ * and the next write would be refused as "changed since read" against a marker that was
+ * never current. Dashboards that only read keep the cache.
+ */
 export async function getTasksByFolder(
   folder: ClientFolder,
-  filters: { includeClosed?: boolean } = {}
+  filters: { includeClosed?: boolean; fresh?: boolean } = {}
 ): Promise<OpsTask[]> {
   const now = Date.now();
   const out: OpsTask[] = [];
@@ -255,7 +277,7 @@ export async function getTasksByFolder(
     });
     params.append("project_ids[]", folder.clickupFolderId);
 
-    const data = await get<{ tasks?: RawTask[]; last_page?: boolean }>(`/team/${workspaceId()}/task`, params);
+    const data = await get<{ tasks?: RawTask[]; last_page?: boolean }>(`/team/${workspaceId()}/task`, params, Boolean(filters.fresh));
     for (const raw of data.tasks ?? []) out.push(normalise(raw, folder, now));
     if (data.last_page !== false || !data.tasks?.length) break;
   }
@@ -302,7 +324,7 @@ export function statsFor(open: OpsTask[], thresholdDays: number): OpsStats {
 }
 
 export async function getTask(taskId: string): Promise<RawTask> {
-  return get<RawTask>(`/task/${taskId}`);
+  return get<RawTask>(`/task/${encodeURIComponent(taskId)}`, undefined, true);
 }
 
 export type TaskEvidence = {
@@ -342,8 +364,8 @@ function findRecordings(text: string): string[] {
  */
 export async function getTaskEvidence(taskId: string): Promise<TaskEvidence> {
   const [task, commentData] = await Promise.all([
-    get<RawTask & { attachments?: { title?: string; url?: string; mimetype?: string }[] }>(`/task/${taskId}`),
-    get<{ comments?: { comment_text?: string; user?: { username?: string } }[] }>(`/task/${taskId}/comment`),
+    get<RawTask & { attachments?: { title?: string; url?: string; mimetype?: string }[] }>(`/task/${encodeURIComponent(taskId)}`, undefined, true),
+    get<{ comments?: { comment_text?: string; user?: { username?: string } }[] }>(`/task/${encodeURIComponent(taskId)}/comment`, undefined, true),
   ]);
 
   const comments = (commentData.comments ?? []).map((c) => ({
@@ -379,7 +401,7 @@ export async function resolveListId(folder: ClientFolder, kind: "tasks" | "bugs"
   return lists.find((l) => l.kind === kind)?.id ?? null;
 }
 
-export type FolderList = { id: string; name: string; kind: ListKind; statuses: string[] };
+export type FolderList = { id: string; name: string; kind: ListKind; statuses: string[]; statusTypes: Record<string, string> };
 
 /**
  * The lists inside a client folder, with the statuses each one allows.
@@ -388,14 +410,15 @@ export type FolderList = { id: string; name: string; kind: ListKind; statuses: s
  */
 export async function getFolderLists(folder: ClientFolder): Promise<FolderList[]> {
   const data = await get<{
-    lists?: { id: string; name: string; statuses?: { status?: string }[] }[];
-  }>(`/folder/${folder.clickupFolderId}/list`, new URLSearchParams({ archived: "false" }));
+    lists?: { id: string; name: string; statuses?: { status?: string; type?: string }[] }[];
+  }>(`/folder/${folder.clickupFolderId}/list`, new URLSearchParams({ archived: "false" }), true);
 
   return (data.lists ?? []).map((l) => ({
     id: l.id,
     name: l.name,
     kind: classifyList(l.name),
     statuses: (l.statuses ?? []).map((s) => s.status ?? "").filter(Boolean),
+    statusTypes: Object.fromEntries((l.statuses ?? []).map((s) => [s.status ?? "", s.type ?? "unknown"])),
   }));
 }
 
@@ -406,7 +429,7 @@ export async function getWorkspaceMembers(): Promise<WorkspaceMember[]> {
   const data = await get<{
     teams?: { id: string; members?: { user?: { id: number; username?: string; email?: string } }[] }[];
   }>("/team");
-  const team = data.teams?.find((t) => t.id === workspaceId()) ?? data.teams?.[0];
+  const team = data.teams?.find((t) => t.id === workspaceId());
   return (team?.members ?? [])
     .map((m) => m.user)
     .filter((u): u is { id: number; username?: string; email?: string } => Boolean(u?.id))
@@ -439,7 +462,10 @@ export async function getTimeByTask(
   folder: ClientFolder,
   range: { from: Date; to: Date }
 ): Promise<{ totalHours: number; perTask: TaskTime[] }> {
+  const members = await getWorkspaceMembers();
+  if (!members.length) throw new ClickUpConfigError("Workspace members unavailable; time coverage is unknown.");
   const params = new URLSearchParams({
+    assignee: members.map(m => m.id).join(","),
     start_date: String(range.from.getTime()),
     end_date: String(range.to.getTime()),
     folder_id: folder.clickupFolderId,
@@ -480,13 +506,42 @@ export async function createTask(
   return res;
 }
 
+export type UpdateTaskPatch = { status?: string; assignees?: { add?: number[]; rem?: number[] }; due_date?: number | null };
+
+/**
+ * A governed write, bracketed by two fresh reads.
+ *
+ * `pre` is the task as it stood the instant before the PUT; `post` is the verification read
+ * after it. Both are returned so the audit log can keep them. When the caller says which
+ * `date_updated` it looked at (`expectedDateUpdated`), a task that has moved on since is
+ * refused before anything is written — nobody's newer work gets overwritten on the strength
+ * of a stale screen. `undefined` means the caller made no such claim; `null` means "I saw a
+ * task with no marker".
+ */
 export async function updateTask(
   taskId: string,
-  patch: { status?: string; assignees?: { add?: number[]; rem?: number[] }; due_date?: number }
-) {
-  const res = await send<RawTask>("PUT", `${API}/task/${taskId}`, patch);
+  patch: UpdateTaskPatch,
+  opts: { expectedDateUpdated?: string | null; onPre?: (pre: RawTask) => void } = {}
+): Promise<{ raw: RawTask; pre: RawTask; post: RawTask }> {
+  const pre = await getTask(taskId);
+  opts.onPre?.(pre);
+  if (opts.expectedDateUpdated !== undefined) {
+    const now = pre.date_updated == null ? null : String(pre.date_updated);
+    if (now !== opts.expectedDateUpdated) throw new OpsPolicyError("task_changed_since_read", 409);
+  }
+  const res = await send<RawTask>("PUT", `${API}/task/${encodeURIComponent(taskId)}`, patch);
   invalidate();
-  return res;
+  let post: RawTask;
+  try { post = await getTask(taskId); }
+  catch (err) { throw new ClickUpWriteUnverifiedError(err instanceof Error ? err.message : "verification read failed"); }
+  if (patch.status && post.status?.status !== patch.status) throw new ClickUpWriteUnverifiedError('Update outcome could not be verified; check ClickUp before retry.');
+  const assigned = new Set((post.assignees ?? []).map(a => a.id));
+  if (patch.assignees?.add?.some(id => !assigned.has(id)) || patch.assignees?.rem?.some(id => assigned.has(id))) throw new ClickUpWriteUnverifiedError('Assignee outcome could not be verified; check ClickUp before retry.');
+  if (patch.due_date !== undefined) {
+    const landed = post.due_date == null || post.due_date === "" ? null : Number(post.due_date);
+    if (landed !== patch.due_date) throw new ClickUpWriteUnverifiedError('Due date outcome could not be verified; check ClickUp before retry.');
+  }
+  return { raw: res, pre, post };
 }
 
 export async function addComment(taskId: string, text: string) {
