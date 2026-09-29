@@ -18,7 +18,7 @@ function decisionError(code: string): string {
 }
 
 /** One pending item: an explicit decision with a mandatory note and a confirmation step (RED is never auto). */
-function DecisionForm({ endpoint, bindingVersion, sourceArtifactId, item }: { endpoint: string; bindingVersion: number; sourceArtifactId: string; item: ApprovalQueueItem }) {
+export function DecisionForm({ endpoint, bindingVersion, sourceArtifactId, item }: { endpoint: string; bindingVersion: number; sourceArtifactId: string; item: ApprovalQueueItem }) {
   const router = useRouter();
   const [note, setNote] = useState('');
   const [pending, setPending] = useState<null | 'approved' | 'rejected'>(null);

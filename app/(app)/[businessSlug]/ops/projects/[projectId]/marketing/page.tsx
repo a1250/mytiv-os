@@ -12,6 +12,7 @@ import { MarketingHome } from "@/components/marketing/marketing-home";
 import { ApprovalsView } from "@/components/marketing/approvals";
 import { BrainView } from "@/components/marketing/brain";
 import { PlanView } from "@/components/marketing/plan";
+import { CampaignsView } from "@/components/marketing/campaigns";
 import { LeadsView } from "@/components/marketing/leads";
 import { ReportsView } from "@/components/marketing/reports";
 import { IntegrationsView, SkillsView } from "@/components/marketing/integrations";
@@ -42,6 +43,7 @@ export default async function MarketingPage({ params, searchParams }: {
     | { view: "approvals"; data: Parameters<typeof ApprovalsView>[0] }
     | { view: "brain"; data: Parameters<typeof BrainView>[0] }
     | { view: "plan"; data: Parameters<typeof PlanView>[0] }
+    | { view: "campaigns"; data: Parameters<typeof CampaignsView>[0] }
     | { view: "leads"; data: Parameters<typeof LeadsView>[0] }
     | { view: "reports"; data: Parameters<typeof ReportsView>[0] }
     | { view: "integrations"; data: Parameters<typeof IntegrationsView>[0] }
@@ -64,6 +66,11 @@ export default async function MarketingPage({ params, searchParams }: {
       } else if (view === "plan") {
         const [monthly, weekly, board] = await Promise.all([latestArtifact(business.id, projectId, binding, "C14"), latestArtifact(business.id, projectId, binding, "C8"), latestArtifact(business.id, projectId, binding, "C7")]);
         loaded = { view: "plan", data: { monthly: monthly?.payload ?? null, weekly: weekly?.payload ?? null, board: board?.payload ?? null } };
+      } else if (view === "campaigns") {
+        const [campaigns, queue, board, records] = await Promise.all([latestArtifact(business.id, projectId, binding, "C12"), latestArtifact(business.id, projectId, binding, "C2a"),
+          latestArtifact(business.id, projectId, binding, "C7"), listRecords(business.id, projectId, binding)]);
+        loaded = { view: "campaigns", data: { businessSlug, projectId, bindingVersion: binding.bindingVersion, canWrite, records, campaigns: campaigns?.payload ?? null,
+          queue: queue ? { id: queue.id, items: queue.payload.items } : null, board: board ? { id: board.id, tasks: board.payload.tasks } : null } };
       } else if (view === "brain") {
         const [status, records] = await Promise.all([latestArtifact(business.id, projectId, binding, "C3a"), listRecords(business.id, projectId, binding)]);
         loaded = { view: "brain", data: { businessSlug, projectId, bindingVersion: binding.bindingVersion, canWrite,
@@ -88,6 +95,7 @@ export default async function MarketingPage({ params, searchParams }: {
     : loaded.view === "approvals" ? <ApprovalsView {...loaded.data} />
     : loaded.view === "brain" ? <BrainView {...loaded.data} />
     : loaded.view === "plan" ? <PlanView {...loaded.data} />
+    : loaded.view === "campaigns" ? <CampaignsView {...loaded.data} />
     : loaded.view === "leads" ? <LeadsView {...loaded.data} />
     : loaded.view === "reports" ? <ReportsView {...loaded.data} />
     : loaded.view === "integrations" ? <IntegrationsView {...loaded.data} />

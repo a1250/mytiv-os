@@ -34,6 +34,7 @@ export const MARKETING_VIEWS = [
   { id: 'home', label: 'בית' },
   { id: 'approvals', label: 'אישורים' },
   { id: 'plan', label: 'תוכנית ולוח עבודה' },
+  { id: 'campaigns', label: 'קמפיינים ותוכן' },
   { id: 'brain', label: 'מוח העסק' },
   { id: 'leads', label: 'לידים ולקוחות' },
   { id: 'reports', label: 'דוחות' },
@@ -142,4 +143,22 @@ export function trackPosition(at: string | null, range: [number, number]): numbe
   const t = Date.parse(at.length === 10 ? `${at}T12:00:00Z` : at);
   if (!Number.isFinite(t)) return null;
   return Math.min(100, Math.max(0, ((t - range[0]) / (range[1] - range[0])) * 100));
+}
+
+/** C16 action type for an approval's action type — mirrors the engine's RECEIPT_ACTION_FOR
+ *  (marketing-os core/lib/apply-receipts.ts); any other action has no execution receipt. */
+export function receiptActionFor(actionType: string): 'campaign_activation' | 'message_batch' | null {
+  return actionType === 'campaign_activate' ? 'campaign_activation'
+    : actionType === 'message_marketing' || actionType === 'message_service_optin' ? 'message_batch' : null;
+}
+/** A publication approval that C6 evidence can resolve (MKT-F19) — exactly the engine's set
+ *  (marketing-os core/lib/publish-approval.ts: publish_organic_new / publish_organic_recurring; job_ad_publish
+ *  has no Manual Publish Pack, so the engine cannot resolve it through C6). The engine re-checks, including
+ *  that the approval belongs to the same task (C2a does not export the task link). */
+export function isPublishAction(actionType: string): boolean {
+  return actionType === 'publish_organic_recurring' || actionType === 'publish_organic_new';
+}
+/** Creative provenance label (MKT-F13): an AI concept is never presented as real. */
+export function provenanceLabel(p: 'real' | 'ai_enhanced' | 'ai_concept'): string {
+  return p === 'real' ? 'REAL · צילום/נכס אמיתי' : p === 'ai_enhanced' ? 'AI_ENHANCED · אמיתי ששופר ב־AI' : 'AI_CONCEPT · קונספט AI — אינו אמיתי';
 }
