@@ -213,6 +213,19 @@ body {
   .ops-root { padding: 16px 14px 40px; }
 }
 
+/* Phones (T-4.8 mobile QA): the 240px sidebar left too little room for any module's content at 375px.
+   Below 768px the shell stacks — the sidebar becomes a horizontally scrollable top bar. Desktop is unchanged. */
+@media (max-width: 767px) {
+  .app { flex-direction: column; }
+  .sidebar { width: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 8px 12px; }
+  .sidebar .brand { padding: 4px; }
+  .sidebar .business-switcher { margin: 4px 0 8px; }
+  .sidebar .nav { flex: none; flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
+  .sidebar .nav > div { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .sidebar .nav-section { margin: 0 4px 0 10px; white-space: nowrap; }
+  .sidebar .nav-item { white-space: nowrap; padding: 6px 8px; }
+}
+
 /* The monthly summary is meant to be printed. Only inside @media print, so
    nothing here changes a pixel on screen for any other module. */
 @media print {
