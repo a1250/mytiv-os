@@ -1002,10 +1002,12 @@ export const marketingSnapshots = pgTable('marketing_snapshots', {
   businessId: uuid('business_id').notNull().references(() => businesses.id),
   projectId: uuid('project_id').notNull().references(() => projects.id),
   revision: integer('revision').notNull(),
+  // T-2.3: the binding version the plan was imported under; revisions restart at 1 per version (D2).
+  bindingVersion: integer('binding_version').notNull(),
   payload: jsonb('payload').notNull(),
   importedBy: uuid('imported_by').notNull().references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex('marketing_snapshot_revision_uq').on(t.businessId, t.projectId, t.revision),
+}, (t) => [uniqueIndex('marketing_snapshot_binding_revision_uq').on(t.businessId, t.projectId, t.bindingVersion, t.revision),
   foreignKey({ columns: [t.businessId, t.projectId], foreignColumns: [projects.businessId, projects.id] }),
   foreignKey({ columns: [t.businessId, t.importedBy], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
 ]);

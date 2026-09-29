@@ -47,11 +47,11 @@ import { POST } from '../app/api/[businessSlug]/ops/projects/[projectId]/marketi
 
 const params = { params: Promise.resolve({ businessSlug: 'mytiv', projectId: 'project' }) };
 const requestId = '11111111-1111-4111-8111-111111111111';
-function post(plan: unknown) {
+function post(plan: unknown, extra: Record<string, unknown> = {}) {
   return new NextRequest('https://ops.example/api/mytiv/ops/projects/project/marketing', {
     method: 'POST',
     headers: { origin: 'https://ops.example', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ plan, confirmed: true, requestId }),
+    body: JSON.stringify({ plan, confirmed: true, requestId, bindingVersion: 1, ...extra }),
   });
 }
 
@@ -77,6 +77,18 @@ test('a valid canonical plan passes validation and reaches the governed audit cl
   expect(res.status).toBe(200);
   expect(mocks.audited).toHaveBeenCalledTimes(1);
   expect(mocks.audited.mock.calls[0][3]).toBe('marketing_import'); // action
+});
+
+test('an import confirmed against a binding version that is no longer current is refused before any audit (T-2.3)', async () => {
+  mocks.binding.mockResolvedValue({ marketingBusiness: BIZ, bindingVersion: 2 }); // rebound since the page was loaded
+  for (const extra of [{ bindingVersion: 1 }, { bindingVersion: undefined }, { bindingVersion: '2' }]) {
+    const res = await POST(post(vectors.valid[0], extra), params);
+    expect(res.status, JSON.stringify(extra)).toBe(409);
+    expect((await res.json()).error).toBe('stale_binding_version');
+  }
+  expect(mocks.audited).not.toHaveBeenCalled();
+  const ok = await POST(post(vectors.valid[0], { bindingVersion: 2 }), params);
+  expect(ok.status).toBe(200);
 });
 
 test('a project with no active DB binding is not connected, even when OPS_MARKETING_BINDINGS names it (D2)', async () => {

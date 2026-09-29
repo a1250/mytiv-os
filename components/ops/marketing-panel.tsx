@@ -9,6 +9,7 @@ import { MarketingBindingEditor, type BindingEditorState } from './marketing-bin
 function importError(error: unknown): string {
   const code = error instanceof Error ? error.message : '';
   if (code.includes('scope') || code.includes('version')) return 'התוכנית אינה מתאימה לעסק המקושר או שגרסת הקובץ אינה נתמכת.';
+  if (code.includes('binding_version')) return 'חיבור הפרויקט ל־Marketing OS השתנה מאז שהתוכנית נבדקה. יש לרענן את הדף ולבדוק שוב.';
   if (code.includes('revision')) return 'גרסת התוכנית כבר קיימת או ישנה מהגרסה שנקלטה.';
   if (code.includes('dependency')) return 'יש לתקן את התלויות ואת סדר התאריכים בתוכנית.';
   if (code.includes('priority')) return 'כל פריט בתוכנית חייב להיות מקושר לעדיפות עסקית קיימת.';
@@ -16,10 +17,14 @@ function importError(error: unknown): string {
   if (code.includes('unavailable')) return 'הייבוא אינו זמין כרגע. יש לבדוק את היסטוריית האישורים לפני ניסיון נוסף.';
   return 'לא ניתן לקרוא את התוכנית. יש לבדוק את מבנה הקובץ, התאריכים וההפניות למקורות.';
 }
-export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, canImport, unavailable, now, bindingEditor }: {
+export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, canImport, unavailable, now, bindingEditor, bindingVersion, previousPlans }: {
   businessSlug: string; projectId: string; binding: string | null; plan: MarketingPlan | null; tasks: OpsTask[]; canImport: boolean; unavailable: boolean; now: string;
   /** Present only for owners (T-2.2): the binding editor's view of the current binding row. */
   bindingEditor?: BindingEditorState;
+  /** The active binding version the import is confirmed against (T-2.3); null when not connected. */
+  bindingVersion: number | null;
+  /** Plans imported under earlier binding versions — history only, never the current plan. */
+  previousPlans: { bindingVersion: number; revision: number; importedAt: string }[];
 }) {
   const router = useRouter();
   const [raw, setRaw] = useState('');
@@ -53,7 +58,7 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
     try {
       const res = await fetch(`/api/${businessSlug}/ops/projects/${projectId}/marketing`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirmed: true, requestId: requestId.current, plan: candidate }),
+        body: JSON.stringify({ confirmed: true, requestId: requestId.current, bindingVersion, plan: candidate }),
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Import failed');
@@ -120,6 +125,10 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
         <button onClick={importPlan} disabled={busy} className="bg-foreground text-background rounded px-4 py-2">{busy ? 'מייבא…' : 'אישור ייבוא התוכנית'}</button>
       </div>}
     </details>}
+    {previousPlans.length > 0 && <section className="border-border rounded-xl border p-4"><h3 className="mb-2 text-sm font-semibold">תוכניות מחיבור קודם</h3>
+      <p className="text-muted-foreground mb-2 text-xs">נקלטו תחת גרסת חיבור קודמת. להיסטוריה בלבד — אינן התוכנית הנוכחית.</p>
+      <ul className="text-muted-foreground space-y-1 text-xs">{previousPlans.map(p => <li key={`${p.bindingVersion}-${p.revision}`}>גרסת חיבור {p.bindingVersion} · גרסת תוכנית {p.revision} · נקלטה {p.importedAt.slice(0, 10)}</li>)}</ul>
+    </section>}
     {message && <p role="status" className="text-sm">{message}</p>}
   </section>;
 }

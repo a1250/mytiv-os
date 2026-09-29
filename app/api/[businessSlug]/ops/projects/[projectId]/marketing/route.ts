@@ -19,9 +19,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ bus
     const text = await req.text();
     if (text.length > 250000) throw new OpsPolicyError('payload_too_large', 413);
     const body = objectInput(JSON.parse(text)); assertConfirmation(req, body);
+    // The human confirmed a plan against the binding version they saw; a rebind/revoke since then makes
+    // that confirmation stale (T-2.3) — refuse rather than import under a different binding.
+    if (body.bindingVersion !== binding.bindingVersion) throw new OpsPolicyError('stale_binding_version', 409);
     const plan = validateMarketingPlan(body.plan, binding.marketingBusiness);
     for (const item of plan.items) if (item.clickupTaskId) await requireScopedTask(folderFromProject(project), item.clickupTaskId);
-    const result = await auditedAction(scope, projectId, body.requestId as string, 'marketing_import', plan, () => importPlan(scope.businessId, projectId, scope.userId, plan), { target: { kind: 'project', id: projectId } });
+    const result = await auditedAction(scope, projectId, body.requestId as string, 'marketing_import', plan, () => importPlan(scope.businessId, projectId, scope.userId, plan, binding), { target: { kind: 'project', id: projectId } });
     return Response.json(result);
   } catch (err) {
     if (err instanceof ApiGuardError) return err.response;

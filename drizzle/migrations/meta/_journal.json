@@ -64,6 +64,13 @@
       "when": 1790709379548,
       "tag": "0008_marketing_bindings",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790709910065,
+      "tag": "0009_snapshot_binding_version",
+      "breakpoints": true
     }
   ]
 }

@@ -20,7 +20,8 @@ type Props = {
   decisions: OpsTask[];
   members: WorkspaceMember[];
   statusesByList: Record<string, string[]>;
-  marketing: { binding: string | null; plan: MarketingPlan | null; canImport: boolean; unavailable: boolean; now: string; bindingEditor?: BindingEditorState };
+  marketing: { binding: string | null; plan: MarketingPlan | null; canImport: boolean; unavailable: boolean; now: string; bindingEditor?: BindingEditorState;
+    bindingVersion: number | null; previousPlans: { bindingVersion: number; revision: number; importedAt: string }[] };
   canWrite: boolean;
   /** True when the ClickUp read hit the 20-page cap — tab counts are then hidden, not shown short (MKT-INT06). */
   incomplete: boolean;
