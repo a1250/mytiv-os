@@ -4,6 +4,7 @@ import { OpsPolicyError } from './ops-policy';
 import { requireScopedTask } from './ops-access';
 import type { ClientFolder } from './ops-config';
 import { auditedAction, appendActionEvent, getOpsAction, listActionEvents } from './ops-audit';
+import { openReconciliationOn } from './ops-reconciliation';
 import { assertUnchanged, isTaskSnapshot, reversePatch, snapshotTask, type TaskSnapshot } from './ops-snapshot';
 
 /**
@@ -38,6 +39,8 @@ export async function planRollback(scope: { businessId: string }, projectId: str
   const detail = success.detail as { pre_state?: unknown; post_state?: unknown };
   if (!isTaskSnapshot(detail.pre_state) || !isTaskSnapshot(detail.post_state)) throw new OpsPolicyError('no_verified_states', 409);
   const { pre_state: pre, post_state: post } = detail;
+  // MKT-GOV06: a later write to this task with an unknown outcome blocks the reverse write too.
+  if (await openReconciliationOn(scope.businessId, { kind: 'task', id: pre.taskId })) throw new OpsPolicyError('reconciliation_pending', 409);
   let current: RawTask, list: Awaited<ReturnType<typeof requireScopedTask>>['list'];
   try { ({ task: current, list } = await requireScopedTask(folder, pre.taskId)); }
   catch (err) {

@@ -50,3 +50,12 @@ const ACTION_LABELS: Record<string, string> = {
   marketing_record_evidence: 'ראיית פרסום', marketing_record_outcome: 'תוצאה מדודה', marketing_record_receipt: 'קבלת ביצוע',
 };
 export function actionLabel(action: string): string { return ACTION_LABELS[action] ?? action; }
+
+/** Unknown external outcomes (MKT-GOV06): the write may or may not have happened. */
+const UNKNOWN_PHASES = new Set(['write_outcome_unknown', 'after_write_unverified']);
+/** An action has an OPEN reconciliation item when its outcome is unknown and no fresh readback has been
+ *  recorded since (`reconciled`). While open, every new write to its target is refused. */
+export function isOpenReconciliation(events: { event: string; detail: Record<string, unknown> }[]): boolean {
+  const unknownAt = events.findLastIndex((e) => e.event === 'failed_or_unknown' && UNKNOWN_PHASES.has(String(e.detail.phase)));
+  return unknownAt !== -1 && !events.slice(unknownAt + 1).some((e) => e.event === 'reconciled');
+}

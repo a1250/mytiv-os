@@ -6,6 +6,7 @@ import { opsActions, opsAuditEvents } from './db/schema';
 import { OpsPolicyError } from './ops-policy';
 import { ClickUpError, ClickUpWriteUnverifiedError } from './clickup';
 import { rollbackEligibility, type TaskSnapshot } from './ops-snapshot';
+import { openReconciliationOn } from './ops-reconciliation';
 
 /**
  * One record shape for every governed external write.
@@ -44,6 +45,9 @@ export async function auditedAction<T>(
   run: (capture: Capture) => Promise<T>,
   meta: AuditMeta = {}
 ): Promise<T> {
+  // MKT-GOV06: while an earlier write to this target has an unknown outcome, no new write is attempted —
+  // a blind retry could double-apply. Resolved only by a fresh readback (POST …/actions/[id]/reconcile).
+  if (meta.target && await openReconciliationOn(scope.businessId, meta.target)) throw new OpsPolicyError('reconciliation_pending', 409);
   const payloadHash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
   const [claim] = await db.insert(opsActions).values({ businessId: scope.businessId, userId: scope.userId, projectId, requestId, action, payloadHash })
     .onConflictDoNothing().returning({ id: opsActions.id });

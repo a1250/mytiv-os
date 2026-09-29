@@ -30,6 +30,17 @@ vi.mock('../lib/db', () => ({ db: {
     return Promise.resolve();
   } }),
 } }));
+// The reconciliation lookup (MKT-GOV06) over the same in-memory events, with the real open-item rule and the
+// same scoping the SQL applies (tenant + the claim's target).
+vi.mock('../lib/ops-reconciliation', async () => {
+  const { isOpenReconciliation } = await import('../lib/ops-audit-view');
+  return { openReconciliationOn: async (businessId: string, target: { kind: string; id: string }) => {
+    const claims = mocks.events.filter((e) => e.businessId === businessId && e.event === 'confirmed'
+      && (e.detail.target as { kind?: string; id?: string } | null)?.kind === target.kind && (e.detail.target as { id?: string } | null)?.id === target.id);
+    for (const c of claims) if (isOpenReconciliation(mocks.events.filter((e) => e.businessId === businessId && e.actionId === c.actionId))) return { actionId: c.actionId };
+    return null;
+  } };
+});
 // The two reads used by rollback, with exactly the scoping the SQL applies.
 vi.mock('../lib/ops-audit', async (importActual) => {
   const actual = await importActual<typeof import('../lib/ops-audit')>();
@@ -42,6 +53,7 @@ vi.mock('../lib/ops-audit', async (importActual) => {
 import { PATCH } from '../app/api/[businessSlug]/ops/tasks/[taskId]/route';
 import { POST as ROLLBACK } from '../app/api/[businessSlug]/ops/actions/[actionId]/rollback/route';
 import { POST as CONFIRM } from '../app/api/[businessSlug]/ops/chat/confirm/route';
+import { POST as RECONCILE } from '../app/api/[businessSlug]/ops/actions/[actionId]/reconcile/route';
 
 const owner = { businessId: 'biz-a', userId: 'user-a', role: 'owner' };
 const project = { id: 'proj-a', name: 'Fixture', clickupFolderId: 'folder-a', folderState: 'linked' };
@@ -233,4 +245,102 @@ test('an owner of another business cannot see or roll back this action', async (
   const other = await ROLLBACK(req(`/api/mytiv/ops/actions/${action.id}/rollback`, 'POST', { projectId: 'proj-x', confirmed: true, requestId: rid(95) }), { params: Promise.resolve({ businessSlug: 'mytiv', actionId: action.id }) });
   expect(other.status).toBe(404);
   expect(eventsOf(action.id).some((e) => e.event === 'rolled_back')).toBe(false);
+});
+
+// ── T-11.3 · reconciliation workflow (MKT-GOV06) ──
+const reconcileReq = (actionId: string, body: Record<string, unknown> = {}) => RECONCILE(req(`/api/mytiv/ops/actions/${actionId}/reconcile`, 'POST', { projectId: 'proj-a', confirmed: true, requestId: rid(77), ...body }), { params: Promise.resolve({ businessSlug: 'mytiv', actionId }) });
+async function unknownOutcome() {
+  verifyBreaks = true;
+  const { res, action } = await governedUpdate(1);
+  expect(res.status).toBe(502);
+  expect(eventsOf(action.id).map((e) => e.event)).toEqual(['confirmed', 'failed_or_unknown']);
+  expect(eventsOf(action.id)[1].detail.phase).toBe('after_write_unverified');
+  verifyBreaks = false;
+  return action;
+}
+
+test('an unknown outcome opens a reconciliation item: a retry on the same task is refused before any claim or write', async () => {
+  await unknownOutcome();
+  delete task.deleted;
+  const before = { writes: writes.length, actions: mocks.actions.length };
+  const retry = await patchReq({ requestId: rid(2), status: 'working' });
+  expect(retry.status).toBe(409);
+  expect((await retry.json()).error).toBe('reconciliation_pending');
+  expect(writes).toHaveLength(before.writes); // nothing sent to ClickUp
+  expect(mocks.actions).toHaveLength(before.actions); // no claim recorded for the refused retry
+});
+
+test('a rollback that would write to a task with an open item is refused (and leaves a refusal receipt)', async () => {
+  const { action: earlier } = await governedUpdate(1); // eligible write
+  verifyBreaks = true;
+  await patchReq({ requestId: rid(2), status: 'working', expectedUpdatedAt: new Date(task.updated).toISOString() }); // unknown outcome on the same task
+  verifyBreaks = false; delete task.deleted;
+  const writesBefore = writes.length;
+  const rb = await rollbackReq(earlier.id);
+  expect(rb.status).toBe(409);
+  expect((await rb.json()).error).toBe('reconciliation_pending');
+  expect(writes).toHaveLength(writesBefore);
+});
+
+test('reconcile: writer-only, tenant-scoped, and only for an open item', async () => {
+  const action = await unknownOutcome();
+  mocks.guard.mockResolvedValueOnce({ ...owner, role: 'member' });
+  expect((await reconcileReq(action.id)).status).toBe(403);
+  mocks.guard.mockResolvedValueOnce({ ...owner, businessId: 'biz-b' }); // another business: its project lookup finds nothing
+  mocks.project.mockResolvedValueOnce(null);
+  expect((await reconcileReq(action.id)).status).toBe(404);
+  mocks.guard.mockResolvedValueOnce({ ...owner, businessId: 'biz-b' }); // …and even with a project, the action is not theirs
+  expect((await reconcileReq(action.id)).status).toBe(404);
+  delete task.deleted;
+  expect((await reconcileReq(action.id, { requestId: rid(78) })).status).toBe(200); // the owner of biz-a resolves it
+  expect((await reconcileReq(action.id, { requestId: rid(79) })).status).toBe(409); // nothing open any more
+});
+
+test('reconcile records the FRESH readback, then writes to the target are allowed again', async () => {
+  const action = await unknownOutcome();
+  delete task.deleted; // the write had landed: ClickUp shows the new status
+  const res = await reconcileReq(action.id);
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.observed_state).toMatchObject({ taskId: 'task-1', status: 'review', assigneeIds: [1, 2] });
+  const reconciled = eventsOf(action.id).at(-1)!;
+  expect(reconciled.event).toBe('reconciled');
+  expect(reconciled.detail).toMatchObject({ observed_state: { status: 'review' }, by: 'user-a', request_id: rid(77) });
+  expect(writes.length).toBe(1); // the readback never writes
+  const next = await patchReq({ requestId: rid(3), status: 'working', expectedUpdatedAt: new Date(task.updated).toISOString() });
+  expect(next.status).toBe(200);
+});
+
+test('reconcile of a task that no longer exists records it as observed missing; a known outcome has nothing to reconcile', async () => {
+  const action = await unknownOutcome(); // task.deleted stays true
+  const res = await reconcileReq(action.id);
+  expect(res.status).toBe(200);
+  expect((await res.json()).observed_state).toEqual({ taskId: 'task-1', missing: true });
+  delete task.deleted;
+  const { action: fine } = await governedUpdate(4, { status: 'working', expectedUpdatedAt: new Date(task.updated).toISOString() });
+  const nothing = await reconcileReq(fine.id, { requestId: rid(80) });
+  expect(nothing.status).toBe(409);
+  expect((await nothing.json()).error).toBe('no_open_reconciliation');
+});
+
+
+test('a KNOWN failure (refused before anything was sent) opens no item: the corrected retry goes through', async () => {
+  task.updated = 2000; // stale row → refused before_write, nothing sent
+  const first = await patchReq({ requestId: rid(1), status: 'review', expectedUpdatedAt: new Date(1000).toISOString() });
+  expect(first.status).toBe(409);
+  expect(eventsOf(lastAction().id)[1].detail.phase).toBe('before_write');
+  const retry = await patchReq({ requestId: rid(2), status: 'review', expectedUpdatedAt: new Date(2000).toISOString() });
+  expect(retry.status).toBe(200);
+});
+
+test('a readback that FAILS (ClickUp unavailable) records nothing — it is never taken as "task missing"', async () => {
+  const action = await unknownOutcome();
+  delete task.deleted;
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => (options?.method && options.method !== 'GET') || String(url).includes('/folder/') || String(url).endsWith('/team')
+    ? realFetch(url, options) : new Response('{"err":"upstream"}', { status: 500 })));
+  const res = await reconcileReq(action.id);
+  expect(res.status).toBe(503);
+  expect(eventsOf(action.id).some((e) => e.event === 'reconciled')).toBe(false); // still open
+  vi.stubGlobal('fetch', realFetch);
 });

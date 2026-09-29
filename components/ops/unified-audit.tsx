@@ -1,6 +1,7 @@
 import type { AuditActionView } from '@/lib/db/queries/ops-audit';
 import type { TaskSnapshot } from '@/lib/ops-snapshot';
-import { actionLabel, canRollBack, describeSnapshot, outcome, refusalReason, resultSummary } from '@/lib/ops-audit-view';
+import { actionLabel, canRollBack, describeSnapshot, isOpenReconciliation, outcome, refusalReason, resultSummary } from '@/lib/ops-audit-view';
+import { ReconcileButton } from './reconcile-button';
 import { RollbackButton } from './rollback-button';
 
 export type BusinessAuditRow = AuditActionView & { projectId: string; projectName: string };
@@ -13,7 +14,15 @@ export type BusinessAuditRow = AuditActionView & { projectId: string; projectNam
  */
 export function UnifiedAudit({ businessSlug, rows, canWrite }: { businessSlug: string; rows: BusinessAuditRow[]; canWrite: boolean }) {
   if (!rows.length) return <p className="text-muted-foreground text-sm">טרם נרשמו פעולות מבוקרות בעסק.</p>;
-  return <ul className="space-y-3">{rows.map((r) => {
+  const open = rows.filter((r) => isOpenReconciliation(r.events));
+  return <div className="space-y-4">
+  {open.length > 0 && <section aria-labelledby="audit-open" className="border-warning/50 rounded-xl border p-3">
+    <h2 id="audit-open" className="text-sm font-semibold">פריטי יישוב פתוחים ({open.length})</h2>
+    <p className="text-muted-foreground text-xs">תוצאת הכתיבה לא אומתה. עד שתירשם קריאה חוזרת, כל כתיבה חדשה ליעד הזה נחסמת.</p>
+    <ul className="mt-2 space-y-1 text-sm">{open.map((r) => <li key={r.id} data-open-item={r.id}>{actionLabel(r.action)} · {r.projectName} · <span dir="ltr">{r.requestId}</span>
+      {canWrite && <> · <ReconcileButton businessSlug={businessSlug} projectId={r.projectId} actionId={r.id} /></>}</li>)}</ul>
+  </section>}
+  <ul className="space-y-3">{rows.map((r) => {
     const success = r.events.find((e) => e.event === 'succeeded');
     const pre = success?.detail.pre_state as TaskSnapshot | undefined, post = success?.detail.post_state as TaskSnapshot | undefined;
     const rolledBack = r.events.find((e) => e.event === 'rolled_back');
@@ -28,5 +37,6 @@ export function UnifiedAudit({ businessSlug, rows, canWrite }: { businessSlug: s
       <p className="text-muted-foreground mt-1 text-xs break-all" dir="ltr">request {r.requestId} · actor {r.actor}</p>
       {canWrite && canRollBack(r) && <RollbackButton businessSlug={businessSlug} projectId={r.projectId} actionId={r.id} />}
     </li>;
-  })}</ul>;
+  })}</ul>
+  </div>;
 }

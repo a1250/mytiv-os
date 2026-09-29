@@ -56,3 +56,18 @@ test('rollback control only for writers and only where eligible; members read th
   expect(m).toContain('UMINO');
   expect(renderToStaticMarkup(createElement(UnifiedAudit, { businessSlug: 'mytiv', rows: [], canWrite: false }))).toContain('טרם נרשמו פעולות מבוקרות');
 });
+
+test('open reconciliation items are listed first; only writers get the readback control (T-11.3)', () => {
+  const unknown = row('a-unk', 'update_task', [{ event: 'confirmed', detail: { target: { kind: 'task', id: 't1' } } }, { event: 'failed_or_unknown', detail: { phase: 'after_write_unverified' } }]);
+  const resolved = row('a-res', 'update_task', [...unknown.events.map(({ event, detail }) => ({ event, detail })), { event: 'reconciled', detail: { observed_state: {} } }]);
+  const w = renderToStaticMarkup(createElement(UnifiedAudit, { businessSlug: 'mytiv', rows: [task, unknown, resolved], canWrite: true }));
+  expect(w).toContain('פריטי יישוב פתוחים (1)');
+  expect(w).toContain('data-open-item="a-unk"');
+  expect(w).not.toContain('data-open-item="a-res"');
+  expect(w).toContain('יישוב (קריאה חוזרת)');
+  const m = renderToStaticMarkup(createElement(UnifiedAudit, { businessSlug: 'mytiv', rows: [unknown], canWrite: false }));
+  expect(m).toContain('data-open-item="a-unk"');
+  expect(m).not.toContain('יישוב (קריאה חוזרת)');
+  expect(renderToStaticMarkup(createElement(UnifiedAudit, { businessSlug: 'mytiv', rows: [task], canWrite: true }))).not.toContain('פריטי יישוב פתוחים');
+});
+
