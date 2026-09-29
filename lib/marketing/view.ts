@@ -82,7 +82,9 @@ export function brainFileStatus(file: string, fileState: 'ok' | 'missing' | 'inv
   if (fileState === 'stale') return 'STALE';
   if (fileState === 'missing') return 'MISSING';
   if (fileState === 'invalid') return 'INVALID';
-  const fields = Object.entries(verification).filter(([key]) => key.startsWith(`${file}#`));
+  // Field keys are `<file><sep><fieldPath>`: the canonical C3a vector uses '#', the engine exporter
+  // (marketing-os core/lib/artifact-exporters.ts buildBrainStatus) emits ':' — both are accepted.
+  const fields = Object.entries(verification).filter(([key]) => key.startsWith(`${file}#`) || key.startsWith(`${file}:`));
   const verified = fields.filter(([, v]) => v.owner_verified || v.source_verified === true).length;
   return fields.length > 0 && verified === fields.length ? 'VERIFIED' : verified > 0 ? 'PARTIAL' : 'UNVERIFIED';
 }

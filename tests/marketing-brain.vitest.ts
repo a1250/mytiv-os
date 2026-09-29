@@ -68,5 +68,9 @@ test('brainFileStatus derivation', () => {
   expect(brainFileStatus('x.yaml', 'ok', { 'x.yaml#a': { owner_verified: true }, 'x.yaml#b': { owner_verified: false } })).toBe('PARTIAL');
   expect(brainFileStatus('x.yaml', 'ok', { 'x.yaml#a': { owner_verified: false, source_verified: false } })).toBe('UNVERIFIED');
   expect(brainFileStatus('x.yaml', 'invalid', {})).toBe('INVALID');
+  // the engine exporter keys fields `file:path` (the canonical vector uses `file#path`) — both count
+  expect(brainFileStatus('x.yaml', 'ok', { 'x.yaml:a': { owner_verified: true, source_verified: false } })).toBe('VERIFIED');
+  expect(brainFileStatus('x.yaml', 'ok', { 'x.yaml:a': { owner_verified: true }, 'x.yaml#b': { owner_verified: false } })).toBe('PARTIAL');
+  expect(brainFileStatus('x.yaml', 'ok', { 'x.yamlx:a': { owner_verified: true }, 'y.yaml:a': { owner_verified: true } })).toBe('UNVERIFIED');
   expect(brainStatusLabel('UNVERIFIED')).toContain('אין להשתמש');
 });
