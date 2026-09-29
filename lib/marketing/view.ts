@@ -81,3 +81,18 @@ export function brainFileStatus(file: string, fileState: 'ok' | 'missing' | 'inv
 export function brainStatusLabel(s: BrainFileStatus): string {
   return { VERIFIED: 'מאומת', PARTIAL: 'מאומת חלקית', UNVERIFIED: 'לא מאומת — אין להשתמש בו לתוכן ייצור', STALE: 'לא עדכני', MISSING: 'חסר', INVALID: 'לא תקין' }[s];
 }
+
+/** Attribution tier (MKT-RPT02): the C5 tier reflects provenance — T1 first-party (HIGH), T2 platform data
+ *  reconciled to a first-party total (MEDIUM), T3 platform-only / modelled (LOW, narrative only). */
+export function tierLabel(tier: 'T1' | 'T2' | 'T3'): string {
+  return tier === 'T1' ? 'HIGH · מערכת העסק' : tier === 'T2' ? 'MEDIUM · פלטפורמה מתואמת' : 'LOW · פלטפורמה בלבד';
+}
+/** "Not verified" (mandatory report section): every KPI that is not first-party verified — UNKNOWN or
+ *  tier ≠ T1 — exactly as the engine's KPI snapshot defines it (marketing-os core/lib/kpi-snapshot.ts). */
+export function notVerifiedKpis<K extends { kpi: string; confidence: string; tier: string }>(kpis: K[]): K[] {
+  return kpis.filter((k) => k.confidence === 'UNKNOWN' || k.tier !== 'T1');
+}
+/** A rate in [0,1] as a percentage. */
+export function percent(rate: number): string {
+  return `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 1 }).format(rate * 100)}%`;
+}

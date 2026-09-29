@@ -11,6 +11,9 @@ import { MARKETING_VIEWS, approvalsWaiting, marketingView } from "@/lib/marketin
 import { MarketingHome } from "@/components/marketing/marketing-home";
 import { ApprovalsView } from "@/components/marketing/approvals";
 import { BrainView } from "@/components/marketing/brain";
+import { LeadsView } from "@/components/marketing/leads";
+import { ReportsView } from "@/components/marketing/reports";
+import { IntegrationsView, SkillsView } from "@/components/marketing/integrations";
 import { listRecords } from "@/lib/marketing/records";
 
 /**
@@ -37,6 +40,10 @@ export default async function MarketingPage({ params, searchParams }: {
   type Loaded = { view: "home"; data: Parameters<typeof MarketingHome>[0] }
     | { view: "approvals"; data: Parameters<typeof ApprovalsView>[0] }
     | { view: "brain"; data: Parameters<typeof BrainView>[0] }
+    | { view: "leads"; data: Parameters<typeof LeadsView>[0] }
+    | { view: "reports"; data: Parameters<typeof ReportsView>[0] }
+    | { view: "integrations"; data: Parameters<typeof IntegrationsView>[0] }
+    | { view: "skills"; data: Parameters<typeof SkillsView>[0] }
     | { view: "pending" };
   let loaded: Loaded | null = null;
   let unavailable = false;
@@ -56,6 +63,16 @@ export default async function MarketingPage({ params, searchParams }: {
         const [status, records] = await Promise.all([latestArtifact(business.id, projectId, binding, "C3a"), listRecords(business.id, projectId, binding)]);
         loaded = { view: "brain", data: { businessSlug, projectId, bindingVersion: binding.bindingVersion, canWrite,
           proposals: records.evidence.filter((e) => e.kind === "brain_proposal"), status: status ? { id: status.id, asOf: status.asOf, payload: status.payload } : null } };
+      } else if (view === "leads") {
+        const [pipeline, consent] = await Promise.all([latestArtifact(business.id, projectId, binding, "C4"), latestArtifact(business.id, projectId, binding, "C13")]);
+        loaded = { view: "leads", data: { pipeline: pipeline?.payload ?? null, consent: consent?.payload ?? null } };
+      } else if (view === "reports") {
+        const [kpis, monthly] = await Promise.all([latestArtifact(business.id, projectId, binding, "C5"), latestArtifact(business.id, projectId, binding, "C14")]);
+        loaded = { view: "reports", data: { kpis: kpis?.payload ?? null, monthly: monthly?.payload ?? null } };
+      } else if (view === "integrations") {
+        loaded = { view: "integrations", data: { integrations: (await latestArtifact(business.id, projectId, binding, "C10"))?.payload ?? null } };
+      } else if (view === "skills") {
+        loaded = { view: "skills", data: { skills: (await latestArtifact(business.id, projectId, binding, "C11"))?.payload ?? null } };
       } else {
         loaded = { view: "pending" };
       }
@@ -65,6 +82,10 @@ export default async function MarketingPage({ params, searchParams }: {
     : loaded.view === "home" ? <MarketingHome {...loaded.data} />
     : loaded.view === "approvals" ? <ApprovalsView {...loaded.data} />
     : loaded.view === "brain" ? <BrainView {...loaded.data} />
+    : loaded.view === "leads" ? <LeadsView {...loaded.data} />
+    : loaded.view === "reports" ? <ReportsView {...loaded.data} />
+    : loaded.view === "integrations" ? <IntegrationsView {...loaded.data} />
+    : loaded.view === "skills" ? <SkillsView {...loaded.data} />
     : <p className="bg-card border-border rounded-xl border p-6">המסך הזה עדיין לא זמין.</p>;
 
   return (
