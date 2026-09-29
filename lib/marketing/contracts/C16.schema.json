@@ -1,0 +1,104 @@
+{
+  "$ref": "#/definitions/C16",
+  "definitions": {
+    "C16": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "approval_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_hash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]+$"
+        },
+        "action_type": {
+          "type": "string",
+          "enum": [
+            "campaign_activation",
+            "message_batch"
+          ]
+        },
+        "executed_by": {
+          "$ref": "#/definitions/C16/properties/approval_id"
+        },
+        "executed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "evidence": {
+          "type": "object",
+          "properties": {
+            "pack_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "external_ref": {
+              "$ref": "#/definitions/C16/properties/approval_id"
+            },
+            "url": {
+              "$ref": "#/definitions/C16/properties/evidence/properties/pack_ref"
+            },
+            "screenshot_ref": {
+              "$ref": "#/definitions/C16/properties/evidence/properties/pack_ref"
+            }
+          },
+          "required": [
+            "pack_ref"
+          ],
+          "additionalProperties": false
+        },
+        "reviewed_by": {
+          "$ref": "#/definitions/C16/properties/approval_id"
+        },
+        "reviewed_at": {
+          "$ref": "#/definitions/C16/properties/executed_at"
+        },
+        "app_request_id": {
+          "$ref": "#/definitions/C16/properties/approval_id"
+        },
+        "binding_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness",
+        "approval_id",
+        "content_hash",
+        "action_type",
+        "executed_by",
+        "executed_at",
+        "evidence",
+        "reviewed_by",
+        "reviewed_at",
+        "app_request_id",
+        "binding_version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

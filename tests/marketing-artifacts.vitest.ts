@@ -6,7 +6,9 @@ import { ARTIFACT_KINDS, isArtifactKind, validateArtifact, type ArtifactKind } f
 import { isDateOnly, isDateTimeZ, isSafeRef, isTimestamp } from '../lib/marketing/contract-rules/rules';
 import parity from './fixtures/marketing-canonical-parity.json';
 
-// Vendored canonical vectors use this tenant and binding version.
+// Vendored canonical vectors use this tenant. They are context-free (they carry different
+// binding_versions), so the vector runs do not pin a caller binding version; rule tests do.
+const VECTOR_BINDING = { marketingBusiness: 'demo-biz' };
 const BINDING = { marketingBusiness: 'demo-biz', bindingVersion: 1 };
 const DIR = path.join(process.cwd(), 'lib/marketing/contracts');
 type Vectors = { valid: unknown[]; invalid: unknown[] };
@@ -22,18 +24,24 @@ test('every vendored non-C1 contract is a registered artifact kind (and vice ver
 // ── canonical vectors through the composed app validator ──
 test('every valid canonical vector passes validateArtifact', () => {
   for (const kind of ARTIFACT_KINDS) {
-    vectors(kind).valid.forEach((v, i) => expect(() => validateArtifact(kind, clone(v), BINDING, contextFor(kind)), `${kind} valid[${i}]`).not.toThrow());
+    vectors(kind).valid.forEach((v, i) => expect(() => validateArtifact(kind, clone(v), VECTOR_BINDING, contextFor(kind)), `${kind} valid[${i}]`).not.toThrow());
   }
 });
 
 test('every invalid canonical vector is rejected by validateArtifact', () => {
   for (const kind of ARTIFACT_KINDS) {
-    vectors(kind).invalid.forEach((v, i) => expect(() => validateArtifact(kind, clone(v), BINDING, contextFor(kind)), `${kind} invalid[${i}]`).toThrow());
+    vectors(kind).invalid.forEach((v, i) => expect(() => validateArtifact(kind, clone(v), VECTOR_BINDING, contextFor(kind)), `${kind} invalid[${i}]`).toThrow());
   }
 });
 
-// Contracts whose contextual rules need caller-supplied facts get them here (see later batches).
-function contextFor(kind: ArtifactKind) { void kind; return {}; }
+// C16 receipts must link to an APPROVED item of the imported C2a queue: the vector runs supply a
+// queue approving every approval the C16 vectors reference, with the content they carry.
+function contextFor(kind: ArtifactKind) {
+  if (kind !== 'C16') return {};
+  const receipts = vectors('C16').valid as { approval_id: string; content_hash: string }[];
+  const queue = { ...(vectors('C2a').valid[0] as object), items: receipts.map(r => ({ approval_id: r.approval_id, content_hash: r.content_hash, state: 'approved' })) };
+  return { approvalQueue: validateArtifact('C2a', queue, VECTOR_BINDING) };
+}
 
 // ── vendored bytes = recorded canonical hashes ──
 test('every vendored contract file matches HASHES.md, and every file is recorded', () => {

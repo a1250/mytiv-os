@@ -19,6 +19,10 @@ file) assert these hashes, so a drift from the canonical source fails CI.
 | C13.vectors.json | 0ec5d60b626ac8471bf87d9d942039354e4e542def48ca17c09fea1fdcf48250 |
 | C14.schema.json | c449eeaae5d32273e0ae4e6a095f2ba4112b08afdd9e089c16764a59f804cc16 |
 | C14.vectors.json | 1b3e44e57034b26d88032b7bf5bb8d71ef1ca10d4d617b0d6abb973093bc446a |
+| C15.schema.json | 3059c8451b52c11e7624e40cafa8a309c2b4aca9a89661d949ea3288355cd897 |
+| C15.vectors.json | 246550eb174254e1b18aff5d75d4c5f492eec0f5278b5d9aa842672942c9d93c |
+| C16.schema.json | 9420c1409a0a0e1cf16c39428e7b82adbfd85f8d2c803ed448d7227f94c09fe2 |
+| C16.vectors.json | af1e08b513a91ca0189bb6eea57214eacbc580ece7fd6d077552d28726b198ef |
 | C2a.schema.json | 18663ed5baa9a7458fe7849dba7e3a17022840a1e866d0243397419f71c49c6c |
 | C2a.vectors.json | 01cdfcd88a4bc6b0d794bf451c715ef2456dce7365aedc41a79f0250229c77ef |
 | C2b.schema.json | 83672aa1c9d026caf58b3bd2451eb9ba5d2b0ced1704cad6cd8eccd1cef8c046 |

@@ -6,6 +6,7 @@ import { C2_C3_CONTRACTS } from './contract-rules/c2-c3';
 import { C5_C8_CONTRACTS } from './contract-rules/c5-c8';
 import { C9_C14_CONTRACTS } from './contract-rules/c9-c14';
 import { C4_C13_CONTRACTS } from './contract-rules/c4-c13';
+import { C15_C16_CONTRACTS } from './contract-rules/c15-c16';
 
 /**
  * Generic validation for every vendored marketing-os artifact contract (C2–C16; C1 keeps its own
@@ -17,7 +18,7 @@ import { C4_C13_CONTRACTS } from './contract-rules/c4-c13';
  *   4. the contract's contextual rules — the canonical zod refinements the JSON Schema cannot carry.
  * The vendored files are canonical; nothing here defines a competing contract.
  */
-const REGISTRY = { ...C2_C3_CONTRACTS, ...C5_C8_CONTRACTS, ...C9_C14_CONTRACTS, ...C4_C13_CONTRACTS };
+const REGISTRY = { ...C2_C3_CONTRACTS, ...C5_C8_CONTRACTS, ...C9_C14_CONTRACTS, ...C4_C13_CONTRACTS, ...C15_C16_CONTRACTS };
 
 export type ArtifactKind = keyof typeof REGISTRY;
 export type ArtifactPayload<K extends ArtifactKind> = (typeof REGISTRY)[K] extends ContractSpec<infer T> ? T : never;

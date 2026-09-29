@@ -1,0 +1,152 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "action_type": "campaign_activation",
+      "executed_by": "operator",
+      "executed_at": "2026-01-01T00:00:00.000Z",
+      "evidence": {
+        "pack_ref": "packs/pack-1.json",
+        "url": "https://example.com/receipt"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a2",
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "action_type": "message_batch",
+      "executed_by": "operator",
+      "executed_at": "2026-01-01T00:00:00.000Z",
+      "evidence": {
+        "pack_ref": "packs/batch-7.json",
+        "external_ref": "provider-msg-42"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-2",
+      "binding_version": 1
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "action_type": "publish",
+      "executed_by": "operator",
+      "executed_at": "2026-01-01T00:00:00.000Z",
+      "evidence": {
+        "pack_ref": "packs/pack-1.json"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "action_type": "campaign_activation",
+      "executed_by": "operator",
+      "executed_at": "2026-01-01T00:00:00.000Z",
+      "evidence": {
+        "pack_ref": "packs/pack-1.json"
+      },
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "action_type": "message_batch",
+      "executed_by": "operator",
+      "executed_at": "2026-01-01T00:00:00.000Z",
+      "evidence": {
+        "url": "https://example.com/x"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "deadbeef",
+      "action_type": "campaign_activation",
+      "executed_by": "operator",
+      "executed_at": "2026-01-01T00:00:00.000Z",
+      "evidence": {
+        "pack_ref": "packs/pack-1.json"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "action_type": "campaign_activation",
+      "executed_by": "operator",
+      "executed_at": "2026-01-01T00:00:00.000Z",
+      "evidence": {
+        "pack_ref": "packs/pack-1.json",
+        "access_token": "secret"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "action_type": "campaign_activation",
+      "executed_by": "operator",
+      "executed_at": "2026-01-01T00:00:00.000Z",
+      "evidence": {
+        "pack_ref": "https://user:pass@h/x"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    }
+  ]
+}
