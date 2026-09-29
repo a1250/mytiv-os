@@ -127,7 +127,13 @@ test('publish evidence + outcomes: attested, safe refs, published-only outcomes,
   expect((await pool.query(`SELECT reconciled_state FROM marketing_evidence WHERE id=$1`, [e.id])).rows[0].reconciled_state).toBe('applied');
   const published = (await latestArtifact(ids.a, ids.p, binding, 'C7'))!;
   await expect(recordOutcome(A(), ids.p, binding, confirmed({ ...out, sourceArtifactId: published.id, dodCriteriaMet: ['bogus'] }), rid())).rejects.toEqual(policy('invalid_dod_criteria', 400));
-  const o = await recordOutcome(A(), ids.p, binding, confirmed({ ...out, sourceArtifactId: published.id }), rid());
+  // every criterion of the task's DoD must be met — a subset, a duplicate or an extra is refused (D10, engine T-5.4)
+  await importArtifact(A(), ids.p, binding, 'C7', board({ status: 'published', dod: ['shipped', 'measured'], completion_evidence: true, completion: 'evidence_reviewed', evidence_state: 'applied' }, '2026-01-02T12:00:00.000Z'), rid());
+  const twoDod = (await latestArtifact(ids.a, ids.p, binding, 'C7'))!;
+  for (const dodCriteriaMet of [['shipped'], ['shipped', 'shipped'], ['shipped', 'measured', 'extra'], ['shipped', 'measured', 'shipped']]) {
+    await expect(recordOutcome(A(), ids.p, binding, confirmed({ ...out, sourceArtifactId: twoDod.id, dodCriteriaMet }), rid())).rejects.toEqual(policy('invalid_dod_criteria', 400));
+  }
+  const o = await recordOutcome(A(), ids.p, binding, confirmed({ ...out, sourceArtifactId: twoDod.id, dodCriteriaMet: [' measured', 'shipped'] }), rid());
   expect(() => validateArtifact('C15', o.payload, binding)).not.toThrow();
   await importArtifact(A(), ids.p, binding, 'C7', board({ status: 'measured', completion_evidence: true, completion: 'outcome_verified', evidence_state: 'applied' }, '2026-01-03T00:00:00.000Z'), rid());
   expect((await pool.query(`SELECT reconciled_state FROM marketing_evidence WHERE id=$1`, [o.id])).rows[0].reconciled_state).toBe('applied');

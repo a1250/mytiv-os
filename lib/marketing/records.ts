@@ -124,9 +124,12 @@ export async function recordOutcome(scope: Scope, projectId: string, binding: Ma
   const board = await source(scope, projectId, binding, body.sourceArtifactId, 'C7');
   const task = boardTask(board, body.taskId);
   if (task.status !== 'published') throw new OpsPolicyError('task_not_published', 409);
+  // D10: DONE only when ALL applicable conditions hold — the outcome must list EVERY one of the task's DoD
+  // criteria, and nothing else (the engine's apply-outcomes enforces the same exact set; T-5.4).
   const criteria = Array.isArray(body.dodCriteriaMet) ? body.dodCriteriaMet : [];
   const dod = new Set(task.dod.map((d) => d.trim()));
-  if (!criteria.length || criteria.some((c) => typeof c !== 'string' || !dod.has(c.trim()))) throw new OpsPolicyError('invalid_dod_criteria');
+  const met = new Set(criteria.map((c) => (typeof c === 'string' ? c.trim() : '')));
+  if (criteria.length !== met.size || met.size !== dod.size || [...met].some((c) => !dod.has(c))) throw new OpsPolicyError('invalid_dod_criteria');
   const at = now();
   const outcome: OutcomeEvidence = {
     schemaVersion: 1, sourceRevision: board.sourceRevision, asOf: at, marketingBusiness: binding.marketingBusiness,
