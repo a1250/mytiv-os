@@ -1,0 +1,62 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "channels": [
+        {
+          "channel": "email",
+          "opted_in": 1200
+        },
+        {
+          "channel": "sms",
+          "opted_in": 300
+        }
+      ],
+      "segments": [
+        {
+          "segment": "regulars",
+          "size": 800
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "channels": [
+        {
+          "channel": "email",
+          "opted_in": 1
+        }
+      ],
+      "segments": [],
+      "contacts": [
+        {
+          "email": "a@b.com"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "channels": [
+        {
+          "channel": "email",
+          "opted_in": -1
+        }
+      ],
+      "segments": []
+    }
+  ]
+}
