@@ -18,6 +18,14 @@ export async function getMarketingBinding(businessId: string, projectId: string)
   }
 }
 
+/** The raw current row for the OWNER editor (shows a revoked binding and its version). Throws on a
+ *  database error so the editor reports "unavailable" instead of pretending nothing is bound. */
+export async function getMarketingBindingState(businessId: string, projectId: string): Promise<{ marketingBusiness: string; bindingVersion: number; revoked: boolean } | null> {
+  const [row] = await db.select({ marketingBusiness: marketingBindings.marketingBusiness, bindingVersion: marketingBindings.bindingVersion, revoked: marketingBindings.revoked })
+    .from(marketingBindings).where(and(eq(marketingBindings.businessId, businessId), eq(marketingBindings.projectId, projectId))).limit(1);
+  return row ?? null;
+}
+
 async function callBindingFunction(query: ReturnType<typeof sql>): Promise<number> {
   try {
     const result = await db.execute(query);

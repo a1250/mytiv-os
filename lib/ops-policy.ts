@@ -20,6 +20,10 @@ export function dateMs(value: unknown): number {
 export function assertWriter(role: string) {
   if (!['owner', 'admin'].includes(role)) throw new OpsPolicyError('approval_role_required', 403);
 }
+/** Owner-only actions (e.g. the marketing tenant binding, D2): admins and members are refused. */
+export function assertOwner(role: string) {
+  if (role !== 'owner') throw new OpsPolicyError('owner_role_required', 403);
+}
 export function assertConfirmation(req: Request, body: Record<string, unknown>) {
   if (req.headers.get('origin') !== new URL(req.url).origin) throw new OpsPolicyError('same_origin_required', 403);
   if (body.confirmed !== true) throw new OpsPolicyError('explicit_confirmation_required');

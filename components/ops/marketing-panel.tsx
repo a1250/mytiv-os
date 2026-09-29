@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { type MarketingPlan } from '@/lib/marketing/contract';
 import { timelineBars } from '@/lib/marketing/timeline';
 import type { OpsTask } from '@/lib/clickup';
+import { MarketingBindingEditor, type BindingEditorState } from './marketing-binding-editor';
 
 function importError(error: unknown): string {
   const code = error instanceof Error ? error.message : '';
@@ -15,8 +16,10 @@ function importError(error: unknown): string {
   if (code.includes('unavailable')) return 'הייבוא אינו זמין כרגע. יש לבדוק את היסטוריית האישורים לפני ניסיון נוסף.';
   return 'לא ניתן לקרוא את התוכנית. יש לבדוק את מבנה הקובץ, התאריכים וההפניות למקורות.';
 }
-export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, canImport, unavailable, now }: {
+export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, canImport, unavailable, now, bindingEditor }: {
   businessSlug: string; projectId: string; binding: string | null; plan: MarketingPlan | null; tasks: OpsTask[]; canImport: boolean; unavailable: boolean; now: string;
+  /** Present only for owners (T-2.2): the binding editor's view of the current binding row. */
+  bindingEditor?: BindingEditorState;
 }) {
   const router = useRouter();
   const [raw, setRaw] = useState('');
@@ -66,6 +69,7 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
     </header>
     {unavailable && <p role="alert" className="text-warning">נתוני השיווק אינם זמינים כרגע. אין להסיק שאין תוכנית.</p>}
     {!binding && <p className="bg-card border-border rounded-xl border p-6">הפרויקט עדיין לא חובר לעסק ב־Marketing OS.</p>}
+    {bindingEditor !== undefined && <MarketingBindingEditor businessSlug={businessSlug} projectId={projectId} state={bindingEditor} />}
     {binding && !plan && !unavailable && <p className="bg-card border-border rounded-xl border p-6">טרם יובאה תוכנית שיווק לפרויקט. לא מוצגים נתוני דוגמה.</p>}
     {plan && <>
       <div className="text-muted-foreground flex flex-wrap gap-4 text-xs">

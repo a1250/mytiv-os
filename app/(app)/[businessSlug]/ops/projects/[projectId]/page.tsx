@@ -1,6 +1,8 @@
 import { AuditLog } from "@/components/ops/audit-log";
 import { Suspense } from "react";
 import { getMarketingBinding, latestPlan } from "@/lib/marketing/service";
+import { getMarketingBindingState } from "@/lib/marketing/binding-store";
+import type { BindingEditorState } from "@/components/ops/marketing-binding-editor";
 import type { MarketingPlan } from "@/lib/marketing/contract";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -29,6 +31,12 @@ export default async function ClientWorkspacePage({
   const folder = folderFromProject(project);
   const activeMarketing = await getMarketingBinding(business.id, projectId);
   const binding = activeMarketing?.marketingBusiness ?? null;
+  // The raw binding row (incl. revoked) is loaded only for owners — the only role that may edit it.
+  let bindingEditor: BindingEditorState | undefined;
+  if (role === "owner") {
+    try { bindingEditor = await getMarketingBindingState(business.id, projectId); }
+    catch { bindingEditor = "unavailable"; }
+  }
   let plan: MarketingPlan | null = null;
   let marketingUnavailable = false;
   if (binding) {
@@ -89,7 +97,7 @@ export default async function ClientWorkspacePage({
       <ClientWorkspace
         businessSlug={businessSlug}
         project={project}
-        marketing={{ binding, plan, canImport: role === "owner" || role === "admin", unavailable: marketingUnavailable, now: new Date().toISOString() }}
+        marketing={{ binding, plan, canImport: role === "owner" || role === "admin", unavailable: marketingUnavailable, now: new Date().toISOString(), bindingEditor }}
         canWrite={role === "owner" || role === "admin"}
         incomplete={tasksIncomplete}
         tasks={rows.filter((t) => t.listKind === "tasks" || t.listKind === "other")}
