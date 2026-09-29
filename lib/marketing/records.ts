@@ -187,3 +187,23 @@ export async function exportRecord(businessId: string, projectId: string, kind: 
   await db.update(marketingEvidence).set({ exportedAt: new Date() }).where(and(eq(marketingEvidence.id, e.id), isNull(marketingEvidence.exportedAt)));
   return e.payload;
 }
+
+/** Records under the ACTIVE binding version, for the screens: decisions and evidence with their state. */
+export async function listRecords(businessId: string, projectId: string, binding: MarketingBinding) {
+  const where = <T extends typeof marketingDecisions | typeof marketingEvidence>(t: T) =>
+    and(eq(t.businessId, businessId), eq(t.projectId, projectId), eq(t.bindingVersion, binding.bindingVersion));
+  const [decisions, evidence] = await Promise.all([
+    db.select({ id: marketingDecisions.id, approvalId: marketingDecisions.approvalId, contentHash: marketingDecisions.contentHash, decision: marketingDecisions.decision,
+      note: marketingDecisions.note, decidedAt: marketingDecisions.decidedAt, exportedAt: marketingDecisions.exportedAt, reconciledState: marketingDecisions.reconciledState })
+      .from(marketingDecisions).where(where(marketingDecisions)),
+    db.select({ id: marketingEvidence.id, kind: marketingEvidence.kind, targetId: marketingEvidence.targetId, approvalId: marketingEvidence.approvalId,
+      createdAt: marketingEvidence.createdAt, exportedAt: marketingEvidence.exportedAt, reconciledState: marketingEvidence.reconciledState })
+      .from(marketingEvidence).where(where(marketingEvidence)),
+  ]);
+  const iso = (d: Date | null) => d?.toISOString() ?? null;
+  return {
+    decisions: decisions.map((d) => ({ ...d, decidedAt: d.decidedAt.toISOString(), exportedAt: iso(d.exportedAt) })),
+    evidence: evidence.map((e) => ({ ...e, createdAt: e.createdAt.toISOString(), exportedAt: iso(e.exportedAt) })),
+  };
+}
+export type MarketingRecords = Awaited<ReturnType<typeof listRecords>>;

@@ -43,3 +43,22 @@ export type MarketingView = (typeof MARKETING_VIEWS)[number]['id'];
 export function marketingView(v: unknown): MarketingView {
   return MARKETING_VIEWS.some((x) => x.id === v) ? (v as MarketingView) : 'home';
 }
+
+export function approvalStateLabel(state: 'pending' | 'approved' | 'rejected' | 'expired'): string {
+  return state === 'pending' ? 'ממתין להחלטה' : state === 'approved' ? 'אושר' : state === 'rejected' ? 'נדחה' : 'פג תוקף';
+}
+
+/** What the engine's next export said about an app record (reconciled_state); null = no export seen yet. */
+export function reconciledLabel(state: string | null): string {
+  switch (state) {
+    case 'awaiting': return 'ממתין להחלה במנוע';
+    case 'applied': return 'הוחל במנוע';
+    case 'stale': return 'התוכן השתנה — הרשומה אינה תקפה עוד';
+    case 'conflict': return 'סתירה מול המנוע';
+    case 'expired': return 'פג תוקף';
+    case 'missing': return 'הפריט אינו מופיע עוד ביצוא';
+    case 'unreviewed': return 'המנוע סימן כלא נבדק';
+    case 'resolved': return 'נסגר במנוע';
+    default: return 'טרם התקבל יצוא מהמנוע';
+  }
+}
