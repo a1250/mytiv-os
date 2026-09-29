@@ -1,0 +1,65 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "kpis": [
+        {
+          "kpi": "revenue",
+          "value": 1000,
+          "confidence": "KNOWN",
+          "tier": "T1",
+          "as_of": "2026-01-01T00:00:00.000Z",
+          "source": "pos"
+        },
+        {
+          "kpi": "reach",
+          "value": null,
+          "confidence": "UNKNOWN",
+          "tier": "T3",
+          "as_of": "2026-01-01T00:00:00.000Z",
+          "source": "none"
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "kpis": [
+        {
+          "kpi": "reach",
+          "value": 5,
+          "confidence": "UNKNOWN",
+          "tier": "T3",
+          "as_of": "2026-01-01T00:00:00.000Z",
+          "source": "x"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "kpis": [
+        {
+          "kpi": "revenue",
+          "value": 1,
+          "confidence": "KNOWN",
+          "tier": "T4",
+          "as_of": "2026-01-01T00:00:00.000Z",
+          "source": "x"
+        }
+      ]
+    }
+  ]
+}

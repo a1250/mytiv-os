@@ -1,0 +1,89 @@
+{
+  "$ref": "#/definitions/C6",
+  "definitions": {
+    "C6": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_hash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]+$"
+        },
+        "channel": {
+          "$ref": "#/definitions/C6/properties/task_id"
+        },
+        "evidence": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "screenshot_ref": {
+              "$ref": "#/definitions/C6/properties/evidence/properties/url"
+            },
+            "measurement_ref": {
+              "$ref": "#/definitions/C6/properties/evidence/properties/url"
+            }
+          },
+          "additionalProperties": false
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "by": {
+          "$ref": "#/definitions/C6/properties/task_id"
+        },
+        "reviewed_by": {
+          "$ref": "#/definitions/C6/properties/task_id"
+        },
+        "reviewed_at": {
+          "$ref": "#/definitions/C6/properties/published_at"
+        },
+        "app_request_id": {
+          "$ref": "#/definitions/C6/properties/task_id"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness",
+        "task_id",
+        "task_hash",
+        "channel",
+        "evidence",
+        "published_at",
+        "by",
+        "reviewed_by",
+        "reviewed_at",
+        "app_request_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

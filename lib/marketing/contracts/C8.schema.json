@@ -1,0 +1,103 @@
+{
+  "$ref": "#/definitions/C8",
+  "definitions": {
+    "C8": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "week": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/definitions/C8/properties/week"
+              },
+              "text": {
+                "$ref": "#/definitions/C8/properties/week"
+              },
+              "why": {
+                "$ref": "#/definitions/C8/properties/week"
+              },
+              "linkedTaskIds": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/C8/properties/week"
+                },
+                "default": []
+              },
+              "sourceRef": {
+                "$ref": "#/definitions/C8/properties/parent"
+              },
+              "sourceRevision": {
+                "$ref": "#/definitions/C8/properties/week"
+              },
+              "asOf": {
+                "$ref": "#/definitions/C8/properties/as_of"
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "KNOWN",
+                  "ESTIMATED",
+                  "UNKNOWN"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "text",
+              "why",
+              "sourceRef",
+              "sourceRevision",
+              "asOf",
+              "confidence"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 10
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness",
+        "week",
+        "parent",
+        "as_of",
+        "points"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

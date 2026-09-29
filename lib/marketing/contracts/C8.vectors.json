@@ -1,0 +1,171 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "week": "2026-W03",
+      "parent": "2026-01",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "points": [
+        {
+          "id": "p1",
+          "text": "fill events",
+          "why": "gap",
+          "linkedTaskIds": [
+            "t-1"
+          ],
+          "sourceRef": "brain/priorities.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "week": "2026-W03",
+      "parent": "2026-01",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "points": [
+        {
+          "id": "p1",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "../secrets",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "week": "2026-W03",
+      "parent": "2026-01",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "points": [
+        {
+          "id": "p0",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        },
+        {
+          "id": "p1",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        },
+        {
+          "id": "p2",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        },
+        {
+          "id": "p3",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        },
+        {
+          "id": "p4",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        },
+        {
+          "id": "p5",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        },
+        {
+          "id": "p6",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        },
+        {
+          "id": "p7",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        },
+        {
+          "id": "p8",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        },
+        {
+          "id": "p9",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        },
+        {
+          "id": "p10",
+          "text": "t",
+          "why": "w",
+          "linkedTaskIds": [],
+          "sourceRef": "brain/p.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        }
+      ]
+    }
+  ]
+}

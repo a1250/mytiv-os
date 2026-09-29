@@ -1,0 +1,95 @@
+{
+  "$ref": "#/definitions/C5",
+  "definitions": {
+    "C5": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "kpis": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kpi": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "KNOWN",
+                  "ESTIMATED",
+                  "UNKNOWN"
+                ]
+              },
+              "tier": {
+                "type": "string",
+                "enum": [
+                  "T1",
+                  "T2",
+                  "T3"
+                ]
+              },
+              "as_of": {
+                "$ref": "#/definitions/C5/properties/as_of"
+              },
+              "source": {
+                "$ref": "#/definitions/C5/properties/kpis/items/properties/kpi"
+              }
+            },
+            "required": [
+              "kpi",
+              "value",
+              "confidence",
+              "tier",
+              "as_of",
+              "source"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness",
+        "as_of",
+        "kpis"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

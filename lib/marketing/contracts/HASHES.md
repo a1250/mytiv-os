@@ -17,3 +17,11 @@ file) assert these hashes, so a drift from the canonical source fails CI.
 | C3a.vectors.json | b0b5bb1f11bc57e3fb1be8db69ac67e07c36e0287dc3f4c43065e4d5b3b1e7af |
 | C3b.schema.json | d412b600d815457fcc052e4836562e3155bf83b5ec6b697c53c0ef2741e136cf |
 | C3b.vectors.json | f552a9877cde823294af9fe64127963d7440195ec9be453492753f104c336e8e |
+| C5.schema.json | 2c06f0d1d4b4e7b151a1d98b5765bc75918281bfe2696977b1cf0a68caa434a7 |
+| C5.vectors.json | d0a5460a6c895d5bf09c098a718d37fa4d3ed9c2ca2b8d7a2598e675bbf4abeb |
+| C6.schema.json | aa3cdcb60b3cfe0b786dac0b8559ecbbd9e8a51b256b5ff6e2c6b5e391a301ef |
+| C6.vectors.json | 872a1088d83e7a32f1ca34d7c3fe819aad0474ac715ab39b4f8e385cf0c6e2d4 |
+| C7.schema.json | 40afd375a2a658d45e061bb59828ce4ddb2cb150c2b947c3786f281f5bd1559e |
+| C7.vectors.json | c70bf71db6f4946cffb537cdd51032d1c4de4b4a8d472f1e4805d421524d03df |
+| C8.schema.json | 2b0e82acc1bcaf790cd7ceabffaacb608ee36b54993427d7df3de8bf69d7f41d |
+| C8.vectors.json | 3cf4b5c17b14ccbccb82d283af87a8de190a434d75b64cc5e6b6600870c8cd79 |
