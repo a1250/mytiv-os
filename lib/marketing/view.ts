@@ -33,6 +33,7 @@ export function approvalsWaiting(queue: ApprovalQueueExport | null): number | nu
 export const MARKETING_VIEWS = [
   { id: 'home', label: 'בית' },
   { id: 'approvals', label: 'אישורים' },
+  { id: 'plan', label: 'תוכנית ולוח עבודה' },
   { id: 'brain', label: 'מוח העסק' },
   { id: 'leads', label: 'לידים ולקוחות' },
   { id: 'reports', label: 'דוחות' },
@@ -101,4 +102,44 @@ export function notVerifiedKpis<K extends { kpi: string; confidence: string; tie
 /** A rate in [0,1] as a percentage. */
 export function percent(rate: number): string {
   return `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 1 }).format(rate * 100)}%`;
+}
+
+const TASK_STATUS: Record<string, string> = {
+  requested: 'התבקש', accepted: 'התקבל', in_progress: 'בעבודה', needs_asset: 'חסר נכס', needs_data: 'חסרים נתונים', qa_pending: 'ממתין ל־QA',
+  qa_blocked: 'נחסם ב־QA', approval_pending: 'ממתין לאישור', approved: 'אושר', rejected: 'נדחה', scheduled: 'מתוזמן', published: 'פורסם',
+  measured: 'נמדד', learned: 'הופקו לקחים', cancelled: 'בוטל',
+};
+/** The canonical workboard status (C7 TaskStatus) in Hebrew; an unknown value is shown as-is, never guessed. */
+export function taskStatusLabel(status: string): string { return TASK_STATUS[status] ?? status; }
+/** The engine's four-state completion (MKT-F08) — the business truth of "done", not a board column. */
+export function completionLabel(c: 'status_changed' | 'evidence_submitted' | 'evidence_reviewed' | 'outcome_verified'): string {
+  return { status_changed: 'רק שינוי סטטוס — ללא ראיה', evidence_submitted: 'ראיה הוגשה', evidence_reviewed: 'ראיה נבדקה', outcome_verified: 'תוצאה אומתה' }[c];
+}
+export function evidenceStateLabel(e: 'none' | 'awaiting' | 'applied' | 'stale' | 'conflict' | 'unreviewed'): string {
+  return { none: 'אין ראיה', awaiting: 'ממתין להחלה במנוע', applied: 'הוחל במנוע', stale: 'הראיה אינה תואמת עוד', conflict: 'סתירה', unreviewed: 'הוגש ללא אישור בדיקה' }[e];
+}
+
+/** [start, end) of a `YYYY-MM` month id, in epoch ms (UTC). */
+export function monthRange(month: string): [number, number] | null {
+  const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(month);
+  if (!m) return null;
+  const y = +m[1], mo = +m[2] - 1;
+  return [Date.UTC(y, mo, 1), Date.UTC(y, mo + 1, 1)];
+}
+/** [start, end) of an ISO week id `YYYY-Www` (Monday start), or null when the id is not an ISO week. */
+export function isoWeekRange(week: string): [number, number] | null {
+  const m = /^(\d{4})-W(0[1-9]|[1-4]\d|5[0-3])$/.exec(week);
+  if (!m) return null;
+  const y = +m[1], w = +m[2];
+  const jan4 = Date.UTC(y, 0, 4);
+  const dow = (new Date(jan4).getUTCDay() + 6) % 7; // 0 = Monday
+  const start = jan4 - dow * 86400000 + (w - 1) * 7 * 86400000;
+  return [start, start + 7 * 86400000];
+}
+/** Position (0–100%) of an instant on a [start, end) track, clamped; null when it has no date. */
+export function trackPosition(at: string | null, range: [number, number]): number | null {
+  if (!at) return null;
+  const t = Date.parse(at.length === 10 ? `${at}T12:00:00Z` : at);
+  if (!Number.isFinite(t)) return null;
+  return Math.min(100, Math.max(0, ((t - range[0]) / (range[1] - range[0])) * 100));
 }
