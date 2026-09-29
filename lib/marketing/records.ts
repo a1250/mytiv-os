@@ -5,7 +5,7 @@ import { marketingArtifacts, marketingBindingEvents, marketingDecisions, marketi
 import { OpsPolicyError, objectInput } from '../ops-policy';
 import type { MarketingBinding } from './binding';
 import { validateArtifact } from './validate-artifact';
-import { getArtifact, recordConflict, type StoredArtifact } from './artifacts';
+import { getArtifact, latestArtifact, recordConflict, type StoredArtifact } from './artifacts';
 import type { ApprovalDecision, ApprovalQueueExport, BrainChangeProposal, BrainStatusExport } from './contract-rules/c2-c3';
 import type { PublishEvidence, WorkboardExport } from './contract-rules/c5-c8';
 import type { ExecutionReceipt, OutcomeEvidence } from './contract-rules/c15-c16';
@@ -106,15 +106,26 @@ export async function recordEvidence(scope: Scope, projectId: string, binding: M
   attested(body);
   const board = await source(scope, projectId, binding, body.sourceArtifactId, 'C7');
   const task = boardTask(board, body.taskId);
+  // MKT-F19: evidence for a task executing a `publish` approval names it; that approval must be APPROVED in
+  // the active queue (the engine re-checks and resolves it). Without an approval id nothing changes.
+  let approvalId: string | undefined;
+  if (body.approvalId !== undefined) {
+    approvalId = text(body.approvalId, 'approval_id', 200).trim();
+    const queue = await latestArtifact(scope.businessId, projectId, binding, 'C2a');
+    const item = queue?.payload.items.find((i) => i.approval_id === approvalId);
+    if (!item) throw new OpsPolicyError('not_found', 404);
+    if (item.state !== 'approved') throw new OpsPolicyError('approval_not_approved', 409);
+  }
   const at = now();
   const evidence: PublishEvidence = {
     schemaVersion: 1, sourceRevision: board.sourceRevision, asOf: at, marketingBusiness: binding.marketingBusiness,
     task_id: task.task_id, task_hash: task.task_hash, channel: text(body.channel, 'channel', 100),
     evidence: objectInput(body.evidence) as PublishEvidence['evidence'], published_at: text(body.publishedAt, 'published_at', 40),
     by: text(body.by, 'by', 200), reviewed_by: scope.userId, reviewed_at: at, app_request_id: requestId,
+    ...(approvalId ? { approval_id: approvalId } : {}),
   };
   validateArtifact('C6', evidence, binding);
-  const id = await insertEvidence(scope, projectId, binding, { kind: 'publish_evidence', sourceArtifactId: board.id, targetId: task.task_id.trim(), preconditionHash: task.task_hash, reviewed: true, payload: evidence, requestId });
+  const id = await insertEvidence(scope, projectId, binding, { kind: 'publish_evidence', sourceArtifactId: board.id, targetId: task.task_id.trim(), approvalId, preconditionHash: task.task_hash, reviewed: true, payload: evidence, requestId });
   return { ok: true as const, kind: 'evidence' as const, id, payload: evidence };
 }
 

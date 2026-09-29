@@ -105,16 +105,17 @@ export function decisionState(d: { approvalId: string; contentHash: string; deci
   if (!item) return 'missing';
   if (item.content_hash !== d.contentHash) return 'stale';
   if (item.state === 'pending') return 'awaiting';
-  if (item.state === d.decision) return 'applied';
+  // `applied` (contract amendment) = approved AND executed: an approval decision is then applied too.
+  if (item.state === d.decision || (item.state === 'applied' && d.decision === 'approved')) return 'applied';
   return item.state === 'expired' ? 'expired' : 'conflict';
 }
-/** C16 receipt vs the next C2a. Canonical C2a has no `applied` state, so an executed receipt can only be
- *  confirmed as still linked (awaiting) — never as applied — until the contract can express it. */
+/** C16 receipt vs the next C2a: `applied` once the engine recorded the execution, awaiting while the item is
+ *  still only approved. */
 export function receiptState(r: { approvalId: string | null; preconditionHash: string }, queue: ApprovalQueueExport): ReconciledState {
   const item = queue.items.find((i) => i.approval_id === r.approvalId);
   if (!item) return 'missing';
   if (item.content_hash !== r.preconditionHash) return 'stale';
-  return item.state === 'approved' ? 'awaiting' : item.state === 'expired' ? 'expired' : 'conflict';
+  return item.state === 'applied' ? 'applied' : item.state === 'approved' ? 'awaiting' : item.state === 'expired' ? 'expired' : 'conflict';
 }
 /** C6 / C15 vs the next C7: the engine's evidence state is authoritative (the app never marks "published"). */
 export function taskEvidenceState(kind: 'publish_evidence' | 'outcome_evidence', targetId: string, board: WorkboardExport): ReconciledState {

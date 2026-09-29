@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { validateArtifact, type ArtifactContext } from '../lib/marketing/validate-artifact';
-import { BINDING, validOf } from './marketing-vectors';
+import { BINDING, CARD, validOf } from './marketing-vectors';
 
 // T-1.5e — C15 OutcomeEvidence + C16 ExecutionReceipt: mandatory review attestation, approval linkage.
 // Canonical vectors run in tests/marketing-artifacts.vitest.ts.
@@ -8,7 +8,7 @@ import { BINDING, validOf } from './marketing-vectors';
 type Row = Record<string, unknown>;
 const HASH = 'a'.repeat(64);
 const queueOf = (items: { approval_id: string; content_hash?: string; state: string }[], over: Row = {}) =>
-  validateArtifact('C2a', { ...validOf('C2a'), ...over, items: items.map(i => ({ content_hash: HASH, ...i })) }, BINDING);
+  validateArtifact('C2a', { ...validOf('C2a'), ...over, items: items.map(i => ({ content_hash: HASH, ...CARD, ...i })) }, BINDING);
 const APPROVED: ArtifactContext = { approvalQueue: queueOf([{ approval_id: 'a1', state: 'approved' }]) };
 const ok = (kind: 'C15' | 'C16', v: unknown, ctx: ArtifactContext = APPROVED) => expect(() => validateArtifact(kind, v, BINDING, ctx)).not.toThrow();
 const bad = (kind: 'C15' | 'C16', v: unknown, why: RegExp, ctx: ArtifactContext = APPROVED) => expect(() => validateArtifact(kind, v, BINDING, ctx)).toThrow(why);

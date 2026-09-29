@@ -8,3 +8,6 @@ export type Vectors = { valid: unknown[]; invalid: unknown[] };
 export const vectors = (kind: string): Vectors => JSON.parse(readFileSync(path.join(CONTRACTS_DIR, `${kind}.vectors.json`), 'utf8'));
 /** A fresh deep copy of the first valid canonical vector, as a mutable record. */
 export const validOf = (kind: string): Record<string, unknown> => JSON.parse(JSON.stringify(vectors(kind).valid[0]));
+/** MKT-F03 card fields every C2a item carries (contract amendment). */
+export const CARD = { title: 'Activate spring campaign', why: 'Fill mid-week events capacity', action_type: 'campaign_activate', action_class: 'RED' as const,
+  facts_cited: ['brain/offers.yaml#spring'], qa_verdict: 'NOT_RUN' as const, rollback_note: 'Pause the campaign.' };

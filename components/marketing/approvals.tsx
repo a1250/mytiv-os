@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ApprovalQueueItem } from '@/lib/marketing/contract-rules/c2-c3';
-import { approvalStateLabel, reconciledLabel } from '@/lib/marketing/view';
+import { actionClassLabel, approvalStateLabel, qaVerdictLabel, reconciledLabel } from '@/lib/marketing/view';
 
 type Decision = { id: string; approvalId: string; contentHash: string; decision: string; note: string; decidedAt: string; exportedAt: string | null; reconciledState: string | null };
 type Queue = { id: string; revision: number; asOf: string; items: ApprovalQueueItem[] };
@@ -69,18 +69,24 @@ export function ApprovalsView({ businessSlug, projectId, bindingVersion, queue, 
   if (!queue) return <p className="bg-card border-border rounded-xl border p-6">טרם יובא תור אישורים. אין פריטים להצגה.</p>;
   return <section className="space-y-4">
     <p className="text-muted-foreground text-xs">תור אישורים · גרסה {queue.revision} · נכון ל־{queue.asOf.slice(0, 16).replace('T', ' ')}</p>
-    <p role="note" className="border-warning/40 bg-warning/10 rounded-lg border p-3 text-sm">
-      פרטי הכרטיס (מה, למה, סיווג, שינוי, עובדות, QA, הערת חזרה לאחור) אינם כלולים עדיין בחוזה C2a. יש לעיין בפריט ב־Marketing OS לפני החלטה.
-    </p>
     {queue.items.length === 0 && <p>אין פריטים בתור.</p>}
     <ul className="space-y-3">{queue.items.map((item) => {
       const recorded = decisions.find((d) => d.approvalId === item.approval_id && d.contentHash === item.content_hash);
-      return <li key={item.approval_id} className="bg-card border-border rounded-xl border p-4">
+      return <li key={item.approval_id} data-approval-id={item.approval_id} className="bg-card border-border rounded-xl border p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="font-medium" dir="ltr">{item.approval_id}</span>
+          <h3 className="font-semibold">{item.title}</h3>
           <span className="text-sm">{approvalStateLabel(item.state)}</span>
         </div>
-        <p className="text-muted-foreground mt-1 text-xs" dir="ltr">content {item.content_hash.slice(0, 12)}…</p>
+        <p className={item.action_class === 'RED' ? 'text-danger mt-1 text-xs' : 'text-muted-foreground mt-1 text-xs'}>{actionClassLabel(item.action_class)} · <span dir="ltr">{item.action_type}</span> · {qaVerdictLabel(item.qa_verdict)}</p>
+        {/* Engine-supplied card text is rendered as TEXT only (never markup, links or controls — MKT-SEC05). */}
+        <dl className="mt-3 space-y-2 text-sm">
+          <div><dt className="text-muted-foreground text-xs">למה</dt><dd>{item.why}</dd></div>
+          {item.requested_change && <div><dt className="text-muted-foreground text-xs">מה ישתנה</dt><dd>{item.requested_change}</dd></div>}
+          {item.diff_summary && <div><dt className="text-muted-foreground text-xs">שינוי</dt><dd><pre dir="ltr" className="bg-muted overflow-x-auto rounded p-2 text-xs whitespace-pre-wrap">{item.diff_summary}</pre></dd></div>}
+          <div><dt className="text-muted-foreground text-xs">עובדות שצוטטו</dt><dd>{item.facts_cited.length ? <ul dir="ltr" className="text-xs">{item.facts_cited.map((f) => <li key={f}>{f}</li>)}</ul> : 'לא צוטטו עובדות'}</dd></div>
+          <div><dt className="text-muted-foreground text-xs">חזרה לאחור</dt><dd>{item.rollback_note || 'לא נמסרה הערת חזרה לאחור'}</dd></div>
+        </dl>
+        <p className="text-muted-foreground mt-2 text-xs" dir="ltr">{item.approval_id} · content {item.content_hash.slice(0, 12)}…</p>
         {recorded ? <div className="mt-3 text-sm">
           <p>החלטה שנרשמה: {recorded.decision === 'approved' ? 'אושר' : 'נדחה'} · {recorded.decidedAt.slice(0, 10)} · נימוק: {recorded.note}</p>
           <p className="text-muted-foreground text-xs">מצב במנוע: {reconciledLabel(recorded.reconciledState)}{recorded.exportedAt ? ` · יוצא ${recorded.exportedAt.slice(0, 10)}` : ' · טרם יוצא'}</p>

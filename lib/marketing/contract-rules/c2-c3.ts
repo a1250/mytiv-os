@@ -7,8 +7,13 @@ import { contract, type Envelope } from './spec';
 
 // Canonical source: marketing-os `schemas/contracts/c1-c3.ts` (registry ids from `index.ts`).
 
-export type ApprovalState = 'pending' | 'approved' | 'rejected' | 'expired';
-export type ApprovalQueueItem = { approval_id: string; content_hash: string; state: ApprovalState };
+export type ApprovalState = 'pending' | 'approved' | 'rejected' | 'expired' | 'applied';
+/** One C2a queue item, with the MKT-F03 card fields (contract amendment; engine ApprovalItem vocabulary). */
+export type ApprovalQueueItem = {
+  approval_id: string; content_hash: string; state: ApprovalState;
+  title: string; why: string; action_type: string; action_class: 'GREEN' | 'YELLOW' | 'RED';
+  requested_change?: string; diff_summary?: string; facts_cited: string[]; qa_verdict: 'PASS' | 'BLOCKED' | 'NOT_RUN'; rollback_note: string;
+};
 /** C2a — ApprovalQueueExport v1 (engine → app). */
 export type ApprovalQueueExport = Envelope & { items: ApprovalQueueItem[] };
 /** C2b — ApprovalDecision v1 (app → engine). */

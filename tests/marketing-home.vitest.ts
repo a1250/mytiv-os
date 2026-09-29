@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MarketingHome } from '../components/marketing/marketing-home';
 import { approvalsWaiting, confidenceLabel, freshnessLabel, ingestedAt, marketingView, metricValue } from '../lib/marketing/view';
 import { validateArtifact } from '../lib/marketing/validate-artifact';
-import { BINDING, validOf } from './marketing-vectors';
+import { BINDING, CARD, validOf } from './marketing-vectors';
 
 // T-4.4 — Marketing Home (MKT-F01, F02, RPT01), rendered to static HTML from canonical vectors.
 const art = <K extends 'C2a' | 'C5' | 'C8' | 'C9'>(k: K, over: Record<string, unknown> = {}) => validateArtifact(k, { ...validOf(k), ...over }, BINDING);
@@ -53,8 +53,8 @@ test('KPI tiles: UNKNOWN renders "—" with its label; KNOWN renders the number 
 test('approvals waiting counts pending items of the imported queue; unknown without a queue', () => {
   expect(approvalsWaiting(null)).toBeNull();
   expect(approvalsWaiting(art('C2a', { items: [
-    { approval_id: 'a1', content_hash: 'a'.repeat(64), state: 'pending' }, { approval_id: 'a2', content_hash: 'a'.repeat(64), state: 'approved' },
-    { approval_id: 'a3', content_hash: 'a'.repeat(64), state: 'pending' }] }))).toBe(2);
+    { approval_id: 'a1', content_hash: 'a'.repeat(64), state: 'pending', ...CARD }, { approval_id: 'a2', content_hash: 'a'.repeat(64), state: 'approved', ...CARD },
+    { approval_id: 'a3', content_hash: 'a'.repeat(64), state: 'pending', ...CARD }] }))).toBe(2);
   expect(html({ approvalsWaiting: 0 })).toContain('>0<'); // a real, imported zero IS shown as 0
 });
 

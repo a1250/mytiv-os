@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ARTIFACT_KINDS, isArtifactKind, validateArtifact, type ArtifactKind } from '../lib/marketing/validate-artifact';
 import { isDateOnly, isDateTimeZ, isSafeRef, isTimestamp } from '../lib/marketing/contract-rules/rules';
 import parity from './fixtures/marketing-canonical-parity.json';
+import { CARD } from './marketing-vectors';
 
 // Vendored canonical vectors use this tenant. They are context-free (they carry different
 // binding_versions), so the vector runs do not pin a caller binding version; rule tests do.
@@ -39,7 +40,7 @@ test('every invalid canonical vector is rejected by validateArtifact', () => {
 function contextFor(kind: ArtifactKind) {
   if (kind !== 'C16') return {};
   const receipts = vectors('C16').valid as { approval_id: string; content_hash: string }[];
-  const queue = { ...(vectors('C2a').valid[0] as object), items: receipts.map(r => ({ approval_id: r.approval_id, content_hash: r.content_hash, state: 'approved' })) };
+  const queue = { ...(vectors('C2a').valid[0] as object), items: receipts.map(r => ({ ...CARD, approval_id: r.approval_id, content_hash: r.content_hash, state: 'approved' })) };
   return { approvalQueue: validateArtifact('C2a', queue, VECTOR_BINDING) };
 }
 

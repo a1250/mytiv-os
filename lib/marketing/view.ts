@@ -44,8 +44,14 @@ export function marketingView(v: unknown): MarketingView {
   return MARKETING_VIEWS.some((x) => x.id === v) ? (v as MarketingView) : 'home';
 }
 
-export function approvalStateLabel(state: 'pending' | 'approved' | 'rejected' | 'expired'): string {
-  return state === 'pending' ? 'ממתין להחלטה' : state === 'approved' ? 'אושר' : state === 'rejected' ? 'נדחה' : 'פג תוקף';
+export function approvalStateLabel(state: 'pending' | 'approved' | 'rejected' | 'expired' | 'applied'): string {
+  return state === 'pending' ? 'ממתין להחלטה' : state === 'approved' ? 'אושר' : state === 'rejected' ? 'נדחה' : state === 'applied' ? 'אושר ובוצע במנוע' : 'פג תוקף';
+}
+export function actionClassLabel(c: 'GREEN' | 'YELLOW' | 'RED'): string {
+  return c === 'RED' ? 'RED · דורש אישור מפורש, לעולם לא אוטומטי' : c === 'YELLOW' ? 'YELLOW · דורש אישור' : 'GREEN';
+}
+export function qaVerdictLabel(v: 'PASS' | 'BLOCKED' | 'NOT_RUN'): string {
+  return v === 'PASS' ? 'עבר QA' : v === 'BLOCKED' ? 'נחסם ב־QA' : 'QA לא הורץ';
 }
 
 /** What the engine's next export said about an app record (reconciled_state); null = no export seen yet. */

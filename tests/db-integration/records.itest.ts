@@ -17,7 +17,8 @@ const H = 'a'.repeat(64), H2 = 'b'.repeat(64);
 const ids = { a: randomUUID(), b: randomUUID(), owner: randomUUID(), ownerB: randomUUID(), p: randomUUID(), q: randomUUID() };
 const A = () => ({ businessId: ids.a, userId: ids.owner });
 let binding: MarketingBinding;
-const queue = (items: Row[], asOf = '2026-01-01T00:00:00.000Z') => ({ ...vec('C2a'), asOf, items });
+const CARD = { title: 'Activate campaign', why: 'fill capacity', action_type: 'campaign_activate', action_class: 'RED', facts_cited: [], qa_verdict: 'NOT_RUN', rollback_note: 'pause it' };
+const queue = (items: Row[], asOf = '2026-01-01T00:00:00.000Z') => ({ ...vec('C2a'), asOf, items: items.map((i) => ({ ...CARD, ...i })) });
 const board = (task: Row, asOf = '2026-01-01T00:00:00.000Z') => { const c7 = vec('C7'); return { ...c7, asOf, tasks: [{ ...(c7.tasks as Row[])[0], ...task }] }; };
 const confirmed = (body: Row) => body; // routes add confirmation/requestId; services receive the parsed body
 const rid = () => randomUUID();
@@ -87,6 +88,9 @@ test('reconciliation on the next C2a: decision applied / stale, receipt still li
     receipt: (await pool.query(`SELECT reconciled_state FROM marketing_evidence WHERE business_id=$1 AND kind='execution_receipt'`, [ids.a])).rows[0].reconciled_state,
   });
   expect(await states()).toEqual({ decision: 'applied', receipt: 'awaiting' });
+  // the engine executed both (contract amendment: state `applied`): the approve decision and the receipt are applied
+  await importArtifact(A(), ids.p, binding, 'C2a', queue([{ approval_id: 'a1', content_hash: H, state: 'applied' }, { approval_id: 'a2', content_hash: H, state: 'applied' }], '2026-01-03T12:00:00.000Z'), rid());
+  expect(await states()).toEqual({ decision: 'applied', receipt: 'applied' });
   await importArtifact(A(), ids.p, binding, 'C2a', queue([{ approval_id: 'a1', content_hash: H2, state: 'pending' }], '2026-01-04T00:00:00.000Z'), rid());
   expect(await states()).toEqual({ decision: 'stale', receipt: 'missing' });
 });
@@ -120,6 +124,15 @@ test('publish evidence + outcomes: attested, safe refs, published-only outcomes,
   await expect(recordEvidence(A(), ids.p, binding, confirmed({ ...ev, taskId: 't-404' }), rid())).rejects.toEqual(policy('not_found', 404));
   const e = await recordEvidence(A(), ids.p, binding, confirmed(ev), rid());
   expect(e.payload).toMatchObject({ task_id: 't-1', reviewed_by: ids.owner });
+  expect(e.payload).not.toHaveProperty('approval_id');
+  // MKT-F19 (contract amendment): evidence for a task executing a publish approval names an APPROVED item of the active queue
+  await importArtifact(A(), ids.p, binding, 'C2a', queue([{ approval_id: 'pub-1', content_hash: H, state: 'approved', action_type: 'publish_post' }, { approval_id: 'pub-2', content_hash: H, state: 'pending' }], '2026-01-05T00:00:00.000Z'), rid());
+  await expect(recordEvidence(A(), ids.p, binding, confirmed({ ...ev, approvalId: 'pub-2' }), rid())).rejects.toEqual(policy('approval_not_approved', 409));
+  await expect(recordEvidence(A(), ids.p, binding, confirmed({ ...ev, approvalId: 'pub-404' }), rid())).rejects.toEqual(policy('not_found', 404));
+  const linked = await recordEvidence(A(), ids.p, binding, confirmed({ ...ev, approvalId: ' pub-1 ' }), rid());
+  expect(linked.payload).toMatchObject({ approval_id: 'pub-1' });
+  expect(() => validateArtifact('C6', linked.payload, binding)).not.toThrow();
+  expect((await pool.query(`SELECT approval_id FROM marketing_evidence WHERE id=$1`, [linked.id])).rows[0].approval_id).toBe('pub-1');
   const out = { sourceArtifactId: c7.id, taskId: 't-1', dodCriteriaMet: ['shipped'], measurement: { kpi_snapshot_ref: 'exports/kpi.v1.json' }, reviewed: true };
   await expect(recordOutcome(A(), ids.p, binding, confirmed(out), rid())).rejects.toEqual(policy('task_not_published', 409));
   // the engine applied the evidence: task published, evidence reviewed + applied

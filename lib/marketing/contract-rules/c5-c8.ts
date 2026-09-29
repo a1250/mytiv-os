@@ -18,6 +18,8 @@ export type PublishEvidence = Envelope & {
   task_id: string; task_hash: string; channel: string;
   evidence: { url?: string; screenshot_ref?: string; measurement_ref?: string };
   published_at: string; by: string; reviewed_by: string; reviewed_at: string; app_request_id: string;
+  /** MKT-F19: the publish approval this evidence resolves (contract amendment). */
+  approval_id?: string;
 };
 
 export type CompletionState = 'status_changed' | 'evidence_submitted' | 'evidence_reviewed' | 'outcome_verified';
@@ -69,6 +71,7 @@ export const C5_C8_CONTRACTS = {
     schema: c6Schema, envelope: true, bound: false,
     check: (e) => {
       for (const f of ['task_id', 'channel', 'by', 'reviewed_by', 'app_request_id'] as const) requireNonEmpty(e[f], `/${f}`);
+      if (e.approval_id !== undefined) requireNonEmpty(e.approval_id, '/approval_id');
       requireTimestamp(e.published_at, '/published_at');
       requireTimestamp(e.reviewed_at, '/reviewed_at');
       const forms = (['url', 'screenshot_ref', 'measurement_ref'] as const).filter((f) => e.evidence[f] !== undefined);
