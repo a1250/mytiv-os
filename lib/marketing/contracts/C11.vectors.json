@@ -1,0 +1,54 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "skills": [
+        {
+          "skill": "build-monthly-plan",
+          "status": "PRODUCTION",
+          "golden_count": 2,
+          "last_replay_score": 0.9
+        },
+        {
+          "skill": "weekly-report",
+          "status": "CANDIDATE",
+          "golden_count": 0,
+          "last_replay_score": null
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "skills": [
+        {
+          "skill": "x",
+          "status": "PRODUCTION",
+          "golden_count": 0,
+          "last_replay_score": 0.9
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "skills": [
+        {
+          "skill": "x",
+          "status": "BOGUS",
+          "golden_count": 1,
+          "last_replay_score": 0.9
+        }
+      ]
+    }
+  ]
+}

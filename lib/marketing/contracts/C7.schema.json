@@ -1,0 +1,165 @@
+{
+  "$ref": "#/definitions/C7",
+  "definitions": {
+    "C7": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "task_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "task_hash": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64,
+                "pattern": "^[a-f0-9]+$"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "requested",
+                  "accepted",
+                  "in_progress",
+                  "needs_asset",
+                  "needs_data",
+                  "qa_pending",
+                  "qa_blocked",
+                  "approval_pending",
+                  "approved",
+                  "rejected",
+                  "scheduled",
+                  "published",
+                  "measured",
+                  "learned",
+                  "cancelled"
+                ]
+              },
+              "owner": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/C7/properties/tasks/items/properties/task_id"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "due": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "$ref": "#/definitions/C7/properties/as_of"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "dod": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/C7/properties/tasks/items/properties/task_id"
+                },
+                "minItems": 1
+              },
+              "blockers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/C7/properties/tasks/items/properties/task_id"
+                }
+              },
+              "stale": {
+                "type": "boolean"
+              },
+              "completion_evidence": {
+                "type": "boolean"
+              },
+              "completion": {
+                "type": "string",
+                "enum": [
+                  "status_changed",
+                  "evidence_submitted",
+                  "evidence_reviewed",
+                  "outcome_verified"
+                ]
+              },
+              "evidence_state": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "awaiting",
+                  "applied",
+                  "stale",
+                  "conflict",
+                  "unreviewed"
+                ]
+              },
+              "updated_at": {
+                "$ref": "#/definitions/C7/properties/as_of"
+              }
+            },
+            "required": [
+              "task_id",
+              "task_hash",
+              "status",
+              "owner",
+              "due",
+              "dod",
+              "blockers",
+              "stale",
+              "completion_evidence",
+              "completion",
+              "evidence_state",
+              "updated_at"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness",
+        "as_of",
+        "tasks"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

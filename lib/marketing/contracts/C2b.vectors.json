@@ -1,0 +1,62 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "decision": "approved",
+      "note": "",
+      "decided_by": "owner",
+      "decided_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "decision": "maybe",
+      "note": "",
+      "decided_by": "owner",
+      "decided_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "nothex",
+      "decision": "approved",
+      "note": "",
+      "decided_by": "owner",
+      "decided_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "approval_id": "a1",
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "decision": "approved",
+      "note": "",
+      "decided_by": "owner",
+      "decided_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 0
+    }
+  ]
+}

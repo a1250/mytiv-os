@@ -1,0 +1,63 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "integrations": [
+        {
+          "id": "meta-ads",
+          "name": "Meta",
+          "class": "A",
+          "status": "verified",
+          "verified_at": "2026-01-01T00:00:00.000Z",
+          "verified_by": "owner"
+        },
+        {
+          "id": "ga4",
+          "name": "GA4",
+          "class": "B",
+          "status": "unverified",
+          "verified_at": null,
+          "verified_by": null
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "integrations": [
+        {
+          "id": "meta-ads",
+          "name": "Meta",
+          "class": "A",
+          "status": "verified",
+          "verified_at": null,
+          "verified_by": null
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "integrations": [
+        {
+          "id": "meta-ads",
+          "name": "Meta",
+          "class": "A",
+          "status": "verified",
+          "verified_at": "2026-01-01T00:00:00.000Z",
+          "verified_by": "owner",
+          "access_token": "secret"
+        }
+      ]
+    }
+  ]
+}

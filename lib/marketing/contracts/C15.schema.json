@@ -1,0 +1,123 @@
+{
+  "$ref": "#/definitions/C15",
+  "definitions": {
+    "C15": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_hash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]+$"
+        },
+        "dod_criteria_met": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/C15/properties/task_id"
+          },
+          "minItems": 1
+        },
+        "measurement": {
+          "type": "object",
+          "properties": {
+            "ingest_manifest_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kpi_snapshot_ref": {
+              "$ref": "#/definitions/C15/properties/measurement/properties/ingest_manifest_ref"
+            },
+            "measured_values": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "metric": {
+                    "$ref": "#/definitions/C15/properties/task_id"
+                  },
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "KNOWN",
+                      "ESTIMATED",
+                      "UNKNOWN"
+                    ]
+                  }
+                },
+                "required": [
+                  "metric",
+                  "value",
+                  "confidence"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "reviewed_by": {
+          "$ref": "#/definitions/C15/properties/task_id"
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "app_request_id": {
+          "$ref": "#/definitions/C15/properties/task_id"
+        },
+        "binding_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness",
+        "task_id",
+        "task_hash",
+        "dod_criteria_met",
+        "measurement",
+        "reviewed_by",
+        "reviewed_at",
+        "app_request_id",
+        "binding_version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

@@ -1,0 +1,258 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "shipped",
+        "measured"
+      ],
+      "measurement": {
+        "kpi_snapshot_ref": "exports/kpi.v1.json"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-2",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "measured"
+      ],
+      "measurement": {
+        "measured_values": [
+          {
+            "metric": "reach",
+            "value": null,
+            "confidence": "UNKNOWN"
+          },
+          {
+            "metric": "revenue",
+            "value": 1000,
+            "confidence": "KNOWN"
+          }
+        ]
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-2",
+      "binding_version": 2
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-3",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "ingested"
+      ],
+      "measurement": {
+        "ingest_manifest_ref": "exports/ingest.v1.json"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-3",
+      "binding_version": 1
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "nothex",
+      "dod_criteria_met": [
+        "shipped"
+      ],
+      "measurement": {
+        "kpi_snapshot_ref": "exports/kpi.json"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [],
+      "measurement": {
+        "kpi_snapshot_ref": "exports/kpi.json"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "shipped"
+      ],
+      "measurement": {
+        "kpi_snapshot_ref": "exports/kpi.json",
+        "secret_token": "sk-x"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "shipped"
+      ],
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "shipped"
+      ],
+      "measurement": {
+        "kpi_snapshot_ref": "exports/kpi.json"
+      },
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "shipped"
+      ],
+      "measurement": {},
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "shipped"
+      ],
+      "measurement": {
+        "kpi_snapshot_ref": "exports/kpi.json",
+        "ingest_manifest_ref": "exports/ingest.json"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "shipped"
+      ],
+      "measurement": {
+        "kpi_snapshot_ref": "../secrets"
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "shipped"
+      ],
+      "measurement": {
+        "measured_values": [
+          {
+            "metric": "reach",
+            "value": 5,
+            "confidence": "UNKNOWN"
+          }
+        ]
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dod_criteria_met": [
+        "shipped"
+      ],
+      "measurement": {
+        "measured_values": [
+          {
+            "metric": "revenue",
+            "value": null,
+            "confidence": "KNOWN"
+          }
+        ]
+      },
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-1",
+      "binding_version": 1
+    }
+  ]
+}

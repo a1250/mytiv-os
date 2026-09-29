@@ -1,0 +1,55 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "files": {
+        "hours.yaml": "ok"
+      },
+      "field_verification": {
+        "hours.yaml#weekly.sun": {
+          "owner_verified": true,
+          "source_verified": false
+        }
+      },
+      "values": {
+        "hours.yaml": {
+          "weekly.sun": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "open_proposals": []
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "files": {
+        "hours.yaml": "bogus"
+      },
+      "field_verification": {},
+      "values": {},
+      "open_proposals": []
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "files": {
+        "hours.yaml": "ok"
+      },
+      "field_verification": {},
+      "values": {
+        "hours.yaml": {
+          "weekly.sun": "nothex"
+        }
+      },
+      "open_proposals": []
+    }
+  ]
+}

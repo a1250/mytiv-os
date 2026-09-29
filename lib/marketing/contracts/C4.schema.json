@@ -1,0 +1,86 @@
+{
+  "$ref": "#/definitions/C4",
+  "definitions": {
+    "C4": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "lead",
+                  "qualified",
+                  "quoted",
+                  "closed_won",
+                  "closed_lost"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "stage",
+              "count"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "quote_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "close_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "sla_breaches": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness",
+        "as_of",
+        "stages",
+        "quote_rate",
+        "close_rate",
+        "sla_breaches"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

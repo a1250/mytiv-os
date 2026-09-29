@@ -1,0 +1,79 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "month": "2026-09",
+      "objectives": [
+        {
+          "id": "o1",
+          "text": "fill pipeline",
+          "sourceRef": "brain/direction.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN",
+          "owner": "cmo",
+          "approvalRef": "approvals/a1.yaml"
+        }
+      ],
+      "budget_pool": 20000,
+      "themes": [
+        "events"
+      ],
+      "kpi_targets": [
+        {
+          "kpi": "leads",
+          "target": 50,
+          "confidence": "ESTIMATED"
+        }
+      ],
+      "review_cadence": "monthly"
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "month": "2026-13",
+      "objectives": [
+        {
+          "id": "o1",
+          "text": "t",
+          "sourceRef": "brain/d.yaml",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        }
+      ],
+      "budget_pool": 1,
+      "themes": [],
+      "kpi_targets": [],
+      "review_cadence": "monthly"
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "month": "2026-09",
+      "objectives": [
+        {
+          "id": "o1",
+          "text": "t",
+          "sourceRef": "../secrets",
+          "sourceRevision": "rev-1",
+          "asOf": "2026-01-01T00:00:00.000Z",
+          "confidence": "KNOWN"
+        }
+      ],
+      "budget_pool": 1,
+      "themes": [],
+      "kpi_targets": [],
+      "review_cadence": "monthly"
+    }
+  ]
+}

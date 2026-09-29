@@ -1,0 +1,81 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "tasks": [
+        {
+          "task_id": "t-1",
+          "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "scheduled",
+          "owner": "operator",
+          "due": "2026-01-01T00:00:00.000Z",
+          "dod": [
+            "shipped"
+          ],
+          "blockers": [],
+          "stale": false,
+          "completion_evidence": false,
+          "completion": "status_changed",
+          "evidence_state": "none",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "tasks": [
+        {
+          "task_id": "t-1",
+          "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "pwned",
+          "owner": "operator",
+          "due": "2026-01-01T00:00:00.000Z",
+          "dod": [
+            "shipped"
+          ],
+          "blockers": [],
+          "stale": false,
+          "completion_evidence": false,
+          "completion": "status_changed",
+          "evidence_state": "none",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "tasks": [
+        {
+          "task_id": "t-1",
+          "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "scheduled",
+          "owner": "operator",
+          "due": "2026-01-01T00:00:00.000Z",
+          "dod": [
+            "shipped"
+          ],
+          "blockers": [],
+          "stale": false,
+          "completion_evidence": true,
+          "completion": "outcome_verified",
+          "evidence_state": "awaiting",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}

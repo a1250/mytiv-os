@@ -1,0 +1,186 @@
+{
+  "$ref": "#/definitions/C12",
+  "definitions": {
+    "C12": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "campaigns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "objective": {
+                "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+              },
+              "audiences": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+                },
+                "minItems": 1
+              },
+              "creative_matrix": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+                },
+                "default": []
+              },
+              "budget_envelope": {
+                "type": "number",
+                "minimum": 0
+              },
+              "kpis": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+                },
+                "default": []
+              },
+              "tracking_spec": {
+                "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+              },
+              "build_state": {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "paused",
+                  "active",
+                  "archived"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "objective",
+              "audiences",
+              "budget_envelope",
+              "tracking_spec",
+              "build_state"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "content_calendar": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+              },
+              "date": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              },
+              "channel": {
+                "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+              },
+              "status": {
+                "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+              }
+            },
+            "required": [
+              "id",
+              "date",
+              "channel",
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "manual_publish_packs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+              },
+              "campaign_id": {
+                "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+              },
+              "instructions": {
+                "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+              }
+            },
+            "required": [
+              "id",
+              "instructions"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "asset_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provenance": {
+                "type": "string",
+                "enum": [
+                  "real",
+                  "ai_enhanced",
+                  "ai_concept"
+                ]
+              },
+              "disclosure": {
+                "$ref": "#/definitions/C12/properties/campaigns/items/properties/id"
+              }
+            },
+            "required": [
+              "ref",
+              "provenance"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

@@ -1,0 +1,68 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "campaigns": [
+        {
+          "id": "c1",
+          "objective": "grow",
+          "audiences": [
+            "corporate"
+          ],
+          "creative_matrix": [
+            "v1"
+          ],
+          "budget_envelope": 5000,
+          "kpis": [
+            "cpl"
+          ],
+          "tracking_spec": "utm-v1",
+          "build_state": "paused"
+        }
+      ],
+      "content_calendar": [],
+      "manual_publish_packs": [],
+      "asset_refs": [
+        {
+          "ref": "assets/hero.png",
+          "provenance": "ai_concept"
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "campaigns": [],
+      "content_calendar": [],
+      "manual_publish_packs": [],
+      "asset_refs": [
+        {
+          "ref": "../secrets",
+          "provenance": "real"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "campaigns": [],
+      "content_calendar": [],
+      "manual_publish_packs": [],
+      "asset_refs": [
+        {
+          "ref": "assets/x.png",
+          "provenance": "totally_real"
+        }
+      ]
+    }
+  ]
+}
