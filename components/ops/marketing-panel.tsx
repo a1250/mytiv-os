@@ -17,7 +17,7 @@ function importError(error: unknown): string {
   if (code.includes('unavailable')) return 'הייבוא אינו זמין כרגע. יש לבדוק את היסטוריית האישורים לפני ניסיון נוסף.';
   return 'לא ניתן לקרוא את התוכנית. יש לבדוק את מבנה הקובץ, התאריכים וההפניות למקורות.';
 }
-export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, canImport, unavailable, now, bindingEditor, bindingVersion, previousPlans }: {
+export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, canImport, unavailable, now, bindingEditor, bindingVersion, previousPlans, moduleEnabled }: {
   businessSlug: string; projectId: string; binding: string | null; plan: MarketingPlan | null; tasks: OpsTask[]; canImport: boolean; unavailable: boolean; now: string;
   /** Present only for owners (T-2.2): the binding editor's view of the current binding row. */
   bindingEditor?: BindingEditorState;
@@ -25,6 +25,8 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
   bindingVersion: number | null;
   /** Plans imported under earlier binding versions — history only, never the current plan. */
   previousPlans: { bindingVersion: number; revision: number; importedAt: string }[];
+  /** The marketing module (E4 screens) is enabled — link to it when the project is connected. */
+  moduleEnabled: boolean;
 }) {
   const router = useRouter();
   const [raw, setRaw] = useState('');
@@ -74,6 +76,7 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
     </header>
     {unavailable && <p role="alert" className="text-warning">נתוני השיווק אינם זמינים כרגע. אין להסיק שאין תוכנית.</p>}
     {!binding && <p className="bg-card border-border rounded-xl border p-6">הפרויקט עדיין לא חובר לעסק ב־Marketing OS.</p>}
+    {binding && moduleEnabled && <a href={`/${businessSlug}/ops/projects/${projectId}/marketing`} className="bg-muted inline-block rounded px-4 py-2 text-sm">למודול השיווק: בית, אישורים, מוח העסק ודוחות</a>}
     {bindingEditor !== undefined && <MarketingBindingEditor businessSlug={businessSlug} projectId={projectId} state={bindingEditor} />}
     {binding && !plan && !unavailable && <p className="bg-card border-border rounded-xl border p-6">טרם יובאה תוכנית שיווק לפרויקט. לא מוצגים נתוני דוגמה.</p>}
     {plan && <>

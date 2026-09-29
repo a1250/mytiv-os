@@ -2,6 +2,7 @@ import { AuditLog } from "@/components/ops/audit-log";
 import { Suspense } from "react";
 import { getMarketingBinding, latestPlan, previousBindingPlans } from "@/lib/marketing/service";
 import { getMarketingBindingState } from "@/lib/marketing/binding-store";
+import { marketingModuleEnabled } from "@/lib/marketing/module-flag";
 import type { BindingEditorState } from "@/components/ops/marketing-binding-editor";
 import type { MarketingPlan } from "@/lib/marketing/contract";
 import Link from "next/link";
@@ -99,7 +100,7 @@ export default async function ClientWorkspacePage({
       <ClientWorkspace
         businessSlug={businessSlug}
         project={project}
-        marketing={{ binding, plan, canImport: role === "owner" || role === "admin", unavailable: marketingUnavailable, now: new Date().toISOString(), bindingEditor, bindingVersion: activeMarketing?.bindingVersion ?? null,
+        marketing={{ binding, plan, canImport: role === "owner" || role === "admin", unavailable: marketingUnavailable, now: new Date().toISOString(), bindingEditor, bindingVersion: activeMarketing?.bindingVersion ?? null, moduleEnabled: marketingModuleEnabled(),
           previousPlans: previousPlans.map((p) => ({ bindingVersion: p.bindingVersion, revision: p.revision, importedAt: p.importedAt.toISOString() })) }}
         canWrite={role === "owner" || role === "admin"}
         incomplete={tasksIncomplete}

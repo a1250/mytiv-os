@@ -7,6 +7,7 @@ import { OpsPolicyError, assertConfirmation, assertWriter, objectInput } from '.
 import { getMarketingBinding } from './binding-store';
 import type { MarketingBinding } from './binding';
 import { importArtifact, listLatestArtifacts } from './artifacts';
+import { marketingModuleEnabled } from './module-flag';
 import { exportRecord, recordDecision, recordEvidence, recordOutcome, recordProposal, recordReceipt, type RecordKind } from './records';
 
 /**
@@ -20,7 +21,7 @@ type Params = { params: Promise<{ businessSlug: string; projectId: string }> };
 type IdParams = { params: Promise<{ businessSlug: string; projectId: string; id: string }> };
 type Scope = Awaited<ReturnType<typeof guard>>;
 
-export function marketingModuleEnabled(): boolean { return process.env.MARKETING_MODULE_ENABLED === 'true'; }
+export { marketingModuleEnabled };
 
 async function respond(fn: () => Promise<Response>): Promise<Response> {
   try { return await fn(); }
