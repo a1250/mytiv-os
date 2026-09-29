@@ -57,6 +57,13 @@
       "when": 1789072620635,
       "tag": "0007_calm_obadiah_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790709379548,
+      "tag": "0008_marketing_bindings",
+      "breakpoints": true
     }
   ]
 }

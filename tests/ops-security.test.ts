@@ -7,7 +7,7 @@ import { foldersForBusiness, folderFromProject, folderState } from '../lib/ops-c
 import { statusChange, needsReviewConfirmation } from '../lib/ops-closure';
 import { snapshotTask, reversePatch, assertUnchanged, rollbackEligibility, isTaskSnapshot } from '../lib/ops-snapshot';
 import { expectedMarker } from '../lib/ops-policy';
-import { marketingBinding } from '../lib/marketing/binding';
+import { activeBinding, bindingPolicyError, parseBootstrapBindings } from '../lib/marketing/binding';
 import { requireScopedTask, requireStatusEvidence } from '../lib/ops-access';
 import { getTasksByFolderWithCompleteness } from '../lib/clickup';
 
@@ -88,15 +88,37 @@ test('only task updates are reversible; creations never are, because nothing her
   assert.deepEqual(rollbackEligibility('marketing_import'), { not: 'not_a_task_update' });
   assert.deepEqual(rollbackEligibility('rollback_task'), { not: 'not_a_task_update' });
 });
-test('a malformed binding table resolves nothing, and never surfaces as a JSON error', () => {
+test('the binding resolves only from an active, well-formed DB row — never from the environment (D2)', () => {
   const prev = process.env.OPS_MARKETING_BINDINGS;
-  process.env.OPS_MARKETING_BINDINGS = '{mytiv:not-json}';
-  assert.equal(marketingBinding('mytiv', 'p'), null);
-  process.env.OPS_MARKETING_BINDINGS = JSON.stringify({ 'mytiv:p': 'umino', 'mytiv:q': 'Bad Slug!' });
-  assert.equal(marketingBinding('mytiv', 'p'), 'umino');
-  assert.equal(marketingBinding('mytiv', 'q'), null);
-  assert.equal(marketingBinding('other', 'p'), null);
+  process.env.OPS_MARKETING_BINDINGS = JSON.stringify({ 'mytiv:p': 'umino' }); // present, and ignored at request time
+  assert.equal(activeBinding(null), null);
+  assert.equal(activeBinding(undefined), null);
+  assert.deepEqual(activeBinding({ marketingBusiness: 'umino', bindingVersion: 3, revoked: false }), { marketingBusiness: 'umino', bindingVersion: 3 });
+  assert.equal(activeBinding({ marketingBusiness: 'umino', bindingVersion: 3, revoked: true }), null);
+  assert.equal(activeBinding({ marketingBusiness: 'umino', bindingVersion: 3 }), null); // revoked flag missing → fail closed
+  assert.equal(activeBinding({ marketingBusiness: 'Bad Slug!', bindingVersion: 1, revoked: false }), null);
+  assert.equal(activeBinding({ marketingBusiness: 'umino', bindingVersion: 0, revoked: false }), null);
+  assert.equal(activeBinding({ marketingBusiness: 'umino', bindingVersion: 1.5, revoked: false }), null);
   process.env.OPS_MARKETING_BINDINGS = prev;
+});
+test('binding database errors map to policy errors; unknown errors are not swallowed', () => {
+  const raised = (message: string) => Object.assign(new Error('Failed query'), { cause: Object.assign(new Error(message), { code: 'P0001' }) });
+  assert.deepEqual([bindingPolicyError(raised('marketing_binding_owner_required'))?.message, bindingPolicyError(raised('marketing_binding_owner_required'))?.status], ['binding_owner_required', 403]);
+  assert.equal(bindingPolicyError(raised('marketing_binding_unchanged'))?.status, 409);
+  assert.equal(bindingPolicyError(raised('marketing_binding_not_bound'))?.message, 'binding_not_bound');
+  assert.equal(bindingPolicyError(Object.assign(new Error('x'), { code: '23514' }))?.message, 'invalid_marketing_business');
+  assert.equal(bindingPolicyError(Object.assign(new Error('x'), { code: '23503' }))?.status, 404);
+  assert.equal(bindingPolicyError(Object.assign(new Error('x'), { code: '23505' }))?.status, 409);
+  assert.equal(bindingPolicyError(new Error('connection reset')), null);
+});
+test('the owner-run bootstrap input is parsed strictly', () => {
+  const id = 'aaaaaaaa-1111-4000-8000-0000000000a1';
+  assert.deepEqual(parseBootstrapBindings(undefined), []);
+  assert.deepEqual(parseBootstrapBindings(JSON.stringify({ [`mytiv:${id.toUpperCase()}`]: 'umino' })), [{ businessSlug: 'mytiv', projectId: id, marketingBusiness: 'umino' }]);
+  assert.throws(() => parseBootstrapBindings('{mytiv:not-json}'), /not valid JSON/);
+  assert.throws(() => parseBootstrapBindings('[]'), /JSON object/);
+  assert.throws(() => parseBootstrapBindings(JSON.stringify({ 'mytiv:p': 'umino' })), /is not "<business-slug>:<project-uuid>"/);
+  assert.throws(() => parseBootstrapBindings(JSON.stringify({ [`mytiv:${id}`]: 'Bad Slug!' })), /not a marketing tenant slug/);
 });
 test('invalid calendar dates are rejected', () => {
   for (const s of ['2026-02-30','2026-13-01','x','2026-1-1']) assert.throws(() => dateMs(s));

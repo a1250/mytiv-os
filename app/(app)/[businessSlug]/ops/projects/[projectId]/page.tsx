@@ -1,6 +1,6 @@
 import { AuditLog } from "@/components/ops/audit-log";
 import { Suspense } from "react";
-import { marketingBinding, latestPlan } from "@/lib/marketing/service";
+import { getMarketingBinding, latestPlan } from "@/lib/marketing/service";
 import type { MarketingPlan } from "@/lib/marketing/contract";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -27,7 +27,8 @@ export default async function ClientWorkspacePage({
   if (!project) notFound();
 
   const folder = folderFromProject(project);
-  const binding = marketingBinding(businessSlug, projectId);
+  const activeMarketing = await getMarketingBinding(business.id, projectId);
+  const binding = activeMarketing?.marketingBusiness ?? null;
   let plan: MarketingPlan | null = null;
   let marketingUnavailable = false;
   if (binding) {

@@ -39,7 +39,7 @@ vi.mock('../lib/api-guard', () => ({
 }));
 vi.mock('../lib/db/queries/projects', () => ({ getProject: mocks.project }));
 vi.mock('../lib/ops-audit', () => ({ auditedAction: mocks.audited }));
-vi.mock('../lib/marketing/service', () => ({ marketingBinding: mocks.binding, importPlan: mocks.importPlan }));
+vi.mock('../lib/marketing/service', () => ({ getMarketingBinding: mocks.binding, importPlan: mocks.importPlan }));
 vi.mock('../lib/ops-access', () => ({ requireScopedTask: vi.fn() }));
 vi.mock('../lib/ops-config', () => ({ folderFromProject: () => ({ key: 'p', label: 'P', clickupFolderId: 'f' }) }));
 
@@ -58,7 +58,7 @@ function post(plan: unknown) {
 beforeEach(() => {
   mocks.guard.mockResolvedValue({ businessId: 'biz', userId: 'user', role: 'owner' });
   mocks.project.mockResolvedValue({ id: 'project', name: 'Fixture', clickupFolderId: 'f' });
-  mocks.binding.mockReturnValue(BIZ);
+  mocks.binding.mockResolvedValue({ marketingBusiness: BIZ, bindingVersion: 1 });
   mocks.audited.mockReset().mockResolvedValue({ ok: true, revision: 1 });
   mocks.importPlan.mockReset();
 });
@@ -77,6 +77,19 @@ test('a valid canonical plan passes validation and reaches the governed audit cl
   expect(res.status).toBe(200);
   expect(mocks.audited).toHaveBeenCalledTimes(1);
   expect(mocks.audited.mock.calls[0][3]).toBe('marketing_import'); // action
+});
+
+test('a project with no active DB binding is not connected, even when OPS_MARKETING_BINDINGS names it (D2)', async () => {
+  const prev = process.env.OPS_MARKETING_BINDINGS;
+  process.env.OPS_MARKETING_BINDINGS = JSON.stringify({ 'mytiv:project': BIZ });
+  mocks.binding.mockResolvedValue(null);
+  try {
+    const res = await POST(post(vectors.valid[0]), params);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('marketing_not_connected');
+    expect(mocks.binding).toHaveBeenCalledWith('biz', 'project'); // keyed by the resolved business id, never the slug/env
+    expect(mocks.audited).not.toHaveBeenCalled();
+  } finally { process.env.OPS_MARKETING_BINDINGS = prev; }
 });
 
 // ── timeline geometry is finite for canonical ISO date-time items ──

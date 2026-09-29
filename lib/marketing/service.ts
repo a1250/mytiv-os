@@ -6,7 +6,7 @@ import { type MarketingPlan } from './contract';
 import { validateMarketingPlan } from './validate';
 import { OpsPolicyError } from '../ops-policy';
 
-export { marketingBinding } from './binding';
+export { getMarketingBinding } from './binding-store';
 export async function latestPlan(businessId: string, projectId: string, marketingBusiness: string): Promise<MarketingPlan | null> {
   const [row] = await db.select().from(marketingSnapshots).where(and(eq(marketingSnapshots.businessId, businessId), eq(marketingSnapshots.projectId, projectId))).orderBy(desc(marketingSnapshots.revision)).limit(1);
   // Composed C1 validation (AJV structural + reference parser) — never parseMarketingPlan directly.

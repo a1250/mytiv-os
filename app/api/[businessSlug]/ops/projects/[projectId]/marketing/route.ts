@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { guard, ApiGuardError } from '@/lib/api-guard';
 import { getProject } from '@/lib/db/queries/projects';
-import { marketingBinding, importPlan } from '@/lib/marketing/service';
+import { getMarketingBinding, importPlan } from '@/lib/marketing/service';
 import { validateMarketingPlan } from '@/lib/marketing/validate';
 import { OpsPolicyError, assertConfirmation, assertWriter, objectInput } from '@/lib/ops-policy';
 import { auditedAction } from '@/lib/ops-audit';
@@ -14,12 +14,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ bus
     const scope = await guard(businessSlug); assertWriter(scope.role);
     const project = await getProject(scope.businessId, projectId);
     if (!project) throw new OpsPolicyError('not_found', 404);
-    const binding = marketingBinding(businessSlug, projectId);
+    const binding = await getMarketingBinding(scope.businessId, projectId);
     if (!binding) throw new OpsPolicyError('marketing_not_connected', 409);
     const text = await req.text();
     if (text.length > 250000) throw new OpsPolicyError('payload_too_large', 413);
     const body = objectInput(JSON.parse(text)); assertConfirmation(req, body);
-    const plan = validateMarketingPlan(body.plan, binding);
+    const plan = validateMarketingPlan(body.plan, binding.marketingBusiness);
     for (const item of plan.items) if (item.clickupTaskId) await requireScopedTask(folderFromProject(project), item.clickupTaskId);
     const result = await auditedAction(scope, projectId, body.requestId as string, 'marketing_import', plan, () => importPlan(scope.businessId, projectId, scope.userId, plan), { target: { kind: 'project', id: projectId } });
     return Response.json(result);
