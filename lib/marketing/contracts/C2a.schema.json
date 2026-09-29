@@ -1,0 +1,69 @@
+{
+  "$ref": "#/definitions/C2a",
+  "definitions": {
+    "C2a": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "approval_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64,
+                "pattern": "^[a-f0-9]+$"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "approved",
+                  "rejected",
+                  "expired"
+                ]
+              }
+            },
+            "required": [
+              "approval_id",
+              "content_hash",
+              "state"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness",
+        "items"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

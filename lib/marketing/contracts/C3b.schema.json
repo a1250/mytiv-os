@@ -1,0 +1,58 @@
+{
+  "$ref": "#/definitions/C3b",
+  "definitions": {
+    "C3b": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "old": {},
+        "new": {},
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verify": {
+          "type": "boolean"
+        },
+        "value_hash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]+$"
+        },
+        "proposed_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app_request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "binding_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "file",
+        "path",
+        "reason",
+        "verify",
+        "value_hash",
+        "proposed_by",
+        "app_request_id",
+        "binding_version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}

@@ -1,0 +1,41 @@
+{
+  "valid": [
+    {
+      "file": "menu.yaml",
+      "path": "items[0].price",
+      "old": 98,
+      "new": 110,
+      "reason": "owner update",
+      "verify": true,
+      "value_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "proposed_by": "system",
+      "app_request_id": "req-2",
+      "binding_version": 1
+    }
+  ],
+  "invalid": [
+    {
+      "file": "menu.yaml",
+      "path": "items[0].price",
+      "old": 98,
+      "reason": "owner update",
+      "verify": true,
+      "value_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "proposed_by": "system",
+      "app_request_id": "req-2",
+      "binding_version": 1
+    },
+    {
+      "file": "menu.yaml",
+      "path": "items[0].price",
+      "old": 98,
+      "new": 110,
+      "reason": "owner update",
+      "verify": true,
+      "value_hash": "nothex",
+      "proposed_by": "system",
+      "app_request_id": "req-2",
+      "binding_version": 1
+    }
+  ]
+}
