@@ -1,0 +1,61 @@
+{
+  "valid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "sources": [
+        {
+          "source": "spend",
+          "as_of": "2026-01-01T00:00:00.000Z",
+          "rows": 120,
+          "schema_result": "pass",
+          "status": "FRESH"
+        },
+        {
+          "source": "reviews",
+          "as_of": null,
+          "rows": 0,
+          "schema_result": "pass",
+          "status": "UNKNOWN"
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "sources": [
+        {
+          "source": "spend",
+          "as_of": null,
+          "rows": 10,
+          "schema_result": "pass",
+          "status": "FRESH"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "as_of": "2026-01-01T00:00:00.000Z",
+      "sources": [
+        {
+          "source": "spend",
+          "as_of": "2026-01-01T00:00:00.000Z",
+          "rows": 1,
+          "schema_result": "pass",
+          "status": "OLD"
+        }
+      ]
+    }
+  ]
+}

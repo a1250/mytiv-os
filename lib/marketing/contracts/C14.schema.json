@@ -1,0 +1,136 @@
+{
+  "$ref": "#/definitions/C14",
+  "definitions": {
+    "C14": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "marketingBusiness": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "month": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+        },
+        "objectives": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "text": {
+                "$ref": "#/definitions/C14/properties/objectives/items/properties/id"
+              },
+              "sourceRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sourceRevision": {
+                "$ref": "#/definitions/C14/properties/objectives/items/properties/id"
+              },
+              "asOf": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "KNOWN",
+                  "ESTIMATED",
+                  "UNKNOWN"
+                ]
+              },
+              "owner": {
+                "$ref": "#/definitions/C14/properties/objectives/items/properties/id"
+              },
+              "approvalRef": {
+                "$ref": "#/definitions/C14/properties/objectives/items/properties/sourceRef"
+              }
+            },
+            "required": [
+              "id",
+              "text",
+              "sourceRef",
+              "sourceRevision",
+              "asOf",
+              "confidence"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "budget_pool": {
+          "type": "number",
+          "minimum": 0
+        },
+        "themes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/C14/properties/objectives/items/properties/id"
+          },
+          "default": []
+        },
+        "kpi_targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kpi": {
+                "$ref": "#/definitions/C14/properties/objectives/items/properties/id"
+              },
+              "target": {
+                "type": "number"
+              },
+              "confidence": {
+                "$ref": "#/definitions/C14/properties/objectives/items/properties/confidence"
+              }
+            },
+            "required": [
+              "kpi",
+              "target",
+              "confidence"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "review_cadence": {
+          "type": "string",
+          "enum": [
+            "weekly",
+            "monthly",
+            "quarterly"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceRevision",
+        "asOf",
+        "marketingBusiness",
+        "month",
+        "objectives",
+        "budget_pool",
+        "review_cadence"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "STRUCTURAL schema generated from the reference zod validator. Authoritative validation — the safe-ref allowlist, the envelope's not-in-the-future rule, and all cross-field (superRefine) rules — is the reference validator, whose behaviour the accompanying .vectors.json encodes. Do NOT treat this JSON Schema as a complete gate."
+}
