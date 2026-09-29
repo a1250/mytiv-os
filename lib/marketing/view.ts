@@ -62,3 +62,22 @@ export function reconciledLabel(state: string | null): string {
     default: return 'טרם התקבל יצוא מהמנוע';
   }
 }
+
+/**
+ * Per-file Brain status (MKT-F09) derived from C3a: STALE / missing / invalid from `files`; otherwise
+ * VERIFIED (every recorded field owner- or source-verified), PARTIAL (some), UNVERIFIED (none, or no field
+ * recorded). EXPIRED is not representable in the canonical C3a contract.
+ */
+export type BrainFileStatus = 'VERIFIED' | 'PARTIAL' | 'UNVERIFIED' | 'STALE' | 'MISSING' | 'INVALID';
+export function brainFileStatus(file: string, fileState: 'ok' | 'missing' | 'invalid' | 'stale',
+  verification: Record<string, { owner_verified: boolean; source_verified?: boolean }>): BrainFileStatus {
+  if (fileState === 'stale') return 'STALE';
+  if (fileState === 'missing') return 'MISSING';
+  if (fileState === 'invalid') return 'INVALID';
+  const fields = Object.entries(verification).filter(([key]) => key.startsWith(`${file}#`));
+  const verified = fields.filter(([, v]) => v.owner_verified || v.source_verified === true).length;
+  return fields.length > 0 && verified === fields.length ? 'VERIFIED' : verified > 0 ? 'PARTIAL' : 'UNVERIFIED';
+}
+export function brainStatusLabel(s: BrainFileStatus): string {
+  return { VERIFIED: 'מאומת', PARTIAL: 'מאומת חלקית', UNVERIFIED: 'לא מאומת — אין להשתמש בו לתוכן ייצור', STALE: 'לא עדכני', MISSING: 'חסר', INVALID: 'לא תקין' }[s];
+}

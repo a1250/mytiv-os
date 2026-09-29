@@ -10,6 +10,7 @@ import { latestArtifact } from "@/lib/marketing/artifacts";
 import { MARKETING_VIEWS, approvalsWaiting, marketingView } from "@/lib/marketing/view";
 import { MarketingHome } from "@/components/marketing/marketing-home";
 import { ApprovalsView } from "@/components/marketing/approvals";
+import { BrainView } from "@/components/marketing/brain";
 import { listRecords } from "@/lib/marketing/records";
 
 /**
@@ -35,6 +36,7 @@ export default async function MarketingPage({ params, searchParams }: {
   // Load only what the selected view needs (errors here → "unavailable"); render after the try/catch.
   type Loaded = { view: "home"; data: Parameters<typeof MarketingHome>[0] }
     | { view: "approvals"; data: Parameters<typeof ApprovalsView>[0] }
+    | { view: "brain"; data: Parameters<typeof BrainView>[0] }
     | { view: "pending" };
   let loaded: Loaded | null = null;
   let unavailable = false;
@@ -50,6 +52,10 @@ export default async function MarketingPage({ params, searchParams }: {
         const [queue, records] = await Promise.all([latestArtifact(business.id, projectId, binding, "C2a"), listRecords(business.id, projectId, binding)]);
         loaded = { view: "approvals", data: { businessSlug, projectId, bindingVersion: binding.bindingVersion, canWrite, decisions: records.decisions,
           queue: queue ? { id: queue.id, revision: queue.revision, asOf: queue.asOf, items: queue.payload.items } : null } };
+      } else if (view === "brain") {
+        const [status, records] = await Promise.all([latestArtifact(business.id, projectId, binding, "C3a"), listRecords(business.id, projectId, binding)]);
+        loaded = { view: "brain", data: { businessSlug, projectId, bindingVersion: binding.bindingVersion, canWrite,
+          proposals: records.evidence.filter((e) => e.kind === "brain_proposal"), status: status ? { id: status.id, asOf: status.asOf, payload: status.payload } : null } };
       } else {
         loaded = { view: "pending" };
       }
@@ -58,6 +64,7 @@ export default async function MarketingPage({ params, searchParams }: {
   const content = !loaded ? null
     : loaded.view === "home" ? <MarketingHome {...loaded.data} />
     : loaded.view === "approvals" ? <ApprovalsView {...loaded.data} />
+    : loaded.view === "brain" ? <BrainView {...loaded.data} />
     : <p className="bg-card border-border rounded-xl border p-6">המסך הזה עדיין לא זמין.</p>;
 
   return (
