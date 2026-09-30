@@ -1,25 +1,7 @@
 import { listOpsAudit, type AuditActionView } from '@/lib/db/queries/ops-audit';
 import type { TaskSnapshot } from '@/lib/ops-snapshot';
+import { canRollBack, describeSnapshot as describe, outcome } from '@/lib/ops-audit-view';
 import { RollbackButton } from './rollback-button';
-
-const day = (ms: number | null) => (ms === null ? 'none' : new Date(ms).toISOString().slice(0, 10));
-function describe(s: TaskSnapshot) {
-  return `status ${s.status ?? 'none'} · owners ${s.assigneeIds.length ? s.assigneeIds.join(',') : 'none'} · due ${day(s.dueDate)}`;
-}
-function outcome(a: AuditActionView) {
-  const last = [...a.events].reverse().find((e) => e.event !== 'confirmed' && e.event !== 'rolled_back');
-  if (!last) return 'claimed — outcome not recorded';
-  if (last.event === 'failed_or_unknown') return `failed_or_unknown (${String(last.detail.phase ?? '')})`;
-  const result = last.detail.result as { error?: unknown } | undefined;
-  if (last.event === 'refused_before_write' || last.event === 'rejected_or_unknown') return `${last.event}${result?.error ? ` (${String(result.error)})` : ''}`;
-  return last.event;
-}
-/** Eligible = the write itself said so at claim time, it succeeded with both states, and nobody reversed it yet. */
-function canRollBack(a: AuditActionView) {
-  const confirmed = a.events.find((e) => e.event === 'confirmed');
-  const success = a.events.find((e) => e.event === 'succeeded');
-  return confirmed?.detail.rollback_eligibility === 'eligible' && !!success?.detail.pre_state && !!success?.detail.post_state && !a.events.some((e) => e.event === 'rolled_back');
-}
 
 export async function AuditLog({ businessSlug, businessId, projectId, canWrite }: { businessSlug: string; businessId: string; projectId: string; canWrite: boolean }) {
   let rows: AuditActionView[];

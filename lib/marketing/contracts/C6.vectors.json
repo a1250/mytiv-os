@@ -16,9 +16,45 @@
       "reviewed_by": "owner",
       "reviewed_at": "2026-01-01T00:00:00.000Z",
       "app_request_id": "req-6"
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-2",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "channel": "instagram",
+      "evidence": {
+        "url": "https://example.com/post/2"
+      },
+      "published_at": "2026-01-01T00:00:00.000Z",
+      "by": "operator",
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-7",
+      "approval_id": "a3"
     }
   ],
   "invalid": [
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "task_id": "t-1",
+      "task_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "channel": "instagram",
+      "evidence": {
+        "url": "https://example.com/x"
+      },
+      "published_at": "2026-01-01T00:00:00.000Z",
+      "by": "operator",
+      "reviewed_by": "owner",
+      "reviewed_at": "2026-01-01T00:00:00.000Z",
+      "app_request_id": "req-6",
+      "approval_id": "  "
+    },
     {
       "schemaVersion": 1,
       "sourceRevision": "rev-1",

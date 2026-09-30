@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { MarketingPanel } from "./marketing-panel";
 import type { MarketingPlan } from "@/lib/marketing/contract";
+import type { BindingEditorState } from "./marketing-binding-editor";
 import { Copilot } from "./copilot";
 import { SpecEditor } from "./spec-editor";
 import { TaskTable } from "./task-table";
@@ -19,7 +20,8 @@ type Props = {
   decisions: OpsTask[];
   members: WorkspaceMember[];
   statusesByList: Record<string, string[]>;
-  marketing: { binding: string | null; plan: MarketingPlan | null; canImport: boolean; unavailable: boolean; now: string };
+  marketing: { binding: string | null; plan: MarketingPlan | null; canImport: boolean; unavailable: boolean; now: string; bindingEditor?: BindingEditorState;
+    bindingVersion: number | null; previousPlans: { bindingVersion: number; revision: number; importedAt: string }[]; moduleEnabled: boolean };
   canWrite: boolean;
   /** True when the ClickUp read hit the 20-page cap — tab counts are then hidden, not shown short (MKT-INT06). */
   incomplete: boolean;

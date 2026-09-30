@@ -57,6 +57,34 @@
       "when": 1789072620635,
       "tag": "0007_calm_obadiah_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790709379548,
+      "tag": "0008_marketing_bindings",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790709910065,
+      "tag": "0009_snapshot_binding_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790710260914,
+      "tag": "0010_marketing_data_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790803966139,
+      "tag": "0011_marketing_import_fences",
+      "breakpoints": true
     }
   ]
 }

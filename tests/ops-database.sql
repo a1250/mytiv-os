@@ -28,8 +28,15 @@ BEGIN
     INSERT INTO ops_actions(business_id,user_id,project_id,request_id,action,payload_hash) VALUES(a,u,p,rid,'test','hash');
     RAISE EXCEPTION 'duplicate claim accepted';
   EXCEPTION WHEN unique_violation THEN NULL; END;
+  -- 0009's import trigger (active binding required) would refuse this row first; disable it for this one
+  -- check so the composite FK itself is proven to reject it, then prove the trigger refuses it too.
   BEGIN
-    INSERT INTO marketing_snapshots(business_id,project_id,revision,payload,imported_by) VALUES(b,p,1,'{}',u);
+    INSERT INTO marketing_snapshots(business_id,project_id,revision,binding_version,payload,imported_by) VALUES(b,p,1,1,'{}',u);
+    RAISE EXCEPTION 'cross-business snapshot accepted by the import trigger';
+  EXCEPTION WHEN raise_exception THEN IF SQLERRM <> 'stale_binding_version' THEN RAISE; END IF; END;
+  ALTER TABLE marketing_snapshots DISABLE TRIGGER marketing_snapshot_order;
+  BEGIN
+    INSERT INTO marketing_snapshots(business_id,project_id,revision,binding_version,payload,imported_by) VALUES(b,p,1,1,'{}',u);
     RAISE EXCEPTION 'cross-business snapshot accepted';
   EXCEPTION WHEN foreign_key_violation THEN
     GET STACKED DIAGNOSTICS violated = CONSTRAINT_NAME;
@@ -37,6 +44,7 @@ BEGIN
       RAISE EXCEPTION 'cross-business snapshot rejected by % instead of the composite project FK', violated;
     END IF;
   END;
+  ALTER TABLE marketing_snapshots ENABLE TRIGGER marketing_snapshot_order;
   BEGIN
     INSERT INTO ops_actions(business_id,user_id,project_id,request_id,action,payload_hash) VALUES(b,u,p,gen_random_uuid(),'test','hash');
     RAISE EXCEPTION 'cross-business claim accepted';
@@ -62,9 +70,10 @@ BEGIN
     UPDATE ops_audit_events SET event='rewritten' WHERE business_id=a;
     RAISE EXCEPTION 'audit edit accepted';
   EXCEPTION WHEN raise_exception THEN IF SQLERRM <> 'Ops history is append-only' THEN RAISE; END IF; END;
-  INSERT INTO marketing_snapshots(business_id,project_id,revision,payload,imported_by) VALUES(a,p,1,'{}',u);
+  PERFORM marketing_bind(a,p,'fixture-tenant',u,gen_random_uuid()); -- 0009: snapshots need the active binding version
+  INSERT INTO marketing_snapshots(business_id,project_id,revision,binding_version,payload,imported_by) VALUES(a,p,1,1,'{}',u);
   BEGIN
-    INSERT INTO marketing_snapshots(business_id,project_id,revision,payload,imported_by) VALUES(a,p,1,'{}',u);
+    INSERT INTO marketing_snapshots(business_id,project_id,revision,binding_version,payload,imported_by) VALUES(a,p,1,1,'{}',u);
     RAISE EXCEPTION 'duplicate plan revision accepted';
   EXCEPTION WHEN unique_violation THEN NULL; END;
   BEGIN
@@ -72,7 +81,7 @@ BEGIN
     RAISE EXCEPTION 'snapshot edit accepted';
   EXCEPTION WHEN raise_exception THEN IF SQLERRM <> 'Ops history is append-only' THEN RAISE; END IF; END;
   BEGIN
-    INSERT INTO marketing_snapshots(business_id,project_id,revision,payload,imported_by) VALUES(a,p,0,'{}',u);
+    INSERT INTO marketing_snapshots(business_id,project_id,revision,binding_version,payload,imported_by) VALUES(a,p,0,1,'{}',u);
     RAISE EXCEPTION 'older revision accepted';
   EXCEPTION WHEN raise_exception THEN IF SQLERRM <> 'stale_or_conflicting_revision' THEN RAISE; END IF; END;
   RAISE NOTICE 'PASS: composite project FKs present and enforced, duplicate claims, project/receipt isolation, append-only rollback receipts, immutable claims/audit/snapshots, unique revisions';

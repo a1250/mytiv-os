@@ -17,7 +17,10 @@ import {
   uniqueIndex,
   index,
   foreignKey,
+  primaryKey,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Tenancy
@@ -999,10 +1002,143 @@ export const marketingSnapshots = pgTable('marketing_snapshots', {
   businessId: uuid('business_id').notNull().references(() => businesses.id),
   projectId: uuid('project_id').notNull().references(() => projects.id),
   revision: integer('revision').notNull(),
+  // T-2.3: the binding version the plan was imported under; revisions restart at 1 per version (D2).
+  bindingVersion: integer('binding_version').notNull(),
   payload: jsonb('payload').notNull(),
   importedBy: uuid('imported_by').notNull().references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex('marketing_snapshot_revision_uq').on(t.businessId, t.projectId, t.revision),
+}, (t) => [uniqueIndex('marketing_snapshot_binding_revision_uq').on(t.businessId, t.projectId, t.bindingVersion, t.revision),
   foreignKey({ columns: [t.businessId, t.projectId], foreignColumns: [projects.businessId, projects.id] }),
   foreignKey({ columns: [t.businessId, t.importedBy], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
 ]);
+
+// Marketing tenant binding (owner decision D2): the database is the ONLY runtime source of truth for
+// which marketing-os tenant a (business, project) is bound to. `marketing_binding_events` is the
+// append-only log (bind / revoke, each with its binding_version, actor and request id);
+// `marketing_bindings` is the one current row per (business, project), which a trigger allows to change
+// only in lock-step with the latest event. Writes go through the `marketing_bind` / `marketing_revoke`
+// SQL functions (migration 0008): serialized per (business, project), owner-only, audited.
+export const marketingBindingEvents = pgTable('marketing_binding_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  event: text('event').notNull(),
+  bindingVersion: integer('binding_version').notNull(),
+  marketingBusiness: text('marketing_business').notNull(),
+  actorId: uuid('actor_id').notNull().references(() => users.id),
+  requestId: uuid('request_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('marketing_binding_event_version_uq').on(t.businessId, t.projectId, t.bindingVersion, t.event),
+  uniqueIndex('marketing_binding_event_request_uq').on(t.businessId, t.requestId),
+  foreignKey({ columns: [t.businessId, t.projectId], foreignColumns: [projects.businessId, projects.id] }),
+  foreignKey({ columns: [t.businessId, t.actorId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  check('marketing_binding_event_kind', sql`${t.event} in ('bind', 'revoke')`),
+  check('marketing_binding_event_version_positive', sql`${t.bindingVersion} >= 1`),
+  check('marketing_binding_event_slug', sql`${t.marketingBusiness} ~ '^[a-z0-9][a-z0-9-]*$'`),
+]);
+export const marketingBindings = pgTable('marketing_bindings', {
+  businessId: uuid('business_id').notNull().references(() => businesses.id),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  marketingBusiness: text('marketing_business').notNull(),
+  bindingVersion: integer('binding_version').notNull(),
+  revoked: boolean('revoked').notNull().default(false),
+  updatedBy: uuid('updated_by').notNull().references(() => users.id),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.businessId, t.projectId] }),
+  foreignKey({ columns: [t.businessId, t.projectId], foreignColumns: [projects.businessId, projects.id] }),
+  foreignKey({ columns: [t.businessId, t.updatedBy], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  check('marketing_binding_version_positive', sql`${t.bindingVersion} >= 1`),
+  check('marketing_binding_slug', sql`${t.marketingBusiness} ~ '^[a-z0-9][a-z0-9-]*$'`),
+]);
+
+// Marketing data model (T-3.1). Engine → app artifacts are append-only projections, numbered per
+// (business, project, kind, binding_version) by `marketing_import_artifact` (migration 0010); app → engine
+// records (decisions, evidence) are written once, under the ACTIVE binding version, against the source
+// artifact the human saw — afterwards only `exported_at` (once) and `reconciled_state` may change.
+export const marketingArtifacts = pgTable('marketing_artifacts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  kind: text('kind').notNull(),
+  bindingVersion: integer('binding_version').notNull(),
+  revision: integer('revision').notNull(),
+  sourceRevision: text('source_revision').notNull(),
+  asOf: timestamp('as_of', { withTimezone: true }).notNull(),
+  contentHash: text('content_hash').notNull(),
+  payload: jsonb('payload').notNull(),
+  importedBy: uuid('imported_by').notNull().references(() => users.id),
+  requestId: uuid('request_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('marketing_artifact_revision_uq').on(t.businessId, t.projectId, t.kind, t.bindingVersion, t.revision),
+  uniqueIndex('marketing_artifact_business_id_uq').on(t.businessId, t.id),
+  uniqueIndex('marketing_artifact_request_uq').on(t.businessId, t.requestId),
+  foreignKey({ columns: [t.businessId, t.projectId], foreignColumns: [projects.businessId, projects.id] }),
+  foreignKey({ columns: [t.businessId, t.importedBy], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  check('marketing_artifact_kind', sql`${t.kind} in ('C2a','C3a','C4','C5','C7','C8','C9','C10','C11','C12','C13','C14')`),
+  check('marketing_artifact_versions_positive', sql`${t.bindingVersion} >= 1 and ${t.revision} >= 1`),
+  check('marketing_artifact_hash', sql`${t.contentHash} ~ '^[a-f0-9]{64}$'`),
+]);
+export const marketingDecisions = pgTable('marketing_decisions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  bindingVersion: integer('binding_version').notNull(),
+  sourceArtifactId: uuid('source_artifact_id').notNull(),
+  approvalId: text('approval_id').notNull(),
+  contentHash: text('content_hash').notNull(),
+  decision: text('decision').notNull(),
+  note: text('note').notNull(),
+  decidedBy: uuid('decided_by').notNull().references(() => users.id),
+  requestId: uuid('request_id').notNull(),
+  decidedAt: timestamp('decided_at', { withTimezone: true }).notNull().defaultNow(),
+  exportedAt: timestamp('exported_at', { withTimezone: true }),
+  reconciledState: text('reconciled_state'),
+}, (t) => [uniqueIndex('marketing_decision_request_uq').on(t.businessId, t.requestId),
+  uniqueIndex('marketing_decision_item_uq').on(t.businessId, t.projectId, t.bindingVersion, t.approvalId, t.contentHash),
+  foreignKey({ columns: [t.businessId, t.projectId], foreignColumns: [projects.businessId, projects.id] }),
+  foreignKey({ columns: [t.businessId, t.decidedBy], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  foreignKey({ columns: [t.businessId, t.sourceArtifactId], foreignColumns: [marketingArtifacts.businessId, marketingArtifacts.id] }),
+  check('marketing_decision_kind', sql`${t.decision} in ('approved','rejected')`),
+  check('marketing_decision_note', sql`length(btrim(${t.note})) >= 1`),
+  check('marketing_decision_hash', sql`${t.contentHash} ~ '^[a-f0-9]{64}$'`),
+  check('marketing_decision_reconciled', sql`${t.reconciledState} is null or ${t.reconciledState} in ('awaiting','open','applied','stale','conflict','expired','missing','unreviewed','resolved')`),
+]);
+export const marketingEvidence = pgTable('marketing_evidence', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  bindingVersion: integer('binding_version').notNull(),
+  kind: text('kind').notNull(),
+  sourceArtifactId: uuid('source_artifact_id'),
+  targetId: text('target_id').notNull(),
+  approvalId: text('approval_id'),
+  preconditionHash: text('precondition_hash').notNull(),
+  reviewedBy: uuid('reviewed_by').references(() => users.id),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  payload: jsonb('payload').notNull(),
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  requestId: uuid('request_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  exportedAt: timestamp('exported_at', { withTimezone: true }),
+  reconciledState: text('reconciled_state'),
+}, (t) => [uniqueIndex('marketing_evidence_request_uq').on(t.businessId, t.requestId),
+  foreignKey({ columns: [t.businessId, t.projectId], foreignColumns: [projects.businessId, projects.id] }),
+  foreignKey({ columns: [t.businessId, t.createdBy], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  foreignKey({ columns: [t.businessId, t.reviewedBy], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  foreignKey({ columns: [t.businessId, t.sourceArtifactId], foreignColumns: [marketingArtifacts.businessId, marketingArtifacts.id] }),
+  check('marketing_evidence_kind', sql`${t.kind} in ('publish_evidence','brain_proposal','outcome_evidence','execution_receipt')`),
+  check('marketing_evidence_hash', sql`${t.preconditionHash} ~ '^[a-f0-9]{64}$'`),
+  check('marketing_evidence_review', sql`${t.kind} = 'brain_proposal' or (${t.reviewedBy} is not null and ${t.reviewedAt} is not null)`),
+  check('marketing_evidence_receipt_link', sql`${t.kind} <> 'execution_receipt' or (${t.approvalId} is not null and ${t.sourceArtifactId} is not null)`),
+  check('marketing_evidence_reconciled', sql`${t.reconciledState} is null or ${t.reconciledState} in ('awaiting','open','applied','stale','conflict','expired','missing','unreviewed','resolved')`),
+]);
+/** GPT review P1-2 (round 2): a request id whose import is known NOT to have been written. Inserted only by
+ *  marketing_import_readback() while holding the request's advisory lock; every artifact insert takes the same
+ *  lock and refuses a fenced request id — so an in-flight or delayed original can never commit afterwards, and a
+ *  `written: false` readback is definitive. Append-only. */
+export const marketingImportFences = pgTable('marketing_import_fences', {
+  businessId: uuid('business_id').notNull().references(() => businesses.id),
+  requestId: uuid('request_id').notNull(),
+  fencedBy: uuid('fenced_by').notNull().references(() => users.id),
+  fencedAt: timestamp('fenced_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.businessId, t.requestId] })]);

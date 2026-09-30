@@ -5,6 +5,8 @@ vi.mock('server-only', () => ({}));
 vi.mock('../lib/api-guard', () => ({ guard: mocks.guard, ApiGuardError: class extends Error { response = NextResponse.json({ error: 'unauthorized' }, { status: 401 }); } }));
 vi.mock('../lib/db/queries/projects', () => ({ getProject: mocks.project }));
 vi.mock('../lib/db', () => ({ db: { insert: mocks.insert } }));
+// Reconciliation gating (MKT-GOV06) is exercised end to end in tests/rollback.vitest.ts; here no item is open.
+vi.mock('../lib/ops-reconciliation', () => ({ openReconciliationOn: async () => null }));
 import { PATCH } from '../app/api/[businessSlug]/ops/tasks/[taskId]/route';
 import { POST } from '../app/api/[businessSlug]/ops/chat/confirm/route';
 import { auditedAction } from '../lib/ops-audit';

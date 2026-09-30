@@ -9,7 +9,40 @@
         {
           "approval_id": "a1",
           "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "state": "pending"
+          "state": "pending",
+          "title": "Activate spring campaign",
+          "why": "Fill mid-week events capacity",
+          "action_type": "campaign_activate",
+          "action_class": "RED",
+          "facts_cited": [
+            "brain/offers.yaml#spring"
+          ],
+          "qa_verdict": "NOT_RUN",
+          "rollback_note": "Pause the campaign (build_state back to paused)."
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "items": [
+        {
+          "approval_id": "a2",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "state": "applied",
+          "title": "Activate spring campaign",
+          "why": "Fill mid-week events capacity",
+          "action_type": "campaign_activate",
+          "action_class": "RED",
+          "facts_cited": [
+            "brain/offers.yaml#spring"
+          ],
+          "qa_verdict": "PASS",
+          "rollback_note": "Pause the campaign (build_state back to paused).",
+          "requested_change": "Activate campaign c1 (paused build)",
+          "diff_summary": "build_state: paused -> active"
         }
       ]
     }
@@ -24,7 +57,16 @@
         {
           "approval_id": "a1",
           "content_hash": "deadbeef",
-          "state": "pending"
+          "state": "pending",
+          "title": "Activate spring campaign",
+          "why": "Fill mid-week events capacity",
+          "action_type": "campaign_activate",
+          "action_class": "RED",
+          "facts_cited": [
+            "brain/offers.yaml#spring"
+          ],
+          "qa_verdict": "NOT_RUN",
+          "rollback_note": "Pause the campaign (build_state back to paused)."
         }
       ]
     },
@@ -37,7 +79,16 @@
         {
           "approval_id": "a1",
           "content_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-          "state": "pending"
+          "state": "pending",
+          "title": "Activate spring campaign",
+          "why": "Fill mid-week events capacity",
+          "action_type": "campaign_activate",
+          "action_class": "RED",
+          "facts_cited": [
+            "brain/offers.yaml#spring"
+          ],
+          "qa_verdict": "NOT_RUN",
+          "rollback_note": "Pause the campaign (build_state back to paused)."
         }
       ]
     },
@@ -50,7 +101,16 @@
         {
           "approval_id": "a1",
           "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "state": "bogus"
+          "state": "bogus",
+          "title": "Activate spring campaign",
+          "why": "Fill mid-week events capacity",
+          "action_type": "campaign_activate",
+          "action_class": "RED",
+          "facts_cited": [
+            "brain/offers.yaml#spring"
+          ],
+          "qa_verdict": "NOT_RUN",
+          "rollback_note": "Pause the campaign (build_state back to paused)."
         }
       ]
     },
@@ -63,7 +123,81 @@
         {
           "approval_id": "a1",
           "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "state": "pending"
+          "state": "pending",
+          "title": "Activate spring campaign",
+          "why": "Fill mid-week events capacity",
+          "action_type": "campaign_activate",
+          "action_class": "RED",
+          "facts_cited": [
+            "brain/offers.yaml#spring"
+          ],
+          "qa_verdict": "NOT_RUN",
+          "rollback_note": "Pause the campaign (build_state back to paused)."
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "items": [
+        {
+          "approval_id": "a1",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "state": "pending",
+          "why": "Fill mid-week events capacity",
+          "action_type": "campaign_activate",
+          "action_class": "RED",
+          "facts_cited": [
+            "brain/offers.yaml#spring"
+          ],
+          "qa_verdict": "NOT_RUN",
+          "rollback_note": "Pause the campaign (build_state back to paused)."
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "items": [
+        {
+          "approval_id": "a1",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "state": "pending",
+          "title": "Activate spring campaign",
+          "why": "Fill mid-week events capacity",
+          "action_type": "campaign_activate",
+          "action_class": "ORANGE",
+          "facts_cited": [
+            "brain/offers.yaml#spring"
+          ],
+          "qa_verdict": "NOT_RUN",
+          "rollback_note": "Pause the campaign (build_state back to paused)."
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "sourceRevision": "rev-1",
+      "asOf": "2026-01-01T00:00:00.000Z",
+      "marketingBusiness": "demo-biz",
+      "items": [
+        {
+          "approval_id": "a1",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "state": "pending",
+          "title": "Activate spring campaign",
+          "why": "Fill mid-week events capacity",
+          "action_type": "campaign_activate",
+          "action_class": "RED",
+          "facts_cited": [
+            "brain/offers.yaml#spring"
+          ],
+          "qa_verdict": "MAYBE",
+          "rollback_note": "Pause the campaign (build_state back to paused)."
         }
       ]
     }

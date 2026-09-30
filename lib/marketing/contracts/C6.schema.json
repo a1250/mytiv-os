@@ -64,6 +64,9 @@
         },
         "app_request_id": {
           "$ref": "#/definitions/C6/properties/task_id"
+        },
+        "approval_id": {
+          "$ref": "#/definitions/C6/properties/task_id"
         }
       },
       "required": [

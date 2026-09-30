@@ -41,14 +41,65 @@
                   "pending",
                   "approved",
                   "rejected",
-                  "expired"
+                  "expired",
+                  "applied"
                 ]
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "why": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action_type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action_class": {
+                "type": "string",
+                "enum": [
+                  "GREEN",
+                  "YELLOW",
+                  "RED"
+                ]
+              },
+              "requested_change": {
+                "type": "string"
+              },
+              "diff_summary": {
+                "type": "string"
+              },
+              "facts_cited": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "qa_verdict": {
+                "type": "string",
+                "enum": [
+                  "PASS",
+                  "BLOCKED",
+                  "NOT_RUN"
+                ]
+              },
+              "rollback_note": {
+                "type": "string"
               }
             },
             "required": [
               "approval_id",
               "content_hash",
-              "state"
+              "state",
+              "title",
+              "why",
+              "action_type",
+              "action_class",
+              "facts_cited",
+              "qa_verdict",
+              "rollback_note"
             ],
             "additionalProperties": false
           }
