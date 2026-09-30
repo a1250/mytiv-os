@@ -15,6 +15,13 @@ PGHOST=/tmp PGPORT=55432 PGUSER=postgres ITEST_DB=itest ITEST_CONFIRM_DROP=itest
   ITEST_PG_MODULE=/path/to/node_modules/pg tests/db-integration/run.sh   # `pg` is not a mytiv-os dependency
 ```
 
+## Import crash-safety (`import-replay.itest.ts`, GPT review P1-1)
+
+Drives the real artifact-import route and `auditedAction` on the local database and injects failures with
+temporary triggers (dropped after each test): reconciliation failing after the insert, the terminal audit event
+failing after the insert ("process died"), and an unknown write outcome. The exact replay of the request must
+converge to one artifact, correct reconciliation and a truthful audit; a conflicting reuse of the id is refused.
+
 ## Engine ↔ app round trip (`roundtrip.itest.ts`)
 
 Skipped unless `RT_ENGINE_DIR` points at a **marketing-os checkout** (its `node_modules` installed). It seeds a

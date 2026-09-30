@@ -104,7 +104,9 @@ if (process.env.MODULE_DISABLED === "1") {
   await check(ownerA, "POST", A("/artifacts"), { status: 400, error: /contract_structure_invalid/ }, write({ bindingVersion: v1, kind: "C2a", payload: { ...c2a, token: "x" } }), "unknown field (strict contract)");
   const impReq = uuid();
   await check(ownerA, "POST", A("/artifacts"), 200, { confirmed: true, requestId: impReq, bindingVersion: v1, kind: "C2a", payload: c2a }, "owner imports C2a");
-  await check(ownerA, "POST", A("/artifacts"), { status: 409, error: "request_already_claimed_check_audit_before_retry" }, { confirmed: true, requestId: impReq, bindingVersion: v1, kind: "C2a", payload: c2a }, "replayed import request");
+  const replay = await check(ownerA, "POST", A("/artifacts"), 200, { confirmed: true, requestId: impReq, bindingVersion: v1, kind: "C2a", payload: c2a }, "exact replay of the import converges (readback, P1-1)");
+  fact("exact replay returns the same artifact (replayed, revision 1), never a second one", replay.json?.replayed === true && replay.json?.revision === 1, JSON.stringify(replay.json));
+  await check(ownerA, "POST", A("/artifacts"), { status: 409, error: "request_already_claimed_check_audit_before_retry" }, { confirmed: true, requestId: impReq, bindingVersion: v1, kind: "C2a", payload: { ...c2a, asOf: now(500) } }, "same request id, different payload → refused");
   await check(ownerA, "POST", A("/artifacts"), 200, write({ bindingVersion: v1, kind: "C7", payload: c7 }), "owner imports C7");
   const arts = (await check(memberA, "GET", A("/artifacts"), 200, null, "member lists latest artifacts")).json?.artifacts ?? [];
   const idOf = (kind) => arts.find((a) => a.kind === kind)?.id;
