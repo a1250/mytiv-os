@@ -28,7 +28,7 @@ const KIND: Record<string, EngineArtifactKind> = {
   approvals: 'C2a', brain: 'C3a', workboard: 'C7', 'weekly-priorities': 'C8', 'ingest-manifest': 'C9', campaigns: 'C12', 'monthly-plan': 'C14',
 };
 type Row = Record<string, unknown>;
-type Seed = { tenant: string; slug: string; taskId: string; dod: string[]; publish: string; campaign: string; rejectMe: string; staleMe: string };
+type Seed = { tenant: string; slug: string; taskId: string; dod: string[]; publish: string; campaign: string; rejectMe: string; staleMe: string; rejectCamp: string };
 
 function engine(script: string, args: string[]) {
   const r = spawnSync('npx', ['tsx', script, ...args], { cwd: ENGINE, encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' } });
@@ -103,7 +103,7 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     const plan = validateMarketingPlan(all.plan, binding.marketingBusiness);
     await importPlan(ids.a, ids.p, ids.owner, plan, binding);
     const queue = (await latestArtifact(ids.a, ids.p, binding, 'C2a'))!.payload;
-    expect(queue.items.map((i) => i.state)).toEqual(['pending', 'pending', 'pending', 'pending']);
+    expect(queue.items.map((i) => i.state)).toEqual(['pending', 'pending', 'pending', 'pending', 'pending']);
     for (const i of queue.items) pendingHash.set(i.approval_id, i.content_hash);
     const brain = (await latestArtifact(ids.a, ids.p, binding, 'C3a'))!.payload;
     expect(Object.keys(brain.field_verification)).toContain('hours.yaml:kitchen_last_order_minutes_before_close'); // engine separator
@@ -117,6 +117,7 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     const camp = await decide(seed.campaign, 'approved');
     const rej = await decide(seed.rejectMe, 'rejected');
     const stale = await decide(seed.staleMe, 'approved');
+    const rejCamp = await decide(seed.rejectCamp, 'rejected');
     const c2b = await exported('decision', pub.id);
     let r = apply('apply-decisions', c2b);
     expect(r.code, r.err).toBe(0);
@@ -128,7 +129,7 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     expect([r.code, r.err]).toEqual([1, expect.stringContaining('approval.decision_conflict')]); // the first decision stands
     r = apply('apply-decisions', { ...(await exported('decision', camp.id)), marketingBusiness: 'other-biz' });
     expect([r.code, r.err]).toEqual([1, expect.stringContaining('approval.decision_tenant_mismatch')]);
-    for (const d of [camp, rej]) { r = apply('apply-decisions', await exported('decision', d.id)); expect(r.code, r.err).toBe(0); }
+    for (const d of [camp, rej, rejCamp]) { r = apply('apply-decisions', await exported('decision', d.id)); expect(r.code, r.err).toBe(0); }
     helper('note', seed.tenant, seed.staleMe); // the engine edits the item after the app's export
     r = apply('apply-decisions', await exported('decision', stale.id));
     expect([r.code, r.err]).toEqual([1, expect.stringContaining('approval.decision_stale')]);
@@ -156,10 +157,21 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     const rc = await recordReceipt(A(), ids.p, binding, { reviewed: true, sourceArtifactId: queue.id, approvalId: seed.campaign, contentHash: item.content_hash, actionType: 'campaign_activation',
       executedBy: 'rt-owner', executedAt: new Date(Date.now() - 60000).toISOString(), evidence: { pack_ref: `packs/${seed.campaign}.md`, external_ref: 'ads-manager-campaign-1' } }, rid());
     const c16 = await exported('receipt', rc.id);
+    // T-12.4b refusals on forged payloads (records the app would never export) — each refused, nothing applied.
+    const refusedWith = (payload: Row, code: string) => { const x = apply('apply-receipts', payload); expect([x.code, x.err]).toEqual([1, expect.stringContaining(code)]); };
+    refusedWith({ ...c16, content_hash: 'f'.repeat(64), app_request_id: randomUUID() }, 'receipt.stale'); // stale linkage
+    refusedWith({ ...c16, marketingBusiness: 'other-biz', app_request_id: randomUUID() }, 'receipt.tenant_mismatch');
     r = apply('apply-receipts', c16);
     expect(r.code, r.err).toBe(0);
     r = apply('apply-receipts', c16); // replay
     expect(r.code, r.err).toBe(0);
+    // T-12.4b refusals. App side: a REJECTED approval has no receipt (the C16 linkage fails closed).
+    const rejected = queue.payload.items.find((i) => i.approval_id === seed.rejectCamp)!;
+    expect(rejected.state).toBe('rejected');
+    await expect(recordReceipt(A(), ids.p, binding, { reviewed: true, sourceArtifactId: queue.id, approvalId: seed.rejectCamp, contentHash: rejected.content_hash, actionType: 'campaign_activation',
+      executedBy: 'rt-owner', executedAt: new Date(Date.now() - 60000).toISOString(), evidence: { pack_ref: `packs/${seed.rejectCamp}.md` } }, rid())).rejects.toThrow('is rejected, not approved');
+    refusedWith({ ...c16, approval_id: seed.rejectCamp, content_hash: rejected.content_hash, app_request_id: randomUUID() }, 'receipt.rejected'); // no pack was ever dispatched
+    refusedWith({ ...c16, app_request_id: randomUUID() }, 'receipt.conflict'); // already applied by a different receipt
 
     await sync('r3');
     const s = await state();
@@ -176,7 +188,12 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
       measurement: { measured_values: [{ metric: 'reservations', value: 12, confidence: 'KNOWN' }] } }, rid())).rejects.toThrow('invalid_dod_criteria');
     const out = await recordOutcome(A(), ids.p, binding, { reviewed: true, sourceArtifactId: board.id, taskId: seed.taskId, dodCriteriaMet: seed.dod,
       measurement: { measured_values: [{ metric: 'reservations', value: 12, confidence: 'KNOWN' }] } }, rid());
-    const r = apply('apply-outcomes', await exported('outcome', out.id));
+    // T-12.4b: publication evidence (C6) submitted as an outcome is refused; nothing changes
+    const c6 = (await listRecords(ids.a, ids.p, binding)).evidence.find((e) => e.kind === 'publish_evidence')!;
+    let r = apply('apply-outcomes', await exported('evidence', c6.id));
+    expect(r.code).toBe(1);
+    expect((await boardTask()).status).toBe('published');
+    r = apply('apply-outcomes', await exported('outcome', out.id));
     expect(r.code, r.err).toBe(0);
     await sync('r4');
     expect((await state()).evidence('outcome_evidence', seed.taskId)).toBe('applied');
@@ -191,7 +208,7 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     let r = apply('apply-proposals', await exported('proposal', pr.id));
     expect(r.code, r.err).toBe(0);
     await sync('r5');
-    expect((await state()).evidence('brain_proposal', `hours.yaml#${FIELD}`)).toBe('awaiting'); // open on the engine
+    expect((await state()).evidence('brain_proposal', `hours.yaml#${FIELD}`)).toBe('open'); // the engine took it in as a pending brain_update
     const brainApproval = (await latestArtifact(ids.a, ids.p, binding, 'C2a'))!.payload.items.find((i) => i.action_type === 'brain_update' && i.state === 'pending')!;
     expect(brainApproval).toBeDefined();
     const d = await decide(brainApproval.approval_id, 'approved');
@@ -207,6 +224,22 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     expect((await queueItem(brainApproval.approval_id))).toMatchObject({ state: 'applied', content_hash: pendingHash.get(brainApproval.approval_id) });
     const brain = (await latestArtifact(ids.a, ids.p, binding, 'C3a'))!.payload;
     expect(brain.values['hours.yaml'][FIELD]).not.toBe(valueHash);
-    expect(readFileSync(path.join(ENGINE!, 'businesses', seed.tenant, 'brain', 'hours.yaml'), 'utf8')).toMatch(new RegExp(`^${FIELD}: 45$`, 'm'));
+    const hours = () => readFileSync(path.join(ENGINE!, 'businesses', seed.tenant, 'brain', 'hours.yaml'), 'utf8');
+    expect(hours()).toMatch(new RegExp(`^${FIELD}: 45$`, 'm'));
+
+    // T-12.4a: the applied brain_update is rolled back on the engine (governed, audited); the next C3a export
+    // carries the original value hash again and the app shows the proposal as closed by the engine.
+    const { auditId } = helper<{ auditId: string }>('brain-audit', seed.tenant, brainApproval.approval_id);
+    r = engine('scripts/rollback.ts', ['--tenant', seed.tenant, auditId]);
+    expect(r.code, r.err).toBe(0);
+    expect(hours()).toMatch(new RegExp(`^${FIELD}: 30$`, 'm'));
+    await sync('r7');
+    expect((await latestArtifact(ids.a, ids.p, binding, 'C3a'))!.payload.values['hours.yaml'][FIELD]).toBe(valueHash);
+    expect((await state()).evidence('brain_proposal', `hours.yaml#${FIELD}`)).toBe('resolved'); // closed by the engine — never "awaiting" again
+
+    // T-12.4a tenant isolation (SEC01): the engine's own audit over the round-trip tenant's published exports
+    r = engine('scripts/audit-tenant-isolation.ts', ['--tenant', seed.tenant]);
+    expect(r.code, r.out).toBe(0);
+    expect(JSON.parse(r.out)).toMatchObject({ slug: seed.slug, finding_count: 0 });
   }, 180000);
 });

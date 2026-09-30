@@ -60,6 +60,7 @@ export function qaVerdictLabel(v: 'PASS' | 'BLOCKED' | 'NOT_RUN'): string {
 export function reconciledLabel(state: string | null): string {
   switch (state) {
     case 'awaiting': return 'ממתין להחלה במנוע';
+    case 'open': return 'פתוח במנוע — ממתין להחלטה על האישור';
     case 'applied': return 'הוחל במנוע';
     case 'stale': return 'התוכן השתנה — הרשומה אינה תקפה עוד';
     case 'conflict': return 'סתירה מול המנוע';

@@ -4014,7 +4014,7 @@
         },
         "marketing_decision_reconciled": {
           "name": "marketing_decision_reconciled",
-          "value": "\"marketing_decisions\".\"reconciled_state\" is null or \"marketing_decisions\".\"reconciled_state\" in ('awaiting','applied','stale','conflict','expired','missing','unreviewed','resolved')"
+          "value": "\"marketing_decisions\".\"reconciled_state\" is null or \"marketing_decisions\".\"reconciled_state\" in ('awaiting','open','applied','stale','conflict','expired','missing','unreviewed','resolved')"
         }
       },
       "isRLSEnabled": false
@@ -4287,7 +4287,7 @@
         },
         "marketing_evidence_reconciled": {
           "name": "marketing_evidence_reconciled",
-          "value": "\"marketing_evidence\".\"reconciled_state\" is null or \"marketing_evidence\".\"reconciled_state\" in ('awaiting','applied','stale','conflict','expired','missing','unreviewed','resolved')"
+          "value": "\"marketing_evidence\".\"reconciled_state\" is null or \"marketing_evidence\".\"reconciled_state\" in ('awaiting','open','applied','stale','conflict','expired','missing','unreviewed','resolved')"
         }
       },
       "isRLSEnabled": false

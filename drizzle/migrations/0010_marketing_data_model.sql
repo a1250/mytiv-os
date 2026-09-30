@@ -35,7 +35,7 @@ CREATE TABLE "marketing_decisions" (
 	CONSTRAINT "marketing_decision_kind" CHECK ("marketing_decisions"."decision" in ('approved','rejected')),
 	CONSTRAINT "marketing_decision_note" CHECK (length(btrim("marketing_decisions"."note")) >= 1),
 	CONSTRAINT "marketing_decision_hash" CHECK ("marketing_decisions"."content_hash" ~ '^[a-f0-9]{64}$'),
-	CONSTRAINT "marketing_decision_reconciled" CHECK ("marketing_decisions"."reconciled_state" is null or "marketing_decisions"."reconciled_state" in ('awaiting','applied','stale','conflict','expired','missing','unreviewed','resolved'))
+	CONSTRAINT "marketing_decision_reconciled" CHECK ("marketing_decisions"."reconciled_state" is null or "marketing_decisions"."reconciled_state" in ('awaiting','open','applied','stale','conflict','expired','missing','unreviewed','resolved'))
 );
 --> statement-breakpoint
 CREATE TABLE "marketing_evidence" (
@@ -60,7 +60,7 @@ CREATE TABLE "marketing_evidence" (
 	CONSTRAINT "marketing_evidence_hash" CHECK ("marketing_evidence"."precondition_hash" ~ '^[a-f0-9]{64}$'),
 	CONSTRAINT "marketing_evidence_review" CHECK ("marketing_evidence"."kind" = 'brain_proposal' or ("marketing_evidence"."reviewed_by" is not null and "marketing_evidence"."reviewed_at" is not null)),
 	CONSTRAINT "marketing_evidence_receipt_link" CHECK ("marketing_evidence"."kind" <> 'execution_receipt' or ("marketing_evidence"."approval_id" is not null and "marketing_evidence"."source_artifact_id" is not null)),
-	CONSTRAINT "marketing_evidence_reconciled" CHECK ("marketing_evidence"."reconciled_state" is null or "marketing_evidence"."reconciled_state" in ('awaiting','applied','stale','conflict','expired','missing','unreviewed','resolved'))
+	CONSTRAINT "marketing_evidence_reconciled" CHECK ("marketing_evidence"."reconciled_state" is null or "marketing_evidence"."reconciled_state" in ('awaiting','open','applied','stale','conflict','expired','missing','unreviewed','resolved'))
 );
 --> statement-breakpoint
 -- Must precede the composite FKs that reference marketing_artifacts(business_id, id).

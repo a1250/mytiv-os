@@ -1101,7 +1101,7 @@ export const marketingDecisions = pgTable('marketing_decisions', {
   check('marketing_decision_kind', sql`${t.decision} in ('approved','rejected')`),
   check('marketing_decision_note', sql`length(btrim(${t.note})) >= 1`),
   check('marketing_decision_hash', sql`${t.contentHash} ~ '^[a-f0-9]{64}$'`),
-  check('marketing_decision_reconciled', sql`${t.reconciledState} is null or ${t.reconciledState} in ('awaiting','applied','stale','conflict','expired','missing','unreviewed','resolved')`),
+  check('marketing_decision_reconciled', sql`${t.reconciledState} is null or ${t.reconciledState} in ('awaiting','open','applied','stale','conflict','expired','missing','unreviewed','resolved')`),
 ]);
 export const marketingEvidence = pgTable('marketing_evidence', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -1130,5 +1130,5 @@ export const marketingEvidence = pgTable('marketing_evidence', {
   check('marketing_evidence_hash', sql`${t.preconditionHash} ~ '^[a-f0-9]{64}$'`),
   check('marketing_evidence_review', sql`${t.kind} = 'brain_proposal' or (${t.reviewedBy} is not null and ${t.reviewedAt} is not null)`),
   check('marketing_evidence_receipt_link', sql`${t.kind} <> 'execution_receipt' or (${t.approvalId} is not null and ${t.sourceArtifactId} is not null)`),
-  check('marketing_evidence_reconciled', sql`${t.reconciledState} is null or ${t.reconciledState} in ('awaiting','applied','stale','conflict','expired','missing','unreviewed','resolved')`),
+  check('marketing_evidence_reconciled', sql`${t.reconciledState} is null or ${t.reconciledState} in ('awaiting','open','applied','stale','conflict','expired','missing','unreviewed','resolved')`),
 ]);

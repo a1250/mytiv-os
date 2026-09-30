@@ -1,5 +1,5 @@
 // Engine-side helper for roundtrip.itest.ts — run with the ENGINE's tsx, cwd = a marketing-os checkout:
-//   npx tsx <this file> seed | transition <tenant> <task> <status> | note <tenant> <approval> | drop <tenant>
+//   npx tsx <this file> seed | transition <tenant> <task> <status> | note <tenant> <approval> | brain-audit <tenant> <approval> | drop <tenant>
 // It only calls the engine's own library functions (the same ones its tests use) on a throwaway tenant
 // copied from the fictional `_fixture-demo` brain; it never touches another tenant. Prints JSON.
 import fs from 'node:fs';
@@ -34,7 +34,8 @@ async function main(): Promise<unknown> {
     const campaign = createApproval(tenant, { ...card, artifact_id: 'art-campaign', action_type: 'campaign_activate', title: 'Activate terrace campaign' }, 'Budget within the approved brief.').id;
     const rejectMe = createApproval(tenant, { ...card, artifact_id: 'art-story', action_type: 'publish_organic_new', title: 'Publish story teaser' }, 'Story teaser.').id;
     const staleMe = createApproval(tenant, { ...card, artifact_id: 'art-promo', action_type: 'campaign_activate', title: 'Activate promo' }, 'Promo.').id;
-    return { tenant, slug: businessSlug(tenant), taskId: task.id, dod, publish, campaign, rejectMe, staleMe };
+    const rejectCamp = createApproval(tenant, { ...card, artifact_id: 'art-weekend', action_type: 'campaign_activate', title: 'Activate weekend campaign' }, 'Weekend budget.').id;
+    return { tenant, slug: businessSlug(tenant), taskId: task.id, dod, publish, campaign, rejectMe, staleMe, rejectCamp };
   }
   const tenant = args[0];
   if (!tenant || !SAFE.test(tenant)) throw new Error(`refusing: not a round-trip tenant: ${tenant}`);
@@ -47,12 +48,18 @@ async function main(): Promise<unknown> {
     addNote(tenant, args[1], 'orchestrator', 'Budget revised after the export.');
     return { ok: true };
   }
+  if (cmd === 'brain-audit') { // the committed brain.updated audit id of an applied brain_update approval (for rollback.ts)
+    const { readAudit } = await lib('audit');
+    const rec = readAudit(tenant).filter((r: { event: string; ref?: string }) => r.event === 'brain.updated' && r.ref === args[1]);
+    if (rec.length !== 1) throw new Error(`expected one brain.updated for ${args[1]}, found ${rec.length}`);
+    return { auditId: rec[0].id };
+  }
   if (cmd === 'drop') {
     fs.rmSync(path.join(BUSINESSES_DIR, tenant), { recursive: true, force: true });
     fs.rmSync(path.join(DATA_DIR, tenant), { recursive: true, force: true });
     return { ok: true };
   }
-  throw new Error(`usage: seed | transition <tenant> <task> <status> | note <tenant> <approval> | drop <tenant>`);
+  throw new Error(`usage: seed | transition <tenant> <task> <status> | note <tenant> <approval> | brain-audit <tenant> <approval> | drop <tenant>`);
 }
 
 main().then((r) => process.stdout.write(JSON.stringify(r)), (e) => { process.stderr.write(String(e instanceof Error ? e.message : e)); process.exit(1); });

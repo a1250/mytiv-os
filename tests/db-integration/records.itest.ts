@@ -106,13 +106,37 @@ test('brain proposals: against the value the human saw; reconciled from the next
   const pr = await recordProposal(A(), ids.p, binding, confirmed(base), rid());
   expect(() => validateArtifact('C3b', pr.payload, binding)).not.toThrow();
   const state = async () => (await pool.query(`SELECT reconciled_state FROM marketing_evidence WHERE id=$1`, [pr.id])).rows[0].reconciled_state;
-  await importArtifact(A(), ids.p, binding, 'C3a', { ...vec('C3a'), open_proposals: [pr.payload] }, rid());
+  const stateOf = async (id: string) => (await pool.query(`SELECT reconciled_state FROM marketing_evidence WHERE id=$1`, [id])).rows[0].reconciled_state;
+  const c3a = (values: string, open: unknown[] = []) => importArtifact(A(), ids.p, binding, 'C3a', { ...vec('C3a'), values: { 'hours.yaml': { 'weekly.sun': values } }, open_proposals: open }, rid());
+  await c3a(H); // exported but not taken in by the engine yet
   expect(await state()).toBe('awaiting');
-  // still open in the engine even though the value already moved (e.g. another change) → still awaiting
-  await importArtifact(A(), ids.p, binding, 'C3a', { ...vec('C3a'), values: { 'hours.yaml': { 'weekly.sun': H2 } }, open_proposals: [pr.payload] }, rid());
-  expect(await state()).toBe('awaiting');
-  await importArtifact(A(), ids.p, binding, 'C3a', { ...vec('C3a'), values: { 'hours.yaml': { 'weekly.sun': H2 } } }, rid());
+  await c3a(H, [pr.payload]); // the engine took it in: an open brain_update approval
+  expect(await state()).toBe('open');
+  await c3a(H2, [pr.payload]); // still open even though the value already moved (another change) → still open
+  expect(await state()).toBe('open');
+  await c3a(H2); // closed by the engine and the value moved → resolved
   expect(await state()).toBe('resolved');
+  await c3a(H); // later the value is back (e.g. the change was rolled back) → still closed, never "awaiting" again
+  expect(await state()).toBe('resolved');
+  // a second proposal the engine never took in, whose value moved in the meantime → stale (the engine refuses it)
+  const src2 = (await latestArtifact(ids.a, ids.p, binding, 'C3a'))!;
+  const pr2 = await recordProposal(A(), ids.p, binding, confirmed({ ...base, sourceArtifactId: src2.id, valueHash: H, new: '10-21' }), rid());
+  await c3a(H);
+  expect(await stateOf(pr2.id)).toBe('awaiting');
+  await c3a(H2);
+  expect(await stateOf(pr2.id)).toBe('stale');
+  await c3a(H); // value back before the engine ever saw it → awaiting again (it can still be taken in)
+  expect(await stateOf(pr2.id)).toBe('awaiting');
+  // the engine's open_proposals shape: value_hash = hash of the NEW value, app_request_id = the approval id —
+  // matched on the engine's proposal identity (file, path, canonical new, reason); a different `new` never matches
+  const engineShaped = (p: Record<string, unknown>, over: Record<string, unknown> = {}) => ({ ...p, value_hash: 'c'.repeat(64), app_request_id: 'apr_x', proposed_by: 'engine-producer', ...over });
+  await c3a(H, [engineShaped(pr2.payload, { new: '09-21' })]);
+  expect(await stateOf(pr2.id)).toBe('awaiting');
+  // open → closed with the value unchanged (rejected, or applied then rolled back) → resolved
+  await c3a(H, [engineShaped(pr2.payload)]);
+  expect(await stateOf(pr2.id)).toBe('open');
+  await c3a(H);
+  expect(await stateOf(pr2.id)).toBe('resolved');
 });
 
 test('publish evidence + outcomes: attested, safe refs, published-only outcomes, DoD criteria from the task; reconciled from C7', async () => {

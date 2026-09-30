@@ -97,7 +97,7 @@ function toStored<K extends EngineArtifactKind>(row: typeof marketingArtifacts.$
 
 // ── reconciliation: the next matching engine artifact tells the app what became of each record ──
 
-export type ReconciledState = 'awaiting' | 'applied' | 'stale' | 'conflict' | 'expired' | 'missing' | 'unreviewed' | 'resolved';
+export type ReconciledState = 'awaiting' | 'open' | 'applied' | 'stale' | 'conflict' | 'expired' | 'missing' | 'unreviewed' | 'resolved';
 
 /** C2b decision vs the next C2a: was the decision applied, is it still awaited, or did the item move on? */
 export function decisionState(d: { approvalId: string; contentHash: string; decision: string }, queue: ApprovalQueueExport): ReconciledState {
@@ -126,12 +126,26 @@ export function taskEvidenceState(kind: 'publish_evidence' | 'outcome_evidence',
   if (kind === 'publish_evidence' && task.evidence_state === 'applied') return 'applied';
   return 'awaiting';
 }
-/** C3b proposal vs the next C3a: open → awaiting; closed and the value moved → resolved; else awaiting. */
-export function proposalState(p: BrainChangeProposal, status: BrainStatusExport): ReconciledState {
-  const open = status.open_proposals.some((o) => o.file === p.file && o.path === p.path && o.value_hash === p.value_hash);
-  if (open) return 'awaiting';
+/**
+ * C3b proposal vs the next C3a. C3a says only whether the proposal is OPEN in the engine (a pending
+ * brain_update approval for the same proposal) and the field's current value hash, so the
+ * previous state carries what earlier exports showed:
+ *   - open in this export                           → open      (the engine took it in; awaiting the decision)
+ *   - not open, and it WAS open / resolved before   → resolved  (closed by the engine: applied, rejected or
+ *                                                                 applied-then-rolled-back — the value may be back)
+ *   - never seen open, and the value has moved      → stale     (changed before the engine took it in; the
+ *                                                                 engine refuses a stale proposal)
+ *   - never seen open, value unchanged              → awaiting  (not taken in yet)
+ */
+export function proposalState(p: BrainChangeProposal, status: BrainStatusExport, prev: ReconciledState | string | null = null): ReconciledState {
+  // "Open" = the engine holds this proposal as a pending brain_update. Matched on the engine's own proposal
+  // identity (marketing-os apply-proposals replay check: file, path, canonical `new`, reason) — NOT on
+  // value_hash / app_request_id, which the engine's open_proposals fill with the hash of the NEW value and the
+  // approval id (C3b uses the hash of the value the proposer saw and the app's request id).
+  if (status.open_proposals.some((o) => o.file === p.file && o.path === p.path && o.reason === p.reason && canonicalHash(o.new) === canonicalHash(p.new))) return 'open';
+  if (prev === 'open' || prev === 'resolved') return 'resolved';
   const current = status.values[p.file]?.[p.path];
-  return current !== undefined && current !== p.value_hash ? 'resolved' : 'awaiting';
+  return current !== undefined && current !== p.value_hash ? 'stale' : 'awaiting';
 }
 
 async function reconcile(businessId: string, projectId: string, binding: MarketingBinding, kind: EngineArtifactKind, payload: unknown): Promise<number> {
@@ -158,7 +172,7 @@ async function reconcile(businessId: string, projectId: string, binding: Marketi
   } else if (kind === 'C3a') {
     const status = payload as BrainStatusExport;
     for (const e of await db.select().from(marketingEvidence).where(and(scope(marketingEvidence), eq(marketingEvidence.kind, 'brain_proposal')))) {
-      const next = proposalState(e.payload as BrainChangeProposal, status);
+      const next = proposalState(e.payload as BrainChangeProposal, status, e.reconciledState);
       if (next !== e.reconciledState) { await db.update(marketingEvidence).set({ reconciledState: next }).where(eq(marketingEvidence.id, e.id)); changed++; }
     }
   }
