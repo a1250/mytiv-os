@@ -37,7 +37,7 @@ export function PlanView({ monthly, weekly, board }: { monthly: MonthlyPlan | nu
       <h2 id="plan-board" className="text-lg font-semibold">לוח העבודה</h2>
       {!board ? <p className="bg-card border-border mt-3 rounded-xl border p-5">טרם יובא לוח עבודה.</p> : <>
         <p className="text-muted-foreground mt-1 text-xs">נכון ל־{board.as_of.slice(0, 16).replace('T', ' ')} · מקור {board.sourceRevision} · הסטטוס והשלמה הם של המנוע</p>
-        <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="text-muted-foreground text-xs">
+        <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[720px] text-sm [&_th]:px-2 [&_td]:px-2"><thead><tr className="text-muted-foreground text-xs">
           <th className="text-start">משימה</th><th className="text-start">סטטוס</th><th className="text-start">אחראי</th><th className="text-start">יעד</th><th className="text-start">הגדרת סיום</th><th className="text-start">חסמים</th><th className="text-start">השלמה</th><th className="text-start">ראיה</th>
         </tr></thead><tbody>{tasks.map((t) => <tr key={t.task_id} data-task-id={t.task_id} className="border-border border-t align-top">
           <td className="py-2" dir="ltr">{t.task_id}</td>

@@ -11,7 +11,7 @@ export function IntegrationsView({ integrations }: { integrations: IntegrationSt
   if (!integrations) return <p className="bg-card border-border rounded-xl border p-6">טרם יובא מצב האינטגרציות.</p>;
   return <section className="space-y-3">
     <p className="text-muted-foreground text-xs">נכון ל־{integrations.asOf.slice(0, 10)} · מקור {integrations.sourceRevision}</p>
-    <table className="w-full text-sm"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">אינטגרציה</th><th className="text-start">סיווג</th><th className="text-start">מצב</th><th className="text-start">אומת</th></tr></thead>
+    <table className="w-full text-sm [&_th]:px-2 [&_td]:px-2"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">אינטגרציה</th><th className="text-start">סיווג</th><th className="text-start">מצב</th><th className="text-start">אומת</th></tr></thead>
       <tbody>{integrations.integrations.map((i) => <tr key={i.id} className="border-border border-t">
         <td className="py-2">{i.name} <span className="text-muted-foreground text-xs" dir="ltr">({i.id})</span></td><td>{CLASS_LABEL[i.class]}</td>
         <td>{i.status === 'verified' ? 'מאומת' : 'לא מאומת'}</td>
@@ -29,7 +29,7 @@ export function SkillsView({ skills }: { skills: SkillsStatus | null }) {
   return <section className="space-y-3">
     <p className="text-muted-foreground text-xs">נכון ל־{skills.asOf.slice(0, 10)} · קידום מיומנות נעשה רק במנוע, בהחלטה מפורשת של הבעלים.</p>
     {skills.skills.length === 0 ? <p>אין מיומנויות רשומות.</p> :
-      <table className="w-full text-sm"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">מיומנות</th><th className="text-start">שלב</th><th className="text-start">דוגמאות זהב</th><th className="text-start">ציון הרצה חוזרת</th></tr></thead>
+      <table className="w-full text-sm [&_th]:px-2 [&_td]:px-2"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">מיומנות</th><th className="text-start">שלב</th><th className="text-start">דוגמאות זהב</th><th className="text-start">ציון הרצה חוזרת</th></tr></thead>
         <tbody>{skills.skills.map((s) => <tr key={s.skill} className="border-border border-t">
           <td className="py-2" dir="ltr">{s.skill}</td><td dir="ltr">{s.status}</td><td className="tabular-nums">{s.golden_count}</td>
           <td className="tabular-nums">{s.last_replay_score === null ? UNKNOWN_VALUE : s.last_replay_score}</td>

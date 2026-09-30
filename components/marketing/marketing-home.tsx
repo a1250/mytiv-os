@@ -34,7 +34,7 @@ export function MarketingHome({ weekly, freshness, kpis, approvalsWaiting }: {
     <section aria-labelledby="mkt-freshness">
       <h2 id="mkt-freshness" className="text-lg font-semibold">עדכניות הנתונים לפי מקור</h2>
       {!freshness ? <p className="bg-card border-border mt-3 rounded-xl border p-5">לא יובא מניפסט קליטה — מצב כל המקורות לא ידוע.</p> :
-        <table className="mt-3 w-full text-sm"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">מקור</th><th className="text-start">מצב</th><th className="text-start">נקלט לאחרונה</th><th className="text-start">שורות</th></tr></thead>
+        <table className="mt-3 w-full text-sm [&_th]:px-2 [&_td]:px-2"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">מקור</th><th className="text-start">מצב</th><th className="text-start">נקלט לאחרונה</th><th className="text-start">שורות</th></tr></thead>
           <tbody>{freshness.sources.map((s) => <tr key={s.source} className="border-border border-t">
             <td className="py-2" dir="ltr">{s.source}</td><td>{freshnessLabel(s.status)}</td><td>{ingestedAt(s.as_of)}</td>
             <td className="tabular-nums">{s.status === 'UNKNOWN' ? UNKNOWN_VALUE : s.rows}</td>

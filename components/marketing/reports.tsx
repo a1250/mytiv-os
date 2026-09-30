@@ -16,7 +16,7 @@ export function ReportsView({ kpis, monthly }: { kpis: KpiSnapshot | null; month
       <h2 id="rpt-weekly" className="text-lg font-semibold">דוח ביצועים שבועי</h2>
       {!kpis ? <p className="bg-card border-border mt-3 rounded-xl border p-5">לא יובאה תמונת מדדים. אין דוח — ולא אפסים.</p> : <>
         <p className="text-muted-foreground mt-1 text-xs">נכון ל־{kpis.as_of.slice(0, 10)} · מקור {kpis.sourceRevision}</p>
-        <table className="mt-3 w-full text-sm"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">מדד</th><th className="text-start">ערך</th><th className="text-start">רמת ייחוס</th><th className="text-start">ודאות</th><th className="text-start">מקור</th></tr></thead>
+        <table className="mt-3 w-full text-sm [&_th]:px-2 [&_td]:px-2"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">מדד</th><th className="text-start">ערך</th><th className="text-start">רמת ייחוס</th><th className="text-start">ודאות</th><th className="text-start">מקור</th></tr></thead>
           <tbody>{kpis.kpis.map((k) => <tr key={k.kpi} className="border-border border-t">
             <td className="py-2" dir="ltr">{k.kpi}</td><td className="tabular-nums">{metricValue(k.value, k.confidence)}</td>
             <td>{tierLabel(k.tier)}</td><td>{confidenceLabel(k.confidence)}</td><td dir="ltr">{k.source}</td>
@@ -35,7 +35,7 @@ export function ReportsView({ kpis, monthly }: { kpis: KpiSnapshot | null; month
       {!monthly ? <p className="bg-card border-border mt-3 rounded-xl border p-5">טרם יובאה תוכנית חודשית. אין יעדים להשוואה.</p> : <>
         <p className="text-muted-foreground mt-1 text-xs">חודש {monthly.month} · מקור {monthly.sourceRevision}</p>
         {(monthly.kpi_targets ?? []).length === 0 ? <p className="mt-3 text-sm">בתוכנית החודשית אין יעדי מדדים.</p> :
-          <table className="mt-3 w-full text-sm"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">מדד</th><th className="text-start">יעד</th><th className="text-start">ביצוע</th></tr></thead>
+          <table className="mt-3 w-full text-sm [&_th]:px-2 [&_td]:px-2"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">מדד</th><th className="text-start">יעד</th><th className="text-start">ביצוע</th></tr></thead>
             <tbody>{(monthly.kpi_targets ?? []).map((t) => {
               const actual = kpis?.kpis.find((k) => k.kpi.trim() === t.kpi.trim());
               return <tr key={t.kpi} className="border-border border-t"><td className="py-2" dir="ltr">{t.kpi}</td>

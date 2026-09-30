@@ -87,12 +87,12 @@ export function BrainView({ businessSlug, projectId, bindingVersion, status, pro
   const fields = Object.entries(s.values).flatMap(([file, paths]) => Object.entries(paths).map(([path, valueHash]) => ({ file, path, valueHash })));
   return <section className="space-y-6">
     <p className="text-muted-foreground text-xs">נכון ל־{status.asOf.slice(0, 16).replace('T', ' ')} · מקור {s.sourceRevision}</p>
-    <table className="w-full text-sm"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">קובץ</th><th className="text-start">תקינות הקובץ</th><th className="text-start">אימות</th></tr></thead>
+    <table className="w-full text-sm [&_th]:px-2 [&_td]:px-2"><thead><tr className="text-muted-foreground text-xs"><th className="px-2 text-start">קובץ</th><th className="px-2 text-start">תקינות הקובץ</th><th className="px-2 text-start">אימות</th></tr></thead>
       <tbody>{Object.entries(s.files).map(([file, health]) => {
         const v = brainVerification(file, s.field_verification);
-        return <tr key={file} className="border-border border-t"><td className="py-2" dir="ltr">{file}</td>
-          <td className={health === 'ok' ? undefined : 'text-warning'}>{brainHealthLabel(health)}</td>
-          <td className={v.level === 'VERIFIED' ? undefined : 'text-warning'}>{brainVerificationLabel(v)}</td></tr>;
+        return <tr key={file} className="border-border border-t"><td className="px-2 py-2 text-start" dir="ltr">{file}</td>
+          <td className={`px-2 ${health === 'ok' ? '' : 'text-warning'}`}>{brainHealthLabel(health)}</td>
+          <td className={`px-2 ${v.level === 'VERIFIED' ? '' : 'text-warning'}`}>{brainVerificationLabel(v)}</td></tr>;
       })}</tbody></table>
     <p className="text-muted-foreground text-xs">תקינות הקובץ ואימות הנתונים הם שני ממדים נפרדים. מצב &quot;פג תוקף&quot; (EXPIRED) מוצג כ&quot;לא עדכני&quot; — החוזה C3a אינו מבחין ביניהם.</p>
     <section><h3 className="mb-2 font-semibold">אימות ברמת שדה</h3>

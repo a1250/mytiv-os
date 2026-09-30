@@ -14,7 +14,7 @@ export function LeadsView({ pipeline, consent }: { pipeline: EventsPipelineAggre
       <h2 id="mkt-pipeline" className="text-lg font-semibold">משפך האירועים</h2>
       {!pipeline ? <p className="bg-card border-border mt-3 rounded-xl border p-5">טרם יובא יצוא משפך האירועים. אין נתונים — ולא אפס.</p> : <>
         <p className="text-muted-foreground mt-1 text-xs">נכון ל־{pipeline.as_of.slice(0, 16).replace('T', ' ')} · מקור {pipeline.sourceRevision} · נתונים מצרפיים בלבד</p>
-        <table className="mt-3 w-full text-sm"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">שלב</th><th className="text-start">כמות</th></tr></thead>
+        <table className="mt-3 w-full text-sm [&_th]:px-2 [&_td]:px-2"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">שלב</th><th className="text-start">כמות</th></tr></thead>
           <tbody>{pipeline.stages.map((s) => <tr key={s.stage} className="border-border border-t"><td className="py-2">{STAGE_LABEL[s.stage] ?? s.stage}</td><td className="tabular-nums">{s.count}</td></tr>)}</tbody></table>
         <div className="mt-3 grid grid-cols-3 gap-3">
           <div className="bg-card border-border rounded-xl border px-4 py-3"><div className="text-xl font-bold tabular-nums">{percent(pipeline.quote_rate)}</div><div className="text-muted-foreground text-xs">שיעור הצעות מחיר</div></div>
