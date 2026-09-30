@@ -72,6 +72,8 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     return {
       decision: (approvalId: string) => r.decisions.find((d) => d.approvalId === approvalId)?.reconciledState,
       evidence: (kind: string, targetId: string) => r.evidence.find((e) => e.kind === kind && e.targetId === targetId)?.reconciledState,
+      /** by record id — two records may share a target (e.g. two proposals for the same brain field) */
+      record: (id: string) => r.evidence.find((e) => e.id === id)?.reconciledState,
     };
   };
   const queueItem = async (approvalId: string) => (await latestArtifact(ids.a, ids.p, binding, 'C2a'))!.payload.items.find((i) => i.approval_id === approvalId)!;
@@ -216,8 +218,8 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     const sentC3b = await exported('proposal', pr.id);
     expect((await latestArtifact(ids.a, ids.p, binding, 'C3a'))!.payload.open_proposals).toEqual([sentC3b]);
     expect(sentC3b).toMatchObject({ value_hash: valueHash, binding_version: binding.bindingVersion });
-    expect((await state()).evidence('brain_proposal', `hours.yaml#${FIELD}`)).toBe('open'); // the engine took it in as a pending brain_update
-    expect((await listRecords(ids.a, ids.p, binding)).evidence.find((e) => e.id === twin.id)!.reconciledState).toBe('awaiting'); // never shown as the other request's open proposal
+    expect((await state()).record(pr.id)).toBe('open'); // the engine took it in as a pending brain_update
+    expect((await state()).record(twin.id)).toBe('awaiting'); // never shown as the other request's open proposal
     const brainApproval = (await latestArtifact(ids.a, ids.p, binding, 'C2a'))!.payload.items.find((i) => i.action_type === 'brain_update' && i.state === 'pending')!;
     expect(brainApproval).toBeDefined();
     const d = await decide(brainApproval.approval_id, 'approved');
@@ -228,7 +230,7 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     expect(r.code, r.err).toBe(0);
     await sync('r6');
     const s = await state();
-    expect(s.evidence('brain_proposal', `hours.yaml#${FIELD}`)).toBe('resolved');
+    expect(s.record(pr.id)).toBe('resolved');
     expect(s.decision(brainApproval.approval_id)).toBe('applied');
     expect((await queueItem(brainApproval.approval_id))).toMatchObject({ state: 'applied', content_hash: pendingHash.get(brainApproval.approval_id) });
     const brain = (await latestArtifact(ids.a, ids.p, binding, 'C3a'))!.payload;
@@ -244,7 +246,7 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     expect(hours()).toMatch(new RegExp(`^${FIELD}: 30$`, 'm'));
     await sync('r7');
     expect((await latestArtifact(ids.a, ids.p, binding, 'C3a'))!.payload.values['hours.yaml'][FIELD]).toBe(valueHash);
-    expect((await state()).evidence('brain_proposal', `hours.yaml#${FIELD}`)).toBe('resolved'); // closed by the engine — never "awaiting" again
+    expect((await state()).record(pr.id)).toBe('resolved'); // closed by the engine — never "awaiting" again
 
     // T-12.4a tenant isolation (SEC01): the engine's own audit over the round-trip tenant's published exports
     r = engine('scripts/audit-tenant-isolation.ts', ['--tenant', seed.tenant]);
