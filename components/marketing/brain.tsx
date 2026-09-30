@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { BrainStatusExport } from '@/lib/marketing/contract-rules/c2-c3';
+import type { ApprovalQueueExport, BrainStatusExport } from '@/lib/marketing/contract-rules/c2-c3';
 import { brainHealthLabel, brainVerification, brainVerificationLabel, reconciledLabel } from '@/lib/marketing/view';
 
 type Proposal = { id: string; targetId: string; createdAt: string; exportedAt: string | null; reconciledState: string | null };
@@ -74,12 +74,15 @@ function ProposeForm({ endpoint, bindingVersion, sourceArtifactId, fields }: {
 
 /**
  * M4 Business Brain viewer (T-4.7 · MKT-F09, F10): per-file status and field-level verification from C3a,
- * the engine's open proposals, the proposals recorded here with their engine state, and (writers) a
- * propose-change form. Nothing here writes to the Brain: a proposal becomes a RED approval in the engine.
+ * the app's proposals the engine holds open (C3a open_proposals), the engine's own brain-change approvals
+ * awaiting a decision (pending brain_update items of C2a — they are not C3b proposals), the proposals recorded
+ * here with their engine state, and (writers) a propose-change form. Nothing here writes to the Brain: a
+ * proposal becomes a RED approval in the engine.
  */
-export function BrainView({ businessSlug, projectId, bindingVersion, status, proposals, canWrite }: {
+export function BrainView({ businessSlug, projectId, bindingVersion, status, proposals, canWrite, engineProposals = null }: {
   businessSlug: string; projectId: string; bindingVersion: number;
   status: { id: string; asOf: string; payload: BrainStatusExport } | null; proposals: Proposal[]; canWrite: boolean;
+  engineProposals?: ApprovalQueueExport['items'] | null;
 }) {
   const base = `/api/${businessSlug}/ops/projects/${projectId}/marketing/proposals`;
   if (!status) return <p className="bg-card border-border rounded-xl border p-6">טרם יובא מצב מוח העסק. אין נתונים להצגה.</p>;
@@ -103,8 +106,12 @@ export function BrainView({ businessSlug, projectId, bindingVersion, status, pro
         </li>)}</ul>}
     </section>
     <section><h3 className="mb-2 font-semibold">הצעות פתוחות במנוע</h3>
-      {s.open_proposals.length === 0 ? <p className="text-sm">אין הצעות פתוחות.</p> :
+      {s.open_proposals.length === 0 ? <p className="text-sm">אין הצעות פתוחות שנשלחו מכאן.</p> :
         <ul className="space-y-1 text-sm">{s.open_proposals.map((p) => <li key={`${p.file}#${p.path}#${p.app_request_id}`}><span dir="ltr">{p.file} › {p.path}</span> · {p.reason}</li>)}</ul>}
+      <h4 className="mt-3 mb-1 text-sm font-medium">שינויי מוח שהמנוע הציע וממתינים להחלטה</h4>
+      {engineProposals === null ? <p className="text-muted-foreground text-sm">תור האישורים טרם יובא — לא ידוע.</p>
+        : engineProposals.length === 0 ? <p className="text-sm">אין.</p>
+        : <ul className="space-y-1 text-sm">{engineProposals.map((a) => <li key={a.approval_id}>{a.title}{a.requested_change ? <> · {a.requested_change}</> : null} · <span className="text-muted-foreground">ממתין בתור האישורים</span></li>)}</ul>}
     </section>
     {proposals.length > 0 && <section><h3 className="mb-2 font-semibold">הצעות שנרשמו כאן</h3>
       <ul className="space-y-1 text-sm">{proposals.map((p) => <li key={p.id}><span dir="ltr">{p.targetId}</span> · {p.createdAt.slice(0, 10)} · {reconciledLabel(p.reconciledState)}{p.exportedAt ? ' · יוצא' : ' · טרם יוצא'}

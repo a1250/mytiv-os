@@ -68,6 +68,17 @@ test('writers get the propose form (fields from C3a values); members get none �
   expect(m).not.toContain('/marketing/proposals/pr-1');
 });
 
+test('engine-originated brain changes awaiting a decision come from C2a (not C3a open_proposals)', () => {
+  const item = { approval_id: 'apr_1', content_hash: H, state: 'pending' as const, title: 'Change hours.yaml › weekly.fri', why: 'w', action_type: 'brain_update',
+    action_class: 'RED' as const, requested_change: 'weekly.fri: closed → 10:00–15:00', facts_cited: [], qa_verdict: 'NOT_RUN' as const, rollback_note: 'r' };
+  const h = render({ engineProposals: [item] });
+  expect(h).toContain('Change hours.yaml › weekly.fri');
+  expect(h).toContain('weekly.fri: closed → 10:00–15:00');
+  expect(h).toContain('ממתין בתור האישורים');
+  expect(render({ engineProposals: null })).toContain('תור האישורים טרם יובא');
+  expect(render({ engineProposals: [] })).not.toContain('ממתין בתור האישורים');
+});
+
 test('no imported status → explicit empty state', () => {
   expect(render({ status: null })).toContain('טרם יובא מצב מוח העסק');
 });

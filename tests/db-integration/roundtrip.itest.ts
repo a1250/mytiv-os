@@ -207,8 +207,17 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     const pr = await recordProposal(A(), ids.p, binding, { sourceArtifactId: status.id, file: 'hours.yaml', path: FIELD, valueHash, old: null, new: 45, reason: 'Kitchen closes orders 45 minutes before close since October', verify: false }, rid());
     let r = apply('apply-proposals', await exported('proposal', pr.id));
     expect(r.code, r.err).toBe(0);
+    // GPT review P1-2: a second app proposal with identical content under ANOTHER request id is not conflated
+    const twin = await recordProposal(A(), ids.p, binding, { sourceArtifactId: status.id, file: 'hours.yaml', path: FIELD, valueHash, old: null, new: 45, reason: 'Kitchen closes orders 45 minutes before close since October', verify: false }, rid());
+    r = apply('apply-proposals', await exported('proposal', twin.id));
+    expect([r.code, r.err]).toEqual([1, expect.stringContaining('brain.proposal_conflict')]);
     await sync('r5');
+    // C3a open_proposals re-export the app's C3b EXACTLY: precondition value_hash, the app's request id, its binding version
+    const sentC3b = await exported('proposal', pr.id);
+    expect((await latestArtifact(ids.a, ids.p, binding, 'C3a'))!.payload.open_proposals).toEqual([sentC3b]);
+    expect(sentC3b).toMatchObject({ value_hash: valueHash, binding_version: binding.bindingVersion });
     expect((await state()).evidence('brain_proposal', `hours.yaml#${FIELD}`)).toBe('open'); // the engine took it in as a pending brain_update
+    expect((await listRecords(ids.a, ids.p, binding)).evidence.find((e) => e.id === twin.id)!.reconciledState).toBe('awaiting'); // never shown as the other request's open proposal
     const brainApproval = (await latestArtifact(ids.a, ids.p, binding, 'C2a'))!.payload.items.find((i) => i.action_type === 'brain_update' && i.state === 'pending')!;
     expect(brainApproval).toBeDefined();
     const d = await decide(brainApproval.approval_id, 'approved');

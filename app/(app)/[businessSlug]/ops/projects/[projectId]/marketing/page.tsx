@@ -72,9 +72,10 @@ export default async function MarketingPage({ params, searchParams }: {
         loaded = { view: "campaigns", data: { businessSlug, projectId, bindingVersion: binding.bindingVersion, canWrite, records, campaigns: campaigns?.payload ?? null,
           queue: queue ? { id: queue.id, items: queue.payload.items } : null, board: board ? { id: board.id, tasks: board.payload.tasks } : null } };
       } else if (view === "brain") {
-        const [status, records] = await Promise.all([latestArtifact(business.id, projectId, binding, "C3a"), listRecords(business.id, projectId, binding)]);
+        const [status, records, queue] = await Promise.all([latestArtifact(business.id, projectId, binding, "C3a"), listRecords(business.id, projectId, binding), latestArtifact(business.id, projectId, binding, "C2a")]);
         loaded = { view: "brain", data: { businessSlug, projectId, bindingVersion: binding.bindingVersion, canWrite,
-          proposals: records.evidence.filter((e) => e.kind === "brain_proposal"), status: status ? { id: status.id, asOf: status.asOf, payload: status.payload } : null } };
+          proposals: records.evidence.filter((e) => e.kind === "brain_proposal"), status: status ? { id: status.id, asOf: status.asOf, payload: status.payload } : null,
+          engineProposals: queue ? queue.payload.items.filter((i) => i.action_type === "brain_update" && i.state === "pending") : null } };
       } else if (view === "leads") {
         const [pipeline, consent] = await Promise.all([latestArtifact(business.id, projectId, binding, "C4"), latestArtifact(business.id, projectId, binding, "C13")]);
         loaded = { view: "leads", data: { pipeline: pipeline?.payload ?? null, consent: consent?.payload ?? null } };

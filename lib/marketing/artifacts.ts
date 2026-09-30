@@ -43,21 +43,53 @@ export type StoredArtifact<K extends EngineArtifactKind = EngineArtifactKind> = 
   id: string; kind: K; bindingVersion: number; revision: number; sourceRevision: string; asOf: string; payload: ArtifactPayload<K>;
 };
 
-/** Import one engine artifact under the ACTIVE binding: validated through the vendored contract first
- *  (tenant scope = the binding), then numbered by the database, then reconciled against open records. */
-export async function importArtifact(scope: { businessId: string; userId: string }, projectId: string, binding: MarketingBinding,
-  kind: unknown, payload: unknown, requestId: string) {
+/** Insert one engine artifact under the ACTIVE binding: validated through the vendored contract first
+ *  (tenant scope = the binding), then numbered and stored by ONE atomic database function (a refusal or an
+ *  error there writes nothing). `onWrite` fires right before that call (the audit's "write attempted"). */
+export async function insertArtifact(scope: { businessId: string; userId: string }, projectId: string, binding: MarketingBinding,
+  kind: unknown, payload: unknown, requestId: string, onWrite?: () => void) {
   if (!isEngineArtifactKind(kind)) throw new OpsPolicyError('unsupported_artifact_kind');
   const artifact = validateArtifact(kind, payload, { marketingBusiness: binding.marketingBusiness }) as { sourceRevision: string; asOf: string };
   let revision: number;
+  onWrite?.();
   try {
     const result = await db.execute(sql`select marketing_import_artifact(${scope.businessId}::uuid, ${projectId}::uuid, ${kind}, ${binding.bindingVersion},
       ${artifact.sourceRevision}, ${artifact.asOf}::timestamptz, ${canonicalHash(payload)}, ${JSON.stringify(payload)}::jsonb, ${scope.userId}::uuid, ${requestId}::uuid) as r`);
     revision = Number((result.rows[0] as { r?: unknown } | undefined)?.r);
   } catch (error) { throw recordConflict(error) ?? error; }
   if (!Number.isSafeInteger(revision) || revision < 1) throw new Error('artifact import returned no revision');
-  const reconciled = await reconcile(scope.businessId, projectId, binding, kind, payload);
-  return { ok: true as const, kind, revision, bindingVersion: binding.bindingVersion, reconciled };
+  return { ok: true as const, kind, revision, bindingVersion: binding.bindingVersion };
+}
+
+/** Insert + reconcile (services / tests). The route runs the two separately: the insert is the governed
+ *  write, reconciliation a derived projection recomputed outside it (GPT review P1-1). */
+export async function importArtifact(scope: { businessId: string; userId: string }, projectId: string, binding: MarketingBinding,
+  kind: unknown, payload: unknown, requestId: string) {
+  const result = await insertArtifact(scope, projectId, binding, kind, payload, requestId);
+  return { ...result, reconciled: await reconcileAll(scope.businessId, projectId, binding) };
+}
+
+/** The artifact a request id created (unique per business), or null — the readback of an import. */
+export async function artifactByRequest(businessId: string, requestId: string) {
+  const [row] = await db.select({ id: marketingArtifacts.id, projectId: marketingArtifacts.projectId, kind: marketingArtifacts.kind, revision: marketingArtifacts.revision,
+    bindingVersion: marketingArtifacts.bindingVersion, contentHash: marketingArtifacts.contentHash })
+    .from(marketingArtifacts).where(and(eq(marketingArtifacts.businessId, businessId), eq(marketingArtifacts.requestId, requestId))).limit(1);
+  return row ?? null;
+}
+
+/**
+ * Recompute every record's reconciled_state from the LATEST artifacts that carry engine state (C2a → decisions
+ * and receipts, C7 → publication / outcome evidence, C3a → brain proposals). Idempotent and derived only from
+ * stored artifacts, so it can be re-run at any time: after each import, and on the replay of an import whose
+ * first attempt stopped after the insert — a failed or interrupted reconciliation converges (P1-1).
+ */
+export async function reconcileAll(businessId: string, projectId: string, binding: MarketingBinding): Promise<number> {
+  let changed = 0;
+  for (const kind of ['C2a', 'C7', 'C3a'] as const) {
+    const latest = await latestArtifact(businessId, projectId, binding, kind);
+    if (latest) changed += await reconcile(businessId, projectId, binding, kind, latest.payload);
+  }
+  return changed;
 }
 
 /** The latest artifact of `kind` under the ACTIVE binding version, re-validated on read (a stored row is
@@ -138,11 +170,10 @@ export function taskEvidenceState(kind: 'publish_evidence' | 'outcome_evidence',
  *   - never seen open, value unchanged              → awaiting  (not taken in yet)
  */
 export function proposalState(p: BrainChangeProposal, status: BrainStatusExport, prev: ReconciledState | string | null = null): ReconciledState {
-  // "Open" = the engine holds this proposal as a pending brain_update. Matched on the engine's own proposal
-  // identity (marketing-os apply-proposals replay check: file, path, canonical `new`, reason) — NOT on
-  // value_hash / app_request_id, which the engine's open_proposals fill with the hash of the NEW value and the
-  // approval id (C3b uses the hash of the value the proposer saw and the app's request id).
-  if (status.open_proposals.some((o) => o.file === p.file && o.path === p.path && o.reason === p.reason && canonicalHash(o.new) === canonicalHash(p.new))) return 'open';
+  // "Open" = the engine holds THIS proposal as a pending brain_update. C3a open_proposals re-export the app's
+  // C3b unchanged (ARCHITECTURE §3.1: reconciliation = {app_request_id, state}), so the identity is the app's
+  // request id plus the precondition it was made against — two requests are never conflated.
+  if (status.open_proposals.some((o) => o.app_request_id === p.app_request_id && o.file === p.file && o.path === p.path && o.value_hash === p.value_hash)) return 'open';
   if (prev === 'open' || prev === 'resolved') return 'resolved';
   const current = status.values[p.file]?.[p.path];
   return current !== undefined && current !== p.value_hash ? 'stale' : 'awaiting';

@@ -8,6 +8,7 @@ import { snapshotTask } from '@/lib/ops-snapshot';
 import { appendActionEvent, getOpsAction, listActionEvents } from '@/lib/ops-audit';
 import { isOpenReconciliation } from '@/lib/ops-audit-view';
 import { OpsPolicyError, assertConfirmation, assertWriter, objectInput, requiredText } from '@/lib/ops-policy';
+import { artifactByRequest } from '@/lib/marketing/artifacts';
 
 /**
  * Resolve an open reconciliation item (T-11.3 · MKT-GOV06): a governed write whose external outcome is
@@ -32,8 +33,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ bus
     const own = events.map((e) => ({ event: e.event, detail: (e.detail ?? {}) as Record<string, unknown> }));
     if (!isOpenReconciliation(own)) throw new OpsPolicyError('no_open_reconciliation', 409);
     const target = own.find((e) => e.event === 'confirmed')?.detail.target as { kind?: string; id?: string } | undefined;
-    if (target?.kind !== 'task' || typeof target.id !== 'string') throw new OpsPolicyError('readback_unsupported', 409);
     let observed: Record<string, unknown>;
+    if (action.action === 'marketing_artifact_import' && target?.kind === 'project' && target.id === projectId) {
+      // A marketing import is one atomic insert keyed by its request id: the readback is definitive.
+      const artifact = await artifactByRequest(scope.businessId, action.requestId);
+      observed = artifact && artifact.projectId === projectId
+        ? { artifact: { id: artifact.id, kind: artifact.kind, revision: artifact.revision, binding_version: artifact.bindingVersion }, written: true }
+        : { artifact: null, written: false };
+      const at = new Date().toISOString();
+      await appendActionEvent(scope.businessId, actionId, 'reconciled', { observed_state: observed, by: scope.userId, at, request_id: body.requestId });
+      return Response.json({ ok: true, reconciled: actionId, observed_state: observed, at });
+    }
+    if (target?.kind !== 'task' || typeof target.id !== 'string') throw new OpsPolicyError('readback_unsupported', 409);
     try { observed = { ...snapshotTask((await requireScopedTask(folderFromProject(project), target.id)).task) }; }
     catch (err) {
       const gone = (err instanceof ClickUpError && err.status === 404) || (err instanceof OpsPolicyError && err.message === 'not_found');

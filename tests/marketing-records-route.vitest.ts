@@ -5,6 +5,7 @@ import { OpsPolicyError } from '../lib/ops-policy';
 // T-3.2 — marketing artifact / record routes (services mocked; the real services run in tests/db-integration).
 const mocks = vi.hoisted(() => ({
   guard: vi.fn(), project: vi.fn(), binding: vi.fn(), audited: vi.fn(), importArtifact: vi.fn(), list: vi.fn(), exportRecord: vi.fn(),
+  claimByRequest: vi.fn(), reconcileAll: vi.fn(), artifactByRequest: vi.fn(), appendEvent: vi.fn(), listEvents: vi.fn(),
   decision: vi.fn(), proposal: vi.fn(), evidence: vi.fn(), outcome: vi.fn(), receipt: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
@@ -13,9 +14,12 @@ vi.mock('../lib/api-guard', () => ({
   ApiGuardError: class extends Error { response: Response; constructor(r: Response) { super('ApiGuardError'); this.response = r; } },
 }));
 vi.mock('../lib/db/queries/projects', () => ({ getProject: mocks.project }));
-vi.mock('../lib/ops-audit', () => ({ auditedAction: mocks.audited }));
+vi.mock('../lib/ops-audit', () => ({ auditedAction: mocks.audited, findOpsActionByRequest: mocks.claimByRequest, appendActionEvent: mocks.appendEvent,
+  listActionEvents: mocks.listEvents, auditPayloadHash: (p: unknown) => JSON.stringify(p) }));
 vi.mock('../lib/marketing/binding-store', () => ({ getMarketingBinding: mocks.binding }));
-vi.mock('../lib/marketing/artifacts', () => ({ importArtifact: mocks.importArtifact, listLatestArtifacts: mocks.list }));
+// the import route's governed write is `insertArtifact`; reconciliation (`reconcileAll`) follows it (GPT review P1-1)
+vi.mock('../lib/marketing/artifacts', () => ({ insertArtifact: mocks.importArtifact, listLatestArtifacts: mocks.list, reconcileAll: mocks.reconcileAll,
+  artifactByRequest: mocks.artifactByRequest, canonicalHash: (p: unknown) => JSON.stringify(p) }));
 vi.mock('../lib/marketing/records', () => ({
   exportRecord: mocks.exportRecord, recordDecision: mocks.decision, recordProposal: mocks.proposal,
   recordEvidence: mocks.evidence, recordOutcome: mocks.outcome, recordReceipt: mocks.receipt,
@@ -62,6 +66,7 @@ beforeEach(() => {
   mocks.audited.mockImplementation((_s, _p, _r, _a, _payload, run: () => unknown) => run());
   for (const m of serviceMocks) m.mockResolvedValue({ ok: true });
   mocks.list.mockResolvedValue([{ kind: 'C2a', revision: 1 }]);
+  mocks.claimByRequest.mockResolvedValue(null); mocks.reconcileAll.mockResolvedValue(0); mocks.artifactByRequest.mockResolvedValue(null); mocks.listEvents.mockResolvedValue([]);
 });
 afterEach(() => { delete process.env.MARKETING_MODULE_ENABLED; });
 
@@ -78,6 +83,7 @@ test('the module is off by default: every route answers 404 and writes nothing',
 test('each write is a governed, audited action routed to its own service with the active binding', async () => {
   for (const [name, POST, service, action] of WRITERS) {
     vi.clearAllMocks(); as('owner'); mocks.project.mockResolvedValue({ id: 'project' }); mocks.binding.mockResolvedValue(BINDING);
+    mocks.claimByRequest.mockResolvedValue(null); mocks.reconcileAll.mockResolvedValue(0);
     mocks.audited.mockImplementation((_s, _p, _r, _a, _payload, run: () => unknown) => run());
     service.mockResolvedValue({ ok: true, kind: name });
     const res = await POST(valid(), params);
@@ -166,4 +172,56 @@ test('export returns the record as a downloadable JSON attachment (writer only)'
   expect(mocks.exportRecord).toHaveBeenCalledWith('biz', 'project', 'decision', '33333333-3333-4333-8333-333333333333');
   mocks.exportRecord.mockRejectedValue(new OpsPolicyError('not_found', 404));
   expect((await receiptExport.GET(req({}, undefined, 'GET'), idParams)).status).toBe(404);
+});
+
+// ── GPT review P1-1: artifact import replay (the real DB behaviour runs in tests/db-integration/import-replay.itest.ts) ──
+const importBody = { confirmed: true, requestId, bindingVersion: 3, kind: 'C2a', payload: {} };
+const claim = (over: Record<string, unknown> = {}) => ({ id: 'act-1', action: 'marketing_artifact_import', projectId: 'project', userId: 'user', payloadHash: JSON.stringify(importBody), ...over });
+test('import: a conflicting reuse of a claimed request id (other payload / action / project / user) is refused with nothing touched', async () => {
+  for (const over of [{ payloadHash: 'other' }, { action: 'marketing_record_decision' }, { projectId: 'other' }, { userId: 'someone-else' }]) {
+    vi.clearAllMocks(); as('owner'); mocks.project.mockResolvedValue({ id: 'project' }); mocks.binding.mockResolvedValue(BINDING);
+    mocks.claimByRequest.mockResolvedValue(claim(over));
+    const res = await artifacts.POST(req(importBody), params);
+    expect([res.status, (await res.json()).error], JSON.stringify(over)).toEqual([409, 'request_already_claimed_check_audit_before_retry']);
+    expect(mocks.importArtifact).not.toHaveBeenCalled(); expect(mocks.audited).not.toHaveBeenCalled(); expect(mocks.appendEvent).not.toHaveBeenCalled();
+  }
+});
+test('import: the exact replay of a request whose artifact was committed converges — no second insert, succeeded recorded, reconciliation re-run', async () => {
+  mocks.claimByRequest.mockResolvedValue(claim());
+  mocks.listEvents.mockResolvedValue([{ event: 'confirmed', detail: {} }]); // the first attempt died after the insert
+  mocks.artifactByRequest.mockResolvedValue({ id: 'art-1', projectId: 'project', kind: 'C2a', revision: 4, bindingVersion: 3, contentHash: JSON.stringify({}) });
+  mocks.reconcileAll.mockResolvedValue(2);
+  const res = await artifacts.POST(req(importBody), params);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true, kind: 'C2a', revision: 4, bindingVersion: 3, replayed: true, reconciled: 2, reconciliationPending: false });
+  expect(mocks.importArtifact).not.toHaveBeenCalled(); expect(mocks.audited).not.toHaveBeenCalled();
+  expect(mocks.appendEvent.mock.calls.map((c) => c[2])).toEqual(['succeeded']);
+  expect(mocks.appendEvent.mock.calls[0][3]).toMatchObject({ observed_by: 'readback', replayed: true });
+});
+test('import: an unknown-outcome attempt is closed by the replay readback (written or not); a not-written request id is still never re-executed', async () => {
+  mocks.claimByRequest.mockResolvedValue(claim());
+  mocks.listEvents.mockResolvedValue([{ event: 'confirmed', detail: {} }, { event: 'failed_or_unknown', detail: { phase: 'write_outcome_unknown' } }]);
+  let res = await artifacts.POST(req(importBody), params); // nothing was written
+  expect(res.status).toBe(409);
+  expect(mocks.appendEvent.mock.calls.map((c) => [c[2], c[3].observed_state])).toEqual([['reconciled', { artifact: null, written: false }]]);
+  expect(mocks.importArtifact).not.toHaveBeenCalled();
+  vi.clearAllMocks(); as('owner'); mocks.project.mockResolvedValue({ id: 'project' }); mocks.binding.mockResolvedValue(BINDING); mocks.reconcileAll.mockResolvedValue(0);
+  mocks.claimByRequest.mockResolvedValue(claim());
+  mocks.listEvents.mockResolvedValue([{ event: 'confirmed', detail: {} }, { event: 'failed_or_unknown', detail: { phase: 'write_outcome_unknown' } }]);
+  mocks.artifactByRequest.mockResolvedValue({ id: 'art-1', projectId: 'project', kind: 'C2a', revision: 1, bindingVersion: 3, contentHash: JSON.stringify({}) });
+  res = await artifacts.POST(req(importBody), params); // it was written
+  expect(res.status).toBe(200);
+  expect(mocks.appendEvent.mock.calls.map((c) => c[2])).toEqual(['succeeded', 'reconciled']);
+  expect(mocks.appendEvent.mock.calls[0][3]).toMatchObject({ corrects_phase: 'write_outcome_unknown' });
+  expect(mocks.appendEvent.mock.calls[1][3].observed_state).toMatchObject({ written: true });
+});
+test('import: a reconciliation failure after the insert leaves the import succeeded and says reconciliation is pending', async () => {
+  mocks.importArtifact.mockResolvedValue({ ok: true, kind: 'C2a', revision: 1, bindingVersion: 3 });
+  mocks.reconcileAll.mockRejectedValue(new Error('db hiccup'));
+  const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const res = await artifacts.POST(req(importBody), params);
+  spy.mockRestore();
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true, kind: 'C2a', revision: 1, bindingVersion: 3, reconciled: null, reconciliationPending: true });
+  expect(mocks.audited).toHaveBeenCalledTimes(1);
 });

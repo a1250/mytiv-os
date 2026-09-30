@@ -127,13 +127,14 @@ test('brain proposals: against the value the human saw; reconciled from the next
   expect(await stateOf(pr2.id)).toBe('stale');
   await c3a(H); // value back before the engine ever saw it → awaiting again (it can still be taken in)
   expect(await stateOf(pr2.id)).toBe('awaiting');
-  // the engine's open_proposals shape: value_hash = hash of the NEW value, app_request_id = the approval id —
-  // matched on the engine's proposal identity (file, path, canonical new, reason); a different `new` never matches
-  const engineShaped = (p: Record<string, unknown>, over: Record<string, unknown> = {}) => ({ ...p, value_hash: 'c'.repeat(64), app_request_id: 'apr_x', proposed_by: 'engine-producer', ...over });
-  await c3a(H, [engineShaped(pr2.payload, { new: '09-21' })]);
+  // identity = the app's request id + precondition (GPT review P1-2): an otherwise identical open proposal under
+  // ANOTHER request id, or with another value_hash, is not this proposal
+  await c3a(H, [{ ...pr2.payload, app_request_id: pr.payload.app_request_id }]);
+  expect(await stateOf(pr2.id)).toBe('awaiting');
+  await c3a(H, [{ ...pr2.payload, value_hash: H2 }]);
   expect(await stateOf(pr2.id)).toBe('awaiting');
   // open → closed with the value unchanged (rejected, or applied then rolled back) → resolved
-  await c3a(H, [engineShaped(pr2.payload)]);
+  await c3a(H, [pr2.payload]);
   expect(await stateOf(pr2.id)).toBe('open');
   await c3a(H);
   expect(await stateOf(pr2.id)).toBe('resolved');

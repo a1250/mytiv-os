@@ -2,11 +2,12 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { guard, ApiGuardError } from '../api-guard';
 import { getProject } from '../db/queries/projects';
-import { auditedAction } from '../ops-audit';
+import { appendActionEvent, auditedAction, auditPayloadHash, findOpsActionByRequest, listActionEvents } from '../ops-audit';
+import { isOpenReconciliation } from '../ops-audit-view';
 import { OpsPolicyError, assertConfirmation, assertWriter, objectInput } from '../ops-policy';
 import { getMarketingBinding } from './binding-store';
 import type { MarketingBinding } from './binding';
-import { importArtifact, listLatestArtifacts } from './artifacts';
+import { artifactByRequest, canonicalHash, insertArtifact, listLatestArtifacts, reconcileAll } from './artifacts';
 import { marketingModuleEnabled } from './module-flag';
 import { exportRecord, recordDecision, recordEvidence, recordOutcome, recordProposal, recordReceipt, type RecordKind } from './records';
 
@@ -60,8 +61,68 @@ function writeRoute(action: string, write: (c: WriteContext) => Promise<unknown>
   });
 }
 
-export const importArtifactRoute = writeRoute('marketing_artifact_import',
-  (c) => importArtifact(c.scope, c.projectId, c.binding, c.body.kind, c.body.payload, c.requestId), 1000000);
+/** Reconciliation after an import: derived, idempotent, outside the governed write. A failure leaves the
+ *  import committed and audited as succeeded; the replay of the same request (or any later import) converges. */
+async function reconcileSafely(businessId: string, projectId: string, binding: MarketingBinding) {
+  try { return { reconciled: await reconcileAll(businessId, projectId, binding), reconciliationPending: false }; }
+  catch (error) {
+    console.error('marketing reconciliation failed; retry the same import request to converge', error instanceof Error ? error.message : error);
+    return { reconciled: null, reconciliationPending: true };
+  }
+}
+
+const IMPORT_ACTION = 'marketing_artifact_import';
+const claimedConflict = () => new OpsPolicyError('request_already_claimed_check_audit_before_retry', 409);
+
+/**
+ * GPT review P1-1 — the exact replay of an import whose request id is already claimed. The artifact insert is
+ * ONE atomic database function, so a readback by request id says definitively whether that request wrote:
+ *   - written   → return the existing artifact (never a second one), append `succeeded` (observed by readback)
+ *                 if the first attempt never recorded it, close an open unknown-outcome item with
+ *                 `reconciled`, and re-run reconciliation;
+ *   - not written → close an open unknown-outcome item with `reconciled {written:false}` and refuse (409): a
+ *                 claimed request id is never executed twice — send a new request id.
+ * Anything but the same user, project, action and exact payload is a conflicting reuse → 409, nothing touched.
+ */
+async function replayImport(scope: Scope, projectId: string, requestId: string, body: Record<string, unknown>) {
+  const claim = await findOpsActionByRequest(scope.businessId, requestId);
+  if (!claim) return null;
+  if (claim.action !== IMPORT_ACTION || claim.projectId !== projectId || claim.userId !== scope.userId || claim.payloadHash !== auditPayloadHash(body)) throw claimedConflict();
+  const events = (await listActionEvents(scope.businessId, claim.id)).map((e) => ({ event: e.event, detail: (e.detail ?? {}) as Record<string, unknown> }));
+  const artifact = await artifactByRequest(scope.businessId, requestId);
+  const at = new Date().toISOString();
+  if (!artifact) {
+    if (isOpenReconciliation(events)) await appendActionEvent(scope.businessId, claim.id, 'reconciled', { observed_state: { artifact: null, written: false }, by: scope.userId, at, request_id: requestId, via: 'replay_readback' });
+    throw claimedConflict();
+  }
+  if (artifact.projectId !== projectId || artifact.kind !== body.kind || artifact.contentHash !== canonicalHash(body.payload)) throw claimedConflict();
+  const result = { ok: true as const, kind: artifact.kind, revision: artifact.revision, bindingVersion: artifact.bindingVersion };
+  if (!events.some((e) => e.event === 'succeeded')) {
+    const failed = [...events].reverse().find((e) => e.event === 'failed_or_unknown');
+    await appendActionEvent(scope.businessId, claim.id, 'succeeded', { result, observed_by: 'readback', replayed: true, at, ...(failed ? { corrects_phase: failed.detail.phase ?? null } : {}) });
+  }
+  if (isOpenReconciliation(events)) await appendActionEvent(scope.businessId, claim.id, 'reconciled', { observed_state: { artifact: { id: artifact.id, kind: artifact.kind, revision: artifact.revision, binding_version: artifact.bindingVersion }, written: true }, by: scope.userId, at, request_id: requestId, via: 'replay_readback' });
+  const binding = await getMarketingBinding(scope.businessId, projectId);
+  return { ...result, replayed: true, ...(binding ? await reconcileSafely(scope.businessId, projectId, binding) : { reconciled: null, reconciliationPending: false }) };
+}
+
+/** Artifact import (engine → app). The governed write is the insert alone; reconciliation follows it. */
+export const importArtifactRoute = (req: NextRequest, { params }: Params) => respond(async () => {
+  const { businessSlug, projectId } = await params;
+  const scope = await projectScope(businessSlug, projectId, true);
+  const text = await req.text();
+  if (text.length > 1000000) throw new OpsPolicyError('payload_too_large', 413);
+  const body = objectInput(JSON.parse(text)); assertConfirmation(req, body);
+  const requestId = body.requestId as string;
+  const replayed = await replayImport(scope, projectId, requestId, body);
+  if (replayed) return Response.json(replayed);
+  const binding = await getMarketingBinding(scope.businessId, projectId);
+  if (!binding) throw new OpsPolicyError('marketing_not_connected', 409);
+  if (body.bindingVersion !== binding.bindingVersion) throw new OpsPolicyError('stale_binding_version', 409);
+  const result = await auditedAction(scope, projectId, requestId, IMPORT_ACTION, body,
+    (capture) => insertArtifact(scope, projectId, binding, body.kind, body.payload, requestId, () => capture.writing()), { target: { kind: 'project', id: projectId } });
+  return Response.json({ ...result, ...(await reconcileSafely(scope.businessId, projectId, binding)) });
+});
 
 type RecordWriter = (scope: Scope, projectId: string, binding: MarketingBinding, body: Record<string, unknown>, requestId: string) => Promise<unknown>;
 const RECORD_WRITERS: Record<RecordKind, RecordWriter> = {

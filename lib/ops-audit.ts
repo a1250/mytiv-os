@@ -24,7 +24,9 @@ import { openReconciliationOn } from './ops-reconciliation';
  */
 export type AuditTarget = { kind: 'task' | 'list' | 'project' | 'action'; id: string };
 export type ExternalRef = { taskId?: string; url?: string; date_updated?: string | null };
-export type Capture = { pre(s: TaskSnapshot): void; post(s: TaskSnapshot): void; ref(r: ExternalRef): void };
+/** `writing()` marks the moment the write itself is attempted (for writes without a task snapshot, e.g. a
+ *  marketing artifact insert): a later non-policy failure is then an UNKNOWN outcome, never `before_write`. */
+export type Capture = { pre(s: TaskSnapshot): void; post(s: TaskSnapshot): void; ref(r: ExternalRef): void; writing(): void };
 export type AuditMeta = { target?: AuditTarget; approval?: Record<string, unknown> };
 
 export type FailurePhase = 'before_write' | 'write_outcome_unknown' | 'after_write_unverified';
@@ -33,6 +35,11 @@ export function failurePhase(error: unknown, preCaptured: boolean): FailurePhase
   if (error instanceof OpsPolicyError) return 'before_write';
   if (error instanceof ClickUpError && error.status >= 400 && error.status < 500) return 'before_write';
   return preCaptured ? 'write_outcome_unknown' : 'before_write';
+}
+
+/** The claim's payload hash: sha256 of the request payload as sent (an exact replay has the same hash). */
+export function auditPayloadHash(payload: unknown): string {
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
 
 /** Claim once before the external write. Unknown outcomes are never automatically retried. */
@@ -48,7 +55,7 @@ export async function auditedAction<T>(
   // MKT-GOV06: while an earlier write to this target has an unknown outcome, no new write is attempted —
   // a blind retry could double-apply. Resolved only by a fresh readback (POST …/actions/[id]/reconcile).
   if (meta.target && await openReconciliationOn(scope.businessId, meta.target)) throw new OpsPolicyError('reconciliation_pending', 409);
-  const payloadHash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+  const payloadHash = auditPayloadHash(payload);
   const [claim] = await db.insert(opsActions).values({ businessId: scope.businessId, userId: scope.userId, projectId, requestId, action, payloadHash })
     .onConflictDoNothing().returning({ id: opsActions.id });
   if (!claim) throw new OpsPolicyError('request_already_claimed_check_audit_before_retry', 409);
@@ -59,12 +66,12 @@ export async function auditedAction<T>(
     actor: scope.userId, approval: { requestId, ...(meta.approval ?? {}) }, action,
     target: meta.target ?? null, payloadHash, rollback_eligibility: rollbackEligibility(action),
   });
-  let pre: TaskSnapshot | undefined, post: TaskSnapshot | undefined, ref: ExternalRef | undefined;
-  const capture: Capture = { pre: (s) => { pre = s; }, post: (s) => { post = s; }, ref: (r) => { ref = r; } };
+  let pre: TaskSnapshot | undefined, post: TaskSnapshot | undefined, ref: ExternalRef | undefined, writing = false;
+  const capture: Capture = { pre: (s) => { pre = s; }, post: (s) => { post = s; }, ref: (r) => { ref = r; }, writing: () => { writing = true; } };
   let result: T;
   try { result = await run(capture); }
   catch (error) {
-    await event('failed_or_unknown', { phase: failurePhase(error, pre !== undefined), ...(pre ? { pre_state: pre } : {}), error: error instanceof Error ? error.constructor.name : 'unknown' });
+    await event('failed_or_unknown', { phase: failurePhase(error, pre !== undefined || writing), ...(pre ? { pre_state: pre } : {}), error: error instanceof Error ? error.constructor.name : 'unknown' });
     throw error;
   }
   const r = result && typeof result === 'object' ? (result as { ok?: unknown; refused?: unknown }) : null;
@@ -80,6 +87,12 @@ export async function auditedAction<T>(
 /** Append an event to an existing action (e.g. `rolled_back` on the original write). Tenant-scoped. */
 export async function appendActionEvent(businessId: string, actionId: string, name: string, detail: Record<string, unknown>) {
   await db.insert(opsAuditEvents).values({ businessId, actionId, event: name, detail });
+}
+
+/** The claim of a request id in this business (unique per business), or null. */
+export async function findOpsActionByRequest(businessId: string, requestId: string) {
+  const [row] = await db.select().from(opsActions).where(and(eq(opsActions.businessId, businessId), eq(opsActions.requestId, requestId))).limit(1);
+  return row ?? null;
 }
 
 export async function getOpsAction(businessId: string, projectId: string, actionId: string) {
