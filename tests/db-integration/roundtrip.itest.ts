@@ -45,7 +45,7 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
   const A = () => ({ businessId: ids.a, userId: ids.owner });
   const rid = () => randomUUID();
   let seed: Seed, binding: MarketingBinding, dir: string;
-  const pendingHash = new Map<string, string>(); // D11.1: the C2a content_hash each approval had while pending
+  const pendingHash = new Map<string, string>(); // D13.1: the C2a content_hash each approval had while pending
 
   /** Write an app-exported record where the engine CLI can read it, and apply it. */
   function apply(script: string, payload: unknown, extra: string[] = []) {
@@ -107,7 +107,7 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     for (const i of queue.items) pendingHash.set(i.approval_id, i.content_hash);
     const brain = (await latestArtifact(ids.a, ids.p, binding, 'C3a'))!.payload;
     expect(Object.keys(brain.field_verification)).toContain('hours.yaml:kitchen_last_order_minutes_before_close'); // engine separator
-    expect(brain.files['hours.yaml']).toBe('ok'); // D11.2: health only — partial verification never makes it 'invalid'
+    expect(brain.files['hours.yaml']).toBe('ok'); // D13.2: health only — partial verification never makes it 'invalid'
     expect(brainVerification('hours.yaml', brain.field_verification)).toEqual({ level: 'PARTIAL', tracked: 2, verified: 1 });
     expect((await boardTask()).status).toBe('approval_pending');
   }, 120000);
@@ -141,7 +141,7 @@ describe.skipIf(!ENGINE)('engine ↔ app round trip', () => {
     expect([s.decision(seed.publish), s.decision(seed.campaign), s.decision(seed.rejectMe), s.decision(seed.staleMe)]).toEqual(['applied', 'applied', 'applied', 'stale']);
     expect((await queueItem(seed.rejectMe)).state).toBe('rejected');
     expect((await queueItem(seed.staleMe)).state).toBe('pending'); // never decided on the engine
-    // D11.1 pending hash == decided hash (approved and rejected) when the content is unchanged; the edited one moved
+    // D13.1 pending hash == decided hash (approved and rejected) when the content is unchanged; the edited one moved
     for (const id of [seed.publish, seed.campaign, seed.rejectMe]) expect((await queueItem(id)).content_hash, id).toBe(pendingHash.get(id));
     expect((await queueItem(seed.staleMe)).content_hash).not.toBe(pendingHash.get(seed.staleMe));
   }, 180000);

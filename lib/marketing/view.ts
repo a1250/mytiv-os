@@ -73,7 +73,7 @@ export function reconciledLabel(state: string | null): string {
 }
 
 /**
- * Brain per file (MKT-F09) — two SEPARATE dimensions (owner decision D11.2):
+ * Brain per file (MKT-F09) — two SEPARATE dimensions (owner decision D13.2):
  *  - file health, from C3a `files` (ok / missing / invalid / stale): structural validity and freshness only;
  *  - verification, derived ONLY from C3a `field_verification`: VERIFIED (every tracked field owner- or
  *    source-verified), PARTIAL (some), UNVERIFIED (none) — and a file with zero tracked fields is UNVERIFIED

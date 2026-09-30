@@ -23,7 +23,7 @@ const render = (over: Record<string, unknown> = {}) => renderToStaticMarkup(crea
   proposals: [{ id: 'pr-1', targetId: 'hours.yaml#weekly.sun', createdAt: '2026-01-02T10:00:00.000Z', exportedAt: null, reconciledState: 'awaiting' }], canWrite: true, ...over }));
 const row = (h: string, file: string) => { const i = h.indexOf(`>${file}<`); return h.slice(i, h.indexOf('</tr>', i)); };
 
-test('per file: health (C3a files) and verification (field_verification) are separate columns (F09, D11.2)', () => {
+test('per file: health (C3a files) and verification (field_verification) are separate columns (F09, D13.2)', () => {
   const h = render();
   expect(row(h, 'hours.yaml')).toContain('תקין'); // health
   expect(row(h, 'hours.yaml')).toContain('>מאומת<'); // owner + source verified fields → VERIFIED
@@ -33,7 +33,7 @@ test('per file: health (C3a files) and verification (field_verification) are sep
   expect(row(h, 'claims.yaml')).toContain('חסר');
   expect(h).toContain('EXPIRED'); // disclosed: C3a does not distinguish it from stale
 });
-test('a structurally valid file is never shown "invalid" because of partial verification (D11.2)', () => {
+test('a structurally valid file is never shown "invalid" because of partial verification (D13.2)', () => {
   const h = renderToStaticMarkup(createElement(BrainView, { businessSlug: 'mytiv', projectId: 'p1', bindingVersion: 1, proposals: [], canWrite: false,
     status: { id: 'c3a-2', asOf: status.asOf, payload: { ...status, files: { 'hours.yaml': 'ok', 'bad.yaml': 'invalid' },
       field_verification: { 'hours.yaml:weekly.sun': { owner_verified: true, source_verified: false }, 'hours.yaml:weekly.fri': { owner_verified: false, source_verified: false } } } } }));

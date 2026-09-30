@@ -24,7 +24,7 @@ records C2b / C6 / C16 / C15 / C3b through the real app services, applies each e
 engine's own CLIs (`apply-decisions --file`, `apply-evidence`, `apply-receipts`, `apply-outcomes`,
 `apply-proposals`) and requires the next export to reconcile every record in the app. It also asserts the
 refusals (C2b replay / conflict / tenant mismatch / stale) and that an approval's C2a `content_hash` is the
-same pending → decided → applied (owner decision D11.1). The engine tenant is deleted afterwards.
+same pending → decided → applied (owner decision D13.1). The engine tenant is deleted afterwards.
 Use a disposable engine worktree; the helper refuses to touch any tenant not named `rt…`.
 
 ```bash
