@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { BrainStatusExport } from '@/lib/marketing/contract-rules/c2-c3';
-import { brainFileStatus, brainStatusLabel, reconciledLabel } from '@/lib/marketing/view';
+import { brainHealthLabel, brainVerification, brainVerificationLabel, reconciledLabel } from '@/lib/marketing/view';
 
 type Proposal = { id: string; targetId: string; createdAt: string; exportedAt: string | null; reconciledState: string | null };
 
@@ -87,13 +87,14 @@ export function BrainView({ businessSlug, projectId, bindingVersion, status, pro
   const fields = Object.entries(s.values).flatMap(([file, paths]) => Object.entries(paths).map(([path, valueHash]) => ({ file, path, valueHash })));
   return <section className="space-y-6">
     <p className="text-muted-foreground text-xs">נכון ל־{status.asOf.slice(0, 16).replace('T', ' ')} · מקור {s.sourceRevision}</p>
-    <table className="w-full text-sm"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">קובץ</th><th className="text-start">מצב</th></tr></thead>
-      <tbody>{Object.entries(s.files).map(([file, state]) => {
-        const st = brainFileStatus(file, state, s.field_verification);
+    <table className="w-full text-sm"><thead><tr className="text-muted-foreground text-xs"><th className="text-start">קובץ</th><th className="text-start">תקינות הקובץ</th><th className="text-start">אימות</th></tr></thead>
+      <tbody>{Object.entries(s.files).map(([file, health]) => {
+        const v = brainVerification(file, s.field_verification);
         return <tr key={file} className="border-border border-t"><td className="py-2" dir="ltr">{file}</td>
-          <td className={st === 'VERIFIED' ? undefined : 'text-warning'}>{brainStatusLabel(st)}</td></tr>;
+          <td className={health === 'ok' ? undefined : 'text-warning'}>{brainHealthLabel(health)}</td>
+          <td className={v.level === 'VERIFIED' ? undefined : 'text-warning'}>{brainVerificationLabel(v)}</td></tr>;
       })}</tbody></table>
-    <p className="text-muted-foreground text-xs">מצב &quot;פג תוקף&quot; (EXPIRED) אינו מיוצא בחוזה C3a הנוכחי.</p>
+    <p className="text-muted-foreground text-xs">תקינות הקובץ ואימות הנתונים הם שני ממדים נפרדים. מצב &quot;פג תוקף&quot; (EXPIRED) מוצג כ&quot;לא עדכני&quot; — החוזה C3a אינו מבחין ביניהם.</p>
     <section><h3 className="mb-2 font-semibold">אימות ברמת שדה</h3>
       {Object.keys(s.field_verification).length === 0 ? <p className="text-sm">לא נרשם אימות לאף שדה.</p> :
         <ul className="space-y-1 text-sm">{Object.entries(s.field_verification).map(([key, v]) => <li key={key}>

@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 import { BrainView } from '../components/marketing/brain';
-import { brainFileStatus, brainStatusLabel } from '../lib/marketing/view';
+import { brainHealthLabel, brainVerification, brainVerificationLabel } from '../lib/marketing/view';
 import type { BrainStatusExport } from '../lib/marketing/contract-rules/c2-c3';
 
 // T-4.7 — Brain viewer (MKT-F09, F10). Proposal writes are proven in the records route/integration tests.
@@ -23,15 +23,25 @@ const render = (over: Record<string, unknown> = {}) => renderToStaticMarkup(crea
   proposals: [{ id: 'pr-1', targetId: 'hours.yaml#weekly.sun', createdAt: '2026-01-02T10:00:00.000Z', exportedAt: null, reconciledState: 'awaiting' }], canWrite: true, ...over }));
 const row = (h: string, file: string) => { const i = h.indexOf(`>${file}<`); return h.slice(i, h.indexOf('</tr>', i)); };
 
-test('per-file status: verified / partial / unverified (not usable for production copy) / stale / missing (F09)', () => {
+test('per file: health (C3a files) and verification (field_verification) are separate columns (F09, D11.2)', () => {
   const h = render();
-  expect(row(h, 'hours.yaml')).toContain('מאומת'); // owner + source verified fields → VERIFIED
-  expect(row(h, 'hours.yaml')).not.toContain('חלקית');
-  expect(row(h, 'menu.yaml')).toContain('מאומת חלקית');
-  expect(row(h, 'tracking.yaml')).toContain('לא מאומת — אין להשתמש בו לתוכן ייצור');
+  expect(row(h, 'hours.yaml')).toContain('תקין'); // health
+  expect(row(h, 'hours.yaml')).toContain('>מאומת<'); // owner + source verified fields → VERIFIED
+  expect(row(h, 'menu.yaml')).toContain('מאומת חלקית (1/2)');
+  expect(row(h, 'tracking.yaml')).toContain('לא מאומת — אין נתוני אימות'); // ok file, zero tracked fields → never VERIFIED
   expect(row(h, 'offers.yaml')).toContain('לא עדכני');
   expect(row(h, 'claims.yaml')).toContain('חסר');
-  expect(h).toContain('EXPIRED'); // disclosed as not representable in C3a
+  expect(h).toContain('EXPIRED'); // disclosed: C3a does not distinguish it from stale
+});
+test('a structurally valid file is never shown "invalid" because of partial verification (D11.2)', () => {
+  const h = renderToStaticMarkup(createElement(BrainView, { businessSlug: 'mytiv', projectId: 'p1', bindingVersion: 1, proposals: [], canWrite: false,
+    status: { id: 'c3a-2', asOf: status.asOf, payload: { ...status, files: { 'hours.yaml': 'ok', 'bad.yaml': 'invalid' },
+      field_verification: { 'hours.yaml:weekly.sun': { owner_verified: true, source_verified: false }, 'hours.yaml:weekly.fri': { owner_verified: false, source_verified: false } } } } }));
+  expect(row(h, 'hours.yaml')).toContain('תקין');
+  expect(row(h, 'hours.yaml')).not.toContain('לא תקין');
+  expect(row(h, 'hours.yaml')).toContain('מאומת חלקית (1/2)'); // engine ':' keys
+  expect(row(h, 'bad.yaml')).toContain('לא תקין');
+  expect(row(h, 'bad.yaml')).toContain('אין נתוני אימות');
 });
 
 test('field-level verification distinguishes owner_verified from source_verified, with source and note', () => {
@@ -62,15 +72,17 @@ test('no imported status → explicit empty state', () => {
   expect(render({ status: null })).toContain('טרם יובא מצב מוח העסק');
 });
 
-test('brainFileStatus derivation', () => {
-  expect(brainFileStatus('x.yaml', 'ok', {})).toBe('UNVERIFIED'); // no field recorded → not verified
-  expect(brainFileStatus('x.yaml', 'ok', { 'x.yaml#a': { owner_verified: true }, 'y.yaml#a': { owner_verified: false } })).toBe('VERIFIED');
-  expect(brainFileStatus('x.yaml', 'ok', { 'x.yaml#a': { owner_verified: true }, 'x.yaml#b': { owner_verified: false } })).toBe('PARTIAL');
-  expect(brainFileStatus('x.yaml', 'ok', { 'x.yaml#a': { owner_verified: false, source_verified: false } })).toBe('UNVERIFIED');
-  expect(brainFileStatus('x.yaml', 'invalid', {})).toBe('INVALID');
-  // the engine exporter keys fields `file:path` (the canonical vector uses `file#path`) — both count
-  expect(brainFileStatus('x.yaml', 'ok', { 'x.yaml:a': { owner_verified: true, source_verified: false } })).toBe('VERIFIED');
-  expect(brainFileStatus('x.yaml', 'ok', { 'x.yaml:a': { owner_verified: true }, 'x.yaml#b': { owner_verified: false } })).toBe('PARTIAL');
-  expect(brainFileStatus('x.yaml', 'ok', { 'x.yamlx:a': { owner_verified: true }, 'y.yaml:a': { owner_verified: true } })).toBe('UNVERIFIED');
-  expect(brainStatusLabel('UNVERIFIED')).toContain('אין להשתמש');
+test('brainVerification derivation — from field_verification only; both key separators', () => {
+  expect(brainVerification('x.yaml', {})).toEqual({ level: 'UNVERIFIED', tracked: 0, verified: 0 }); // no data → not verified
+  expect(brainVerification('x.yaml', { 'x.yaml#a': { owner_verified: true }, 'y.yaml#a': { owner_verified: false } }).level).toBe('VERIFIED');
+  expect(brainVerification('x.yaml', { 'x.yaml#a': { owner_verified: true }, 'x.yaml#b': { owner_verified: false } }).level).toBe('PARTIAL');
+  expect(brainVerification('x.yaml', { 'x.yaml#a': { owner_verified: false, source_verified: false } }).level).toBe('UNVERIFIED');
+  expect(brainVerification('x.yaml', { 'x.yaml#a': { owner_verified: false, source_verified: true } }).level).toBe('VERIFIED'); // source-verified counts
+  expect(brainVerification('x.yaml', { 'x.yaml:a': { owner_verified: true, source_verified: false } }).level).toBe('VERIFIED');
+  expect(brainVerification('x.yaml', { 'x.yaml:a': { owner_verified: true }, 'x.yaml#b': { owner_verified: false } }).level).toBe('PARTIAL');
+  expect(brainVerification('x.yaml', { 'x.yamlx:a': { owner_verified: true }, 'y.yaml:a': { owner_verified: true } }).level).toBe('UNVERIFIED');
+  expect(brainVerificationLabel({ level: 'UNVERIFIED', tracked: 0, verified: 0 })).toContain('אין נתוני אימות');
+  expect(brainVerificationLabel({ level: 'UNVERIFIED', tracked: 2, verified: 0 })).toContain('אין להשתמש');
+  expect(brainVerificationLabel({ level: 'UNVERIFIED', tracked: 2, verified: 0 })).not.toContain('אין נתוני אימות');
+  expect([brainHealthLabel('ok'), brainHealthLabel('invalid'), brainHealthLabel('stale'), brainHealthLabel('missing')]).toEqual(['תקין', 'לא תקין', 'לא עדכני', 'חסר']);
 });

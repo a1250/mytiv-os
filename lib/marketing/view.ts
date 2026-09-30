@@ -72,24 +72,29 @@ export function reconciledLabel(state: string | null): string {
 }
 
 /**
- * Per-file Brain status (MKT-F09) derived from C3a: STALE / missing / invalid from `files`; otherwise
- * VERIFIED (every recorded field owner- or source-verified), PARTIAL (some), UNVERIFIED (none, or no field
- * recorded). EXPIRED is not representable in the canonical C3a contract.
+ * Brain per file (MKT-F09) — two SEPARATE dimensions (owner decision D11.2):
+ *  - file health, from C3a `files` (ok / missing / invalid / stale): structural validity and freshness only;
+ *  - verification, derived ONLY from C3a `field_verification`: VERIFIED (every tracked field owner- or
+ *    source-verified), PARTIAL (some), UNVERIFIED (none) — and a file with zero tracked fields is UNVERIFIED
+ *    with "no verification data", never VERIFIED.
+ * Field keys are `<file><sep><fieldPath>`: the canonical C3a vector uses '#', the engine exporter
+ * (marketing-os buildBrainStatus) ':' — both are accepted.
  */
-export type BrainFileStatus = 'VERIFIED' | 'PARTIAL' | 'UNVERIFIED' | 'STALE' | 'MISSING' | 'INVALID';
-export function brainFileStatus(file: string, fileState: 'ok' | 'missing' | 'invalid' | 'stale',
-  verification: Record<string, { owner_verified: boolean; source_verified?: boolean }>): BrainFileStatus {
-  if (fileState === 'stale') return 'STALE';
-  if (fileState === 'missing') return 'MISSING';
-  if (fileState === 'invalid') return 'INVALID';
-  // Field keys are `<file><sep><fieldPath>`: the canonical C3a vector uses '#', the engine exporter
-  // (marketing-os core/lib/artifact-exporters.ts buildBrainStatus) emits ':' — both are accepted.
+export type BrainFileHealth = 'ok' | 'missing' | 'invalid' | 'stale';
+export function brainHealthLabel(h: BrainFileHealth): string {
+  return { ok: 'תקין', missing: 'חסר', invalid: 'לא תקין', stale: 'לא עדכני' }[h];
+}
+export type BrainVerification = { level: 'VERIFIED' | 'PARTIAL' | 'UNVERIFIED'; tracked: number; verified: number };
+export function brainVerification(file: string, verification: Record<string, { owner_verified: boolean; source_verified?: boolean }>): BrainVerification {
   const fields = Object.entries(verification).filter(([key]) => key.startsWith(`${file}#`) || key.startsWith(`${file}:`));
   const verified = fields.filter(([, v]) => v.owner_verified || v.source_verified === true).length;
-  return fields.length > 0 && verified === fields.length ? 'VERIFIED' : verified > 0 ? 'PARTIAL' : 'UNVERIFIED';
+  const level = fields.length > 0 && verified === fields.length ? 'VERIFIED' : verified > 0 ? 'PARTIAL' : 'UNVERIFIED';
+  return { level, tracked: fields.length, verified };
 }
-export function brainStatusLabel(s: BrainFileStatus): string {
-  return { VERIFIED: 'מאומת', PARTIAL: 'מאומת חלקית', UNVERIFIED: 'לא מאומת — אין להשתמש בו לתוכן ייצור', STALE: 'לא עדכני', MISSING: 'חסר', INVALID: 'לא תקין' }[s];
+export function brainVerificationLabel(v: BrainVerification): string {
+  if (v.level === 'VERIFIED') return 'מאומת';
+  if (v.level === 'PARTIAL') return `מאומת חלקית (${v.verified}/${v.tracked})`;
+  return v.tracked === 0 ? 'לא מאומת — אין נתוני אימות · אין להשתמש בו לתוכן ייצור' : 'לא מאומת — אין להשתמש בו לתוכן ייצור';
 }
 
 /** Attribution tier (MKT-RPT02): the C5 tier reflects provenance — T1 first-party (HIGH), T2 platform data

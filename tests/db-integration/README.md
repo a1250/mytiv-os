@@ -14,3 +14,20 @@ initdb -D /tmp/pgdata -U postgres --auth=trust --locale=C && pg_ctl -D /tmp/pgda
 PGHOST=/tmp PGPORT=55432 PGUSER=postgres ITEST_DB=itest ITEST_CONFIRM_DROP=itest \
   ITEST_PG_MODULE=/path/to/node_modules/pg tests/db-integration/run.sh   # `pg` is not a mytiv-os dependency
 ```
+
+## Engine ↔ app round trip (`roundtrip.itest.ts`)
+
+Skipped unless `RT_ENGINE_DIR` points at a **marketing-os checkout** (its `node_modules` installed). It seeds a
+throwaway engine tenant `rt<random>` from the fictional `_fixture-demo` brain (`roundtrip-engine.ts`, run with
+the engine's own `tsx`), exports it, imports every artifact into the local DB through the vendored contracts,
+records C2b / C6 / C16 / C15 / C3b through the real app services, applies each exported record with the
+engine's own CLIs (`apply-decisions --file`, `apply-evidence`, `apply-receipts`, `apply-outcomes`,
+`apply-proposals`) and requires the next export to reconcile every record in the app. It also asserts the
+refusals (C2b replay / conflict / tenant mismatch / stale) and that an approval's C2a `content_hash` is the
+same pending → decided → applied (owner decision D11.1). The engine tenant is deleted afterwards.
+Use a disposable engine worktree; the helper refuses to touch any tenant not named `rt…`.
+
+```bash
+RT_ENGINE_DIR=/path/to/marketing-os-worktree PGHOST=/tmp PGPORT=55432 PGUSER=postgres ITEST_DB=itest \
+  ITEST_CONFIRM_DROP=itest ITEST_PG_MODULE=/path/to/node_modules/pg tests/db-integration/run.sh
+```
