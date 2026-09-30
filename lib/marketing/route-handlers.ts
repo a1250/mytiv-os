@@ -7,7 +7,7 @@ import { isOpenReconciliation } from '../ops-audit-view';
 import { OpsPolicyError, assertConfirmation, assertWriter, objectInput } from '../ops-policy';
 import { getMarketingBinding } from './binding-store';
 import type { MarketingBinding } from './binding';
-import { artifactByRequest, canonicalHash, insertArtifact, listLatestArtifacts, reconcileAll } from './artifacts';
+import { artifactByRequest, canonicalHash, canonicalize, insertArtifact, listLatestArtifacts, readbackImport, reconcileAll } from './artifacts';
 import { marketingModuleEnabled } from './module-flag';
 import { exportRecord, recordDecision, recordEvidence, recordOutcome, recordProposal, recordReceipt, type RecordKind } from './records';
 
@@ -75,27 +75,34 @@ const IMPORT_ACTION = 'marketing_artifact_import';
 const claimedConflict = () => new OpsPolicyError('request_already_claimed_check_audit_before_retry', 409);
 
 /**
- * GPT review P1-1 — the exact replay of an import whose request id is already claimed. The artifact insert is
- * ONE atomic database function, so a readback by request id says definitively whether that request wrote:
- *   - written   → return the existing artifact (never a second one), append `succeeded` (observed by readback)
- *                 if the first attempt never recorded it, close an open unknown-outcome item with
- *                 `reconciled`, and re-run reconciliation;
- *   - not written → close an open unknown-outcome item with `reconciled {written:false}` and refuse (409): a
- *                 claimed request id is never executed twice — send a new request id.
- * Anything but the same user, project, action and exact payload is a conflicting reuse → 409, nothing touched.
+ * GPT review P1-1 — the exact replay of an import whose request id is already claimed.
+ * Identity (round 2): the claim's payload hash is taken over the CANONICAL request body (keys recursively
+ * sorted), so a re-send that differs only in JSON key order is the same request; any changed value — payload,
+ * kind, binding version, request id — and any other user, project or action is a conflicting reuse → 409.
+ * Outcome (round 2): decided by the definitive readback (readbackImport, migration 0011), never by visibility:
+ *   - written     → return the existing artifact (never a second one), append `succeeded` (observed by readback)
+ *                   if the first attempt never recorded it, close an open unknown-outcome item with `reconciled`,
+ *                   and re-run reconciliation;
+ *   - in_flight   → the original write has not terminated: nothing is concluded, the unknown-outcome item stays
+ *                   open (new writes to the project stay blocked) → 409, retry the readback later;
+ *   - not_written → a fence now guarantees the request id can never produce an artifact: close an open item
+ *                   with `reconciled {written:false, fenced:true}` and refuse (409) — a claimed request id is
+ *                   never executed twice; send a new request id.
  */
 async function replayImport(scope: Scope, projectId: string, requestId: string, body: Record<string, unknown>) {
   const claim = await findOpsActionByRequest(scope.businessId, requestId);
   if (!claim) return null;
-  if (claim.action !== IMPORT_ACTION || claim.projectId !== projectId || claim.userId !== scope.userId || claim.payloadHash !== auditPayloadHash(body)) throw claimedConflict();
+  if (claim.action !== IMPORT_ACTION || claim.projectId !== projectId || claim.userId !== scope.userId || claim.payloadHash !== auditPayloadHash(canonicalize(body))) throw claimedConflict();
   const events = (await listActionEvents(scope.businessId, claim.id)).map((e) => ({ event: e.event, detail: (e.detail ?? {}) as Record<string, unknown> }));
-  const artifact = await artifactByRequest(scope.businessId, requestId);
+  const outcome = await readbackImport(scope.businessId, requestId, scope.userId);
+  if (outcome === 'in_flight') throw new OpsPolicyError('import_outcome_pending_retry_readback', 409);
   const at = new Date().toISOString();
-  if (!artifact) {
-    if (isOpenReconciliation(events)) await appendActionEvent(scope.businessId, claim.id, 'reconciled', { observed_state: { artifact: null, written: false }, by: scope.userId, at, request_id: requestId, via: 'replay_readback' });
+  if (outcome === 'not_written') {
+    if (isOpenReconciliation(events)) await appendActionEvent(scope.businessId, claim.id, 'reconciled', { observed_state: { artifact: null, written: false, fenced: true }, by: scope.userId, at, request_id: requestId, via: 'replay_readback' });
     throw claimedConflict();
   }
-  if (artifact.projectId !== projectId || artifact.kind !== body.kind || artifact.contentHash !== canonicalHash(body.payload)) throw claimedConflict();
+  const artifact = await artifactByRequest(scope.businessId, requestId);
+  if (!artifact || artifact.projectId !== projectId || artifact.kind !== body.kind || artifact.contentHash !== canonicalHash(body.payload)) throw claimedConflict();
   const result = { ok: true as const, kind: artifact.kind, revision: artifact.revision, bindingVersion: artifact.bindingVersion };
   if (!events.some((e) => e.event === 'succeeded')) {
     const failed = [...events].reverse().find((e) => e.event === 'failed_or_unknown');
@@ -119,7 +126,8 @@ export const importArtifactRoute = (req: NextRequest, { params }: Params) => res
   const binding = await getMarketingBinding(scope.businessId, projectId);
   if (!binding) throw new OpsPolicyError('marketing_not_connected', 409);
   if (body.bindingVersion !== binding.bindingVersion) throw new OpsPolicyError('stale_binding_version', 409);
-  const result = await auditedAction(scope, projectId, requestId, IMPORT_ACTION, body,
+  // the claim's payload hash covers the CANONICAL body, so an exact replay is recognised whatever its key order
+  const result = await auditedAction(scope, projectId, requestId, IMPORT_ACTION, canonicalize(body),
     (capture) => insertArtifact(scope, projectId, binding, body.kind, body.payload, requestId, () => capture.writing()), { target: { kind: 'project', id: projectId } });
   return Response.json({ ...result, ...(await reconcileSafely(scope.businessId, projectId, binding)) });
 });

@@ -5,7 +5,7 @@ import { OpsPolicyError } from '../lib/ops-policy';
 // T-3.2 — marketing artifact / record routes (services mocked; the real services run in tests/db-integration).
 const mocks = vi.hoisted(() => ({
   guard: vi.fn(), project: vi.fn(), binding: vi.fn(), audited: vi.fn(), importArtifact: vi.fn(), list: vi.fn(), exportRecord: vi.fn(),
-  claimByRequest: vi.fn(), reconcileAll: vi.fn(), artifactByRequest: vi.fn(), appendEvent: vi.fn(), listEvents: vi.fn(),
+  claimByRequest: vi.fn(), reconcileAll: vi.fn(), artifactByRequest: vi.fn(), appendEvent: vi.fn(), listEvents: vi.fn(), readback: vi.fn(),
   decision: vi.fn(), proposal: vi.fn(), evidence: vi.fn(), outcome: vi.fn(), receipt: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
@@ -18,8 +18,13 @@ vi.mock('../lib/ops-audit', () => ({ auditedAction: mocks.audited, findOpsAction
   listActionEvents: mocks.listEvents, auditPayloadHash: (p: unknown) => JSON.stringify(p) }));
 vi.mock('../lib/marketing/binding-store', () => ({ getMarketingBinding: mocks.binding }));
 // the import route's governed write is `insertArtifact`; reconciliation (`reconcileAll`) follows it (GPT review P1-1)
+const { canonicalize } = vi.hoisted(() => {
+  const canonicalize = (v: unknown): unknown => Array.isArray(v) ? v.map(canonicalize)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, canonicalize((v as Record<string, unknown>)[k])])) : v;
+  return { canonicalize };
+});
 vi.mock('../lib/marketing/artifacts', () => ({ insertArtifact: mocks.importArtifact, listLatestArtifacts: mocks.list, reconcileAll: mocks.reconcileAll,
-  artifactByRequest: mocks.artifactByRequest, canonicalHash: (p: unknown) => JSON.stringify(p) }));
+  artifactByRequest: mocks.artifactByRequest, readbackImport: mocks.readback, canonicalize, canonicalHash: (p: unknown) => JSON.stringify(canonicalize(p)) }));
 vi.mock('../lib/marketing/records', () => ({
   exportRecord: mocks.exportRecord, recordDecision: mocks.decision, recordProposal: mocks.proposal,
   recordEvidence: mocks.evidence, recordOutcome: mocks.outcome, recordReceipt: mocks.receipt,
@@ -176,7 +181,7 @@ test('export returns the record as a downloadable JSON attachment (writer only)'
 
 // ── GPT review P1-1: artifact import replay (the real DB behaviour runs in tests/db-integration/import-replay.itest.ts) ──
 const importBody = { confirmed: true, requestId, bindingVersion: 3, kind: 'C2a', payload: {} };
-const claim = (over: Record<string, unknown> = {}) => ({ id: 'act-1', action: 'marketing_artifact_import', projectId: 'project', userId: 'user', payloadHash: JSON.stringify(importBody), ...over });
+const claim = (over: Record<string, unknown> = {}) => ({ id: 'act-1', action: 'marketing_artifact_import', projectId: 'project', userId: 'user', payloadHash: JSON.stringify(canonicalize(importBody)), ...over });
 test('import: a conflicting reuse of a claimed request id (other payload / action / project / user) is refused with nothing touched', async () => {
   for (const over of [{ payloadHash: 'other' }, { action: 'marketing_record_decision' }, { projectId: 'other' }, { userId: 'someone-else' }]) {
     vi.clearAllMocks(); as('owner'); mocks.project.mockResolvedValue({ id: 'project' }); mocks.binding.mockResolvedValue(BINDING);
@@ -189,6 +194,7 @@ test('import: a conflicting reuse of a claimed request id (other payload / actio
 test('import: the exact replay of a request whose artifact was committed converges — no second insert, succeeded recorded, reconciliation re-run', async () => {
   mocks.claimByRequest.mockResolvedValue(claim());
   mocks.listEvents.mockResolvedValue([{ event: 'confirmed', detail: {} }]); // the first attempt died after the insert
+  mocks.readback.mockResolvedValue('written');
   mocks.artifactByRequest.mockResolvedValue({ id: 'art-1', projectId: 'project', kind: 'C2a', revision: 4, bindingVersion: 3, contentHash: JSON.stringify({}) });
   mocks.reconcileAll.mockResolvedValue(2);
   const res = await artifacts.POST(req(importBody), params);
@@ -201,13 +207,15 @@ test('import: the exact replay of a request whose artifact was committed converg
 test('import: an unknown-outcome attempt is closed by the replay readback (written or not); a not-written request id is still never re-executed', async () => {
   mocks.claimByRequest.mockResolvedValue(claim());
   mocks.listEvents.mockResolvedValue([{ event: 'confirmed', detail: {} }, { event: 'failed_or_unknown', detail: { phase: 'write_outcome_unknown' } }]);
-  let res = await artifacts.POST(req(importBody), params); // nothing was written
+  mocks.readback.mockResolvedValue('not_written'); // lock free, no artifact → fenced: definitively not written
+  let res = await artifacts.POST(req(importBody), params);
   expect(res.status).toBe(409);
-  expect(mocks.appendEvent.mock.calls.map((c) => [c[2], c[3].observed_state])).toEqual([['reconciled', { artifact: null, written: false }]]);
+  expect(mocks.appendEvent.mock.calls.map((c) => [c[2], c[3].observed_state])).toEqual([['reconciled', { artifact: null, written: false, fenced: true }]]);
   expect(mocks.importArtifact).not.toHaveBeenCalled();
   vi.clearAllMocks(); as('owner'); mocks.project.mockResolvedValue({ id: 'project' }); mocks.binding.mockResolvedValue(BINDING); mocks.reconcileAll.mockResolvedValue(0);
   mocks.claimByRequest.mockResolvedValue(claim());
   mocks.listEvents.mockResolvedValue([{ event: 'confirmed', detail: {} }, { event: 'failed_or_unknown', detail: { phase: 'write_outcome_unknown' } }]);
+  mocks.readback.mockResolvedValue('written');
   mocks.artifactByRequest.mockResolvedValue({ id: 'art-1', projectId: 'project', kind: 'C2a', revision: 1, bindingVersion: 3, contentHash: JSON.stringify({}) });
   res = await artifacts.POST(req(importBody), params); // it was written
   expect(res.status).toBe(200);
@@ -224,4 +232,27 @@ test('import: a reconciliation failure after the insert leaves the import succee
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ ok: true, kind: 'C2a', revision: 1, bindingVersion: 3, reconciled: null, reconciliationPending: true });
   expect(mocks.audited).toHaveBeenCalledTimes(1);
+});
+
+test('import (round 2): an in-flight original write is never concluded — no audit event, the item stays open, 409 retry-readback', async () => {
+  mocks.claimByRequest.mockResolvedValue(claim());
+  mocks.listEvents.mockResolvedValue([{ event: 'confirmed', detail: {} }, { event: 'failed_or_unknown', detail: { phase: 'write_outcome_unknown' } }]);
+  mocks.readback.mockResolvedValue('in_flight');
+  const res = await artifacts.POST(req(importBody), params);
+  expect([res.status, (await res.json()).error]).toEqual([409, 'import_outcome_pending_retry_readback']);
+  expect(mocks.appendEvent).not.toHaveBeenCalled(); expect(mocks.importArtifact).not.toHaveBeenCalled(); expect(mocks.artifactByRequest).not.toHaveBeenCalled();
+});
+test('import (round 2): the replay identity is canonical — a re-send with reordered keys is the same request; a changed value is not', async () => {
+  const reordered = { payload: {}, kind: 'C2a', bindingVersion: 3, requestId, confirmed: true };
+  mocks.claimByRequest.mockResolvedValue(claim());
+  mocks.readback.mockResolvedValue('written');
+  mocks.artifactByRequest.mockResolvedValue({ id: 'art-1', projectId: 'project', kind: 'C2a', revision: 4, bindingVersion: 3, contentHash: JSON.stringify({}) });
+  let res = await artifacts.POST(req(reordered), params);
+  expect([res.status, (await res.json()).replayed]).toEqual([200, true]);
+  for (const changed of [{ ...reordered, bindingVersion: 2 }, { ...reordered, kind: 'C7' }, { ...reordered, payload: { x: 1 } }]) {
+    vi.clearAllMocks(); as('owner'); mocks.project.mockResolvedValue({ id: 'project' }); mocks.binding.mockResolvedValue(BINDING); mocks.claimByRequest.mockResolvedValue(claim());
+    res = await artifacts.POST(req(changed), params);
+    expect([res.status, (await res.json()).error], JSON.stringify(changed)).toEqual([409, 'request_already_claimed_check_audit_before_retry']);
+    expect(mocks.readback).not.toHaveBeenCalled();
+  }
 });

@@ -8,7 +8,7 @@ import { snapshotTask } from '@/lib/ops-snapshot';
 import { appendActionEvent, getOpsAction, listActionEvents } from '@/lib/ops-audit';
 import { isOpenReconciliation } from '@/lib/ops-audit-view';
 import { OpsPolicyError, assertConfirmation, assertWriter, objectInput, requiredText } from '@/lib/ops-policy';
-import { artifactByRequest } from '@/lib/marketing/artifacts';
+import { artifactByRequest, readbackImport } from '@/lib/marketing/artifacts';
 
 /**
  * Resolve an open reconciliation item (T-11.3 · MKT-GOV06): a governed write whose external outcome is
@@ -35,11 +35,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ bus
     const target = own.find((e) => e.event === 'confirmed')?.detail.target as { kind?: string; id?: string } | undefined;
     let observed: Record<string, unknown>;
     if (action.action === 'marketing_artifact_import' && target?.kind === 'project' && target.id === projectId) {
-      // A marketing import is one atomic insert keyed by its request id: the readback is definitive.
-      const artifact = await artifactByRequest(scope.businessId, action.requestId);
-      observed = artifact && artifact.projectId === projectId
-        ? { artifact: { id: artifact.id, kind: artifact.kind, revision: artifact.revision, binding_version: artifact.bindingVersion }, written: true }
-        : { artifact: null, written: false };
+      // A marketing import is one atomic insert keyed by its request id. The lock-aware readback (migration 0011)
+      // is definitive: in flight → nothing is decided and the item stays open; not written → a fence guarantees
+      // the request can never produce an artifact afterwards.
+      const outcome = await readbackImport(scope.businessId, action.requestId, scope.userId);
+      if (outcome === 'in_flight') throw new OpsPolicyError('import_outcome_pending_retry_readback', 409);
+      if (outcome === 'written') {
+        const artifact = await artifactByRequest(scope.businessId, action.requestId);
+        if (!artifact) throw new Error('readback said written but the artifact is not visible');
+        observed = { artifact: { id: artifact.id, kind: artifact.kind, revision: artifact.revision, binding_version: artifact.bindingVersion }, written: true };
+      } else observed = { artifact: null, written: false, fenced: true };
       const at = new Date().toISOString();
       await appendActionEvent(scope.businessId, actionId, 'reconciled', { observed_state: observed, by: scope.userId, at, request_id: body.requestId });
       return Response.json({ ok: true, reconciled: actionId, observed_state: observed, at });

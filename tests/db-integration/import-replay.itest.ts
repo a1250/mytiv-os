@@ -12,7 +12,8 @@ vi.mock('../../lib/api-guard', () => ({
 import { pool } from './db-local';
 import { bindMarketing, getMarketingBinding } from '../../lib/marketing/binding-store';
 import { recordDecision } from '../../lib/marketing/records';
-import { latestArtifact } from '../../lib/marketing/artifacts';
+import { canonicalHash, canonicalize, latestArtifact } from '../../lib/marketing/artifacts';
+import { auditPayloadHash } from '../../lib/ops-audit';
 import { openReconciliationOn } from '../../lib/ops-reconciliation';
 import * as artifactsRoute from '../../app/api/[businessSlug]/ops/projects/[projectId]/marketing/artifacts/route';
 import * as reconcileRoute from '../../app/api/[businessSlug]/ops/actions/[actionId]/reconcile/route';
@@ -27,7 +28,7 @@ import type { MarketingBinding } from '../../lib/marketing/binding';
  * that committed; a conflicting reuse of the request id is refused.
  */
 type Row = Record<string, unknown>;
-const project = randomUUID();
+const project = randomUUID(), project2 = randomUUID(), owner2 = randomUUID();
 const vec = (k: string): Row => JSON.parse(readFileSync(path.join(process.cwd(), `lib/marketing/contracts/${k}.vectors.json`), 'utf8')).valid[0];
 const H = 'a'.repeat(64);
 const CARD = { title: 'Activate campaign', why: 'fill capacity', action_type: 'campaign_activate', action_class: 'RED', facts_cited: [], qa_verdict: 'NOT_RUN', rollback_note: 'pause it' };
@@ -36,11 +37,19 @@ const queue = (state: string) => ({ ...vec('C2a'), asOf: new Date(clock += 60_00
 const params = { params: Promise.resolve({ businessSlug: 'biz', projectId: project }) };
 let binding: MarketingBinding;
 
-function post(body: Row) {
+function post(body: Row, p = params) {
   return artifactsRoute.POST(new NextRequest('https://ops.example/api/biz/ops/projects/x/marketing/artifacts', {
     method: 'POST', headers: { origin: 'https://ops.example', 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  }), params);
+  }), p);
 }
+function reconcilePost(actionId: string) {
+  return reconcileRoute.POST(new NextRequest(`https://ops.example/api/biz/ops/actions/${actionId}/reconcile`, {
+    method: 'POST', headers: { origin: 'https://ops.example', 'Content-Type': 'application/json' }, body: JSON.stringify({ confirmed: true, requestId: randomUUID(), projectId: project }),
+  }), { params: Promise.resolve({ businessSlug: 'biz', actionId }) });
+}
+/** Recursively reverse every object's key order (same JSON value, different serialization). */
+const reorder = (v: unknown): unknown => Array.isArray(v) ? v.map(reorder)
+  : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v as object).reverse().map((k) => [k, reorder((v as Row)[k])])) : v;
 const importBody = (payload: Row, requestId = randomUUID()) => ({ confirmed: true, requestId, bindingVersion: binding.bindingVersion, kind: 'C2a', payload });
 const artifactsFor = async (requestId: string) => Number((await pool.query(`SELECT count(*) FROM marketing_artifacts WHERE business_id=$1 AND request_id=$2`, [scope.businessId, requestId])).rows[0].count);
 const c2aCount = async () => Number((await pool.query(`SELECT count(*) FROM marketing_artifacts WHERE business_id=$1 AND kind='C2a'`, [scope.businessId])).rows[0].count);
@@ -58,7 +67,9 @@ beforeAll(async () => {
   await pool.query(`INSERT INTO businesses(id,name,slug) VALUES ($1::uuid,'P1-1',$1::text)`, [scope.businessId]);
   await pool.query(`INSERT INTO users(id,email) VALUES ($1::uuid,$1::text||'@x.invalid')`, [scope.userId]);
   await pool.query(`INSERT INTO business_memberships(business_id,user_id,role) VALUES ($1,$2,'owner')`, [scope.businessId, scope.userId]);
-  await pool.query(`INSERT INTO projects(id,business_id,name) VALUES ($1,$2,'P')`, [project, scope.businessId]);
+  await pool.query(`INSERT INTO projects(id,business_id,name) VALUES ($1,$2,'P'),($3,$2,'P2')`, [project, scope.businessId, project2]);
+  await pool.query(`INSERT INTO users(id,email) VALUES ($1::uuid,$1::text||'@x.invalid')`, [owner2]);
+  await pool.query(`INSERT INTO business_memberships(business_id,user_id,role) VALUES ($1,$2,'owner')`, [scope.businessId, owner2]);
   await bindMarketing(scope, project, 'demo-biz', randomUUID());
   binding = (await getMarketingBinding(scope.businessId, project))!;
   // a pending C2a item with a recorded decision: the next C2a (item approved) must reconcile it to `applied`
@@ -157,4 +168,118 @@ test('(4) a conflicting reuse of a request id is refused: no second artifact, no
   }
   expect(await artifactsFor(body.requestId)).toBe(1);
   expect((await eventsFor(body.requestId)).length).toBe(events);
+});
+
+// ── Round 2 (GPT re-review) ──────────────────────────────────────────────────────────────────────────────────
+
+test('(5) P1-1r2: a replay whose body differs only in JSON key order is the SAME request — original artifact returned, reconciliation re-run, no duplicate', async () => {
+  await inject(`${FAIL_FN} CREATE TRIGGER itest_fail_decision_update BEFORE UPDATE ON marketing_decisions FOR EACH ROW EXECUTE FUNCTION itest_fail();`);
+  const before = await decisionState();
+  const body = importBody(queue(before === 'applied' ? 'pending' : 'approved'));
+  const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  let res = await post(body); // committed; reconciliation fails
+  spy.mockRestore();
+  const first = await res.json();
+  expect(first).toMatchObject({ ok: true, reconciliationPending: true });
+  expect(await decisionState()).toBe(before);
+  await heal();
+  const reordered = reorder(body) as Row;
+  expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(body)); // really a different serialization
+  res = await post(reordered);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ ok: true, replayed: true, revision: first.revision, reconciliationPending: false });
+  expect(await decisionState()).toBe(before === 'applied' ? 'awaiting' : 'applied'); // reconciliation re-ran and converged
+  expect(await artifactsFor(body.requestId)).toBe(1);
+  // any meaningful change is still a conflicting reuse — nothing written, no event appended
+  const events = (await eventsFor(body.requestId)).length;
+  const changed: [string, Row, typeof params | undefined][] = [
+    ['payload value', { ...reordered, payload: queue('rejected') }, undefined],
+    ['kind', { ...reordered, kind: 'C7' }, undefined],
+    ['binding version', { ...reordered, bindingVersion: binding.bindingVersion + 1 }, undefined],
+    ['project', reordered, { params: Promise.resolve({ businessSlug: 'biz', projectId: project2 }) }],
+  ];
+  for (const [what, b, p] of changed) {
+    res = await post(b, p);
+    expect([res.status, (await res.json()).error], what).toEqual([409, 'request_already_claimed_check_audit_before_retry']);
+  }
+  const me = scope.userId;
+  scope.userId = owner2; // another owner of the same business
+  res = await post(reordered);
+  scope.userId = me;
+  expect([res.status, (await res.json()).error], 'user').toEqual([409, 'request_already_claimed_check_audit_before_retry']);
+  expect(await artifactsFor(body.requestId)).toBe(1);
+  expect((await eventsFor(body.requestId)).length).toBe(events);
+});
+
+/** The audit state an import leaves when its HTTP call timed out: claimed, write attempted, outcome unknown. */
+async function unknownOutcomeClaim(body: Row) {
+  const { rows: [a] } = await pool.query(`INSERT INTO ops_actions(business_id,user_id,project_id,request_id,action,payload_hash) VALUES ($1,$2,$3,$4,'marketing_artifact_import',$5) RETURNING id`,
+    [scope.businessId, scope.userId, project, body.requestId, auditPayloadHash(canonicalize(body))]);
+  // two events a few seconds apart, as the route writes them (separate statements, ordered timestamps)
+  await pool.query(`INSERT INTO ops_audit_events(business_id,action_id,event,detail,created_at) VALUES ($1,$2,'confirmed',$3, now() - interval '3 seconds'),
+    ($1,$2,'failed_or_unknown',$4, now() - interval '2 seconds')`,
+    [scope.businessId, a.id, JSON.stringify({ target: { kind: 'project', id: project } }), JSON.stringify({ phase: 'write_outcome_unknown', error: 'NeonDbError' })]);
+  return a.id as string;
+}
+/** The original import still executing on the database: its transaction holds the request's lock, uncommitted. */
+async function inFlightOriginal(body: Row) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const p = body.payload as Row;
+    await client.query(`SELECT marketing_import_artifact($1,$2,'C2a',$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.businessId, project, binding.bindingVersion, p.sourceRevision, p.asOf, canonicalHash(p), JSON.stringify(p), scope.userId, body.requestId]);
+    return client;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {}); client.release(); throw error;
+  }
+}
+
+test('(6) P1-2r2: while the original write is still in flight, no readback concludes — the item stays open; once it commits, the replay returns THAT artifact', async () => {
+  const before = await decisionState();
+  const body = importBody(queue(before === 'applied' ? 'pending' : 'approved'));
+  const actionId = await unknownOutcomeClaim(body);
+  const original = await inFlightOriginal(body);
+  try {
+    let res = await post(body); // 1st readback: nothing visible, the write unresolved
+    expect([res.status, (await res.json()).error]).toEqual([409, 'import_outcome_pending_retry_readback']);
+    res = await reconcilePost(actionId); // the manual route follows the same rule
+    expect([res.status, (await res.json()).error]).toEqual([409, 'import_outcome_pending_retry_readback']);
+    expect((await eventsFor(body.requestId)).map((e) => e.event)).toEqual(['confirmed', 'failed_or_unknown']); // nothing concluded
+    expect(await openReconciliationOn(scope.businessId, { kind: 'project', id: project })).not.toBeNull();
+    res = await post(importBody(queue('approved'))); // new writes stay blocked
+    expect([res.status, (await res.json()).error]).toEqual([409, 'reconciliation_pending']);
+    expect(await artifactsFor(body.requestId)).toBe(0);
+    await original.query('COMMIT'); // the delayed original commits AFTER the first readback
+  } finally { original.release(); }
+  const res = await post(body); // a later readback finds it
+  expect(res.status).toBe(200);
+  const out = await res.json();
+  expect(out).toMatchObject({ ok: true, replayed: true, reconciliationPending: false });
+  expect(await artifactsFor(body.requestId)).toBe(1); // the original's artifact, no duplicate
+  const events = await eventsFor(body.requestId);
+  expect(events.map((e) => e.event)).toEqual(['confirmed', 'failed_or_unknown', 'succeeded', 'reconciled']);
+  expect(events[2]!.detail).toMatchObject({ observed_by: 'readback', corrects_phase: 'write_outcome_unknown' });
+  expect(events[3]!.detail).toMatchObject({ observed_state: { written: true } });
+  expect(await openReconciliationOn(scope.businessId, { kind: 'project', id: project })).toBeNull();
+  expect(await decisionState()).toBe(before === 'applied' ? 'awaiting' : 'applied');
+});
+
+test('(7) P1-2r2: written:false is definitive — the readback fences the request id, so a delayed original can never commit; the id is never reused', async () => {
+  const body = importBody(queue('approved'));
+  await unknownOutcomeClaim(body); // the original never reached the database (yet)
+  let res = await post(body);
+  expect([res.status, (await res.json()).error]).toEqual([409, 'request_already_claimed_check_audit_before_retry']);
+  expect((await eventsFor(body.requestId)).at(-1)).toMatchObject({ event: 'reconciled', detail: { observed_state: { artifact: null, written: false, fenced: true } } });
+  expect(await openReconciliationOn(scope.businessId, { kind: 'project', id: project })).toBeNull();
+  // the delayed original finally arrives: refused by the fence, nothing written
+  await expect(inFlightOriginal(body).then(async (c) => { try { await c.query('COMMIT'); } finally { c.release(); } })).rejects.toThrow('import_request_fenced');
+  expect(await artifactsFor(body.requestId)).toBe(0);
+  // replaying the claimed id again never executes it
+  res = await post(body);
+  expect([res.status, (await res.json()).error]).toEqual([409, 'request_already_claimed_check_audit_before_retry']);
+  expect(await artifactsFor(body.requestId)).toBe(0);
+  // the fence is permanent evidence
+  await expect(pool.query(`DELETE FROM marketing_import_fences WHERE business_id=$1 AND request_id=$2`, [scope.businessId, body.requestId])).rejects.toThrow('append-only');
+  expect(Number((await pool.query(`SELECT count(*) FROM marketing_import_fences WHERE business_id=$1 AND request_id=$2`, [scope.businessId, body.requestId])).rows[0].count)).toBe(1);
 });

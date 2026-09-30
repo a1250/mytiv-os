@@ -17,11 +17,14 @@ export function isEngineArtifactKind(kind: unknown): kind is EngineArtifactKind 
   return typeof kind === 'string' && (ENGINE_ARTIFACT_KINDS as readonly string[]).includes(kind);
 }
 
+/** The same value with every object's keys recursively sorted — JSON key order no longer matters. */
+export function canonicalize(value: unknown): unknown {
+  return Array.isArray(value) ? value.map(canonicalize)
+    : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value as object).sort().map((k) => [k, canonicalize((value as Record<string, unknown>)[k])])) : value;
+}
 /** sha256 of a canonical (recursively key-sorted) JSON rendering — identical content, identical hash. */
 export function canonicalHash(value: unknown): string {
-  const canon = (v: unknown): unknown => Array.isArray(v) ? v.map(canon)
-    : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, canon((v as Record<string, unknown>)[k])])) : v;
-  return createHash('sha256').update(JSON.stringify(canon(value))).digest('hex');
+  return createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex');
 }
 
 /** Postgres refusals raised by the 0010 functions/triggers → policy errors (conflicts, not outages). */
@@ -32,6 +35,8 @@ export function recordConflict(error: unknown): OpsPolicyError | null {
       if (message.includes('stale_binding_version')) return new OpsPolicyError('stale_binding_version', 409);
       if (message.includes('stale_or_conflicting_revision')) return new OpsPolicyError('stale_or_conflicting_revision', 409);
       if (message.includes('approval_linkage_invalid')) return new OpsPolicyError('approval_linkage_invalid', 409);
+      // the request id was fenced by a readback that found nothing written: this (delayed) write never commits
+      if (message.includes('import_request_fenced')) return new OpsPolicyError('import_request_fenced', 409);
     }
     if (code === '23505') return new OpsPolicyError('already_recorded', 409);
     if (code === '23503') return new OpsPolicyError('not_found', 404);
@@ -69,7 +74,22 @@ export async function importArtifact(scope: { businessId: string; userId: string
   return { ...result, reconciled: await reconcileAll(scope.businessId, projectId, binding) };
 }
 
-/** The artifact a request id created (unique per business), or null — the readback of an import. */
+/**
+ * The DEFINITIVE readback of an import request (migration 0011, GPT review P1-2 round 2): 'written' = its
+ * artifact is committed; 'in_flight' = another transaction still holds the request's lock (the original write
+ * has not terminated — nothing may be concluded); 'not_written' = lock free and no artifact, and a fence was
+ * recorded in the same transaction, so the request id can never produce an artifact afterwards.
+ */
+export type ImportReadback = 'written' | 'in_flight' | 'not_written';
+export async function readbackImport(businessId: string, requestId: string, actorId: string): Promise<ImportReadback> {
+  const result = await db.execute(sql`select marketing_import_readback(${businessId}::uuid, ${requestId}::uuid, ${actorId}::uuid) as r`);
+  const r = (result.rows[0] as { r?: unknown } | undefined)?.r;
+  if (r !== 'written' && r !== 'in_flight' && r !== 'not_written') throw new Error('import readback returned no state');
+  return r;
+}
+
+/** The artifact a request id created (unique per business), or null. Visibility alone is NOT a readback of an
+ *  unknown write (an in-flight write is invisible) — decide with readbackImport first. */
 export async function artifactByRequest(businessId: string, requestId: string) {
   const [row] = await db.select({ id: marketingArtifacts.id, projectId: marketingArtifacts.projectId, kind: marketingArtifacts.kind, revision: marketingArtifacts.revision,
     bindingVersion: marketingArtifacts.bindingVersion, contentHash: marketingArtifacts.contentHash })

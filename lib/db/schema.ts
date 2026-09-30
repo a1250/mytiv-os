@@ -1132,3 +1132,13 @@ export const marketingEvidence = pgTable('marketing_evidence', {
   check('marketing_evidence_receipt_link', sql`${t.kind} <> 'execution_receipt' or (${t.approvalId} is not null and ${t.sourceArtifactId} is not null)`),
   check('marketing_evidence_reconciled', sql`${t.reconciledState} is null or ${t.reconciledState} in ('awaiting','open','applied','stale','conflict','expired','missing','unreviewed','resolved')`),
 ]);
+/** GPT review P1-2 (round 2): a request id whose import is known NOT to have been written. Inserted only by
+ *  marketing_import_readback() while holding the request's advisory lock; every artifact insert takes the same
+ *  lock and refuses a fenced request id — so an in-flight or delayed original can never commit afterwards, and a
+ *  `written: false` readback is definitive. Append-only. */
+export const marketingImportFences = pgTable('marketing_import_fences', {
+  businessId: uuid('business_id').notNull().references(() => businesses.id),
+  requestId: uuid('request_id').notNull(),
+  fencedBy: uuid('fenced_by').notNull().references(() => users.id),
+  fencedAt: timestamp('fenced_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.businessId, t.requestId] })]);

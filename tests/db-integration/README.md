@@ -22,6 +22,12 @@ temporary triggers (dropped after each test): reconciliation failing after the i
 failing after the insert ("process died"), and an unknown write outcome. The exact replay of the request must
 converge to one artifact, correct reconciliation and a truthful audit; a conflicting reuse of the id is refused.
 
+Round 2 (GPT re-review): the replay identity is canonical (a re-send differing only in JSON key order is the same
+request), and an unknown import outcome is decided only by the lock-aware readback of migration 0011 — `in_flight`
+keeps it open, `not_written` fences the request id so a delayed original can never commit. Tests (5)–(7) hold an
+original import uncommitted on a second connection to prove it. `tests/marketing-import-fence-concurrency.sh` races
+one import against several readbacks per request id: artifact XOR fence, never both.
+
 ## Engine ↔ app round trip (`roundtrip.itest.ts`)
 
 Skipped unless `RT_ENGINE_DIR` points at a **marketing-os checkout** (its `node_modules` installed). It seeds a
