@@ -25,6 +25,8 @@ export const HE: Record<string, string> = {
   Add: "הוסף",
   "No tasks yet.": "עדיין אין משימות.",
   Remove: "הסר",
+  "Only owners and admins can remove tasks.": "רק בעלים או מנהלים יכולים להסיר משימות.",
+  "The change was not saved.": "השינוי לא נשמר.",
   "No leads yet.": "עדיין אין לידים.",
   "New lead company name…": "שם חברה חדשה…",
   "Studio identity": "זהות המותג",

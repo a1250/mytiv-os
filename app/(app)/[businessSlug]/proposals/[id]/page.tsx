@@ -20,6 +20,8 @@ type Proposal = {
   id: string;
   title: string;
   leadId: string | null;
+  /** The project this proposal belongs to, if any — a follow-up task is filed under it too. */
+  projectId: string | null;
   clientName: string | null;
   clientCompany: string | null;
   clientEmail: string | null;
@@ -149,6 +151,7 @@ export default function ProposalEditorPage() {
       priority: "high",
       category: "sales",
       leadId: draft.leadId,
+      projectId: draft.projectId ?? null,
     });
     setNotice(t("Follow-up task created for a week from today."));
   }
