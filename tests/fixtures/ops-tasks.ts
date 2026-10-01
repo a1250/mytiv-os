@@ -19,6 +19,12 @@ export const OPS_TASKS: OpsTask[] = [
 ];
 export const MEMBERS: WorkspaceMember[] = [{ id: 101, name: 'Dana' }, { id: 102, name: 'Noam' }];
 export const STATUSES_BY_LIST: Record<string, string[]> = { 'L-tasks': ['to do', 'in progress', 'complete'], 'L-bugs': ['open', 'fixed'], 'L-other': ['open'] };
+/** The same lists as ClickUp's folder read returns them (status → ClickUp status type). */
+export const FOLDER_LISTS: { id: string; statuses: string[]; statusTypes: Record<string, string> }[] = [
+  { id: 'L-tasks', statuses: STATUSES_BY_LIST['L-tasks'], statusTypes: { 'to do': 'open', 'in progress': 'custom', complete: 'closed' } },
+  { id: 'L-bugs', statuses: STATUSES_BY_LIST['L-bugs'], statusTypes: { open: 'open', fixed: 'closed' } },
+  { id: 'L-other', statuses: STATUSES_BY_LIST['L-other'], statusTypes: { open: 'open' } },
+];
 export const PLAN: MarketingPlan = {
   schemaVersion: 1, marketingBusiness: 'umino-demo', revision: 2, sourceRevision: 'rev-7', asOf: '2026-09-29T00:00:00Z',
   priorities: [{ id: 'p1', title: 'More weekday covers', evidenceRef: 'brain/goals.yaml', confidence: 'KNOWN', provenance: 'owner_verified' }],

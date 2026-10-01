@@ -9,7 +9,7 @@ import type { BindingEditorState } from "./marketing-binding-editor";
 import { Copilot } from "./copilot";
 import { SpecEditor } from "./spec-editor";
 import { TaskTable } from "./task-table";
-import type { StatusOptions, WorkItem, WorkPerson } from "@/lib/work-source/types";
+import { refKey, type StatusOptions, type TaskSourceCapabilities, type WorkItem, type WorkPerson } from "@/lib/work-source/types";
 import type { ProjectRow } from "@/lib/db/queries/projects";
 
 type Props = {
@@ -20,6 +20,8 @@ type Props = {
   decisions: WorkItem[];
   members: WorkPerson[];
   statusOptions: StatusOptions;
+  /** What the project's source supports (null when no source holds the project). */
+  capabilities: TaskSourceCapabilities | null;
   marketing: { binding: string | null; plan: MarketingPlan | null; canImport: boolean; unavailable: boolean; now: string; bindingEditor?: BindingEditorState;
     bindingVersion: number | null; previousPlans: { bindingVersion: number; revision: number; importedAt: string }[]; moduleEnabled: boolean };
   canWrite: boolean;
@@ -42,6 +44,7 @@ export function ClientWorkspace({
   decisions,
   members,
   statusOptions,
+  capabilities,
   marketing,
   canWrite,
   incomplete,
@@ -83,6 +86,7 @@ export function ClientWorkspace({
           tasks={tasks}
           members={members}
           statusOptions={statusOptions}
+          capabilities={capabilities}
           readOnly={!canWrite}
           emptyMessage={
             incomplete
@@ -103,6 +107,7 @@ export function ClientWorkspace({
           tasks={bugs}
           members={members}
           statusOptions={statusOptions}
+          capabilities={capabilities}
           readOnly={!canWrite}
           emptyMessage={incomplete ? "Bug list is partial (20-page cap) — open bugs can't be determined." : project.folderState === "unauthorized" ? "This project's ClickUp folder is not authorized for this business — bugs were not read." : "No open bugs."}
         />
@@ -116,7 +121,7 @@ export function ClientWorkspace({
         ) : (
           <ul className="flex flex-col gap-2">
             {decisions.map((d) => (
-              <li key={`${d.ref.provider}:${d.ref.id}`} className="bg-card border-border rounded-xl border p-3.5">
+              <li key={refKey(d.ref)} className="bg-card border-border rounded-xl border p-3.5">
                 <div className="flex items-start gap-2">
                   <span className="flex-1 text-sm leading-snug font-medium">{d.title}</span>
                   {d.sourceLink && (
@@ -132,7 +137,7 @@ export function ClientWorkspace({
                   )}
                 </div>
                 <div className="mt-2">
-                  <Badge variant={d.statusCategory === "closed" || d.statusCategory === "done" ? "done" : "neutral"}>
+                  <Badge variant={d.statusCategory === "done" ? "done" : "neutral"}>
                     {d.statusLabel}
                   </Badge>
                 </div>

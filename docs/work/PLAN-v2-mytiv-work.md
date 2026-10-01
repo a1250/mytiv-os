@@ -1,6 +1,7 @@
 # תוכנית מימוש — Mytiv Work (גרסה 2, אחרי review הבעלים)
 
 > **מצב:** תוכנית מעודכנת לפי 12 החלטות הבעלים, ובסופה מפרט מימוש לחבילה 1 בלבד.
+> **v2.1 (2026-10-01):** תיקוני ביקורת — קטגוריות סטטוס עם `unknown`, זהויות ספק־ניטרליות, הפרדת Query/Command/Capabilities, גבול אבטחת DB מוצהר בכנות, ו־`work_statuses` לכל עסק. ראו החלטות 9, 12, 15.
 > בחבילה 1 אין migrations, אין שינוי ב־staging/production ואין נגיעה ב־ClickUp.
 
 ## Context
@@ -92,13 +93,13 @@
 | 6 | תלות מעגלית | `work_add_dependency` נועלת לכל עסק ומריצה CTE רקורסיבי על תלויות פעילות. `work_restore` מריץ את הבדיקה מחדש. אסור להוסיף תלות למשימה שבסל או מאורכבת. |
 | 7 | שיוך | `owner_user_id` + `task_members(collaborator\|watcher)`, עם FK מורכב לחברות. חברות מבוטלת מסומנת ב־`deactivated_at` ולא נמחקת. |
 | 8 | קישורים | `project_id` ו־`lead_id` (FK מורכב), ו־`task_links` לסוגים `proposal`, `calendar_event`, `marketing_item`, `url`. trigger מאמת קיום ועסק. |
-| 9 | **סטטוסים, ללא סתירה** | טבלת ייחוס `work_statuses(key PK, category, label_he, position)`, שמכילה ב־MVP סט קבוע. ב־`tasks` יש `status_key` ו־`status_category` עם **FK מורכב** `(status_key, status_category) → work_statuses(key, category)`. ה־DB פוסל כל צירוף לא עקבי, והקטגוריה עדיין זמינה לאינדקס. סטטוס ClickUp המקורי נשמר ב־`external_status` לעיון בלבד. ערכות סטטוס לכל עסק יגיעו בשלב 6, כהרחבה של אותה טבלה. |
+| 9 | **סטטוסים, ללא סתירה (עודכן ב־v2.1)** | `work_status_templates` גלובלית (קטלוג מערכת בלבד) + `work_statuses` **לכל עסק** (`business_id NOT NULL`, ‏`UNIQUE(business_id,key)`, ‏`UNIQUE(business_id,id,category)`). סטטוסי המערכת מועתקים לכל עסק (backfill + trigger על עסק חדש). ‏`tasks(status_id, status_category)` עם FK מורכב `(business_id, status_id, status_category)` — סטטוס של עסק אחר או קטגוריה סותרת בלתי ניתנים לשמירה. `key`/`category` בלתי ניתנים לשינוי; שינוי שם → `label_he` בלבד + `work_status_revisions` (append-only); אירועי משימה שומרים `status_id` + התווית באותו רגע. אין `DELETE` — `retired_at`. פירוט ה־schema ב־ADR החלטה 4. |
 | 10 | **ledger אידמפוטנטיות** | ראו הטבלה `work_requests` מתחת לטבלה הזו. |
 | 11 | היסטוריה ו־audit | כל שינוי הוא פונקציית plpgsql אחת, שכותבת את השינוי, את שורת `work_requests` ואת `work_events` (append-only) באותה טרנזקציה. `version` עולה בתוך הפונקציה, ו־`expectedVersion` לא תואם מחזיר 409. ה־audit המאוחד מציג אירועים משמעותיים מתוך שאילתה נפרדת. יבוא, cutover וכתיבות ל־ClickUp נשארים ב־`auditedAction`. |
-| 12 | **הרשאה בתוך ה־DB** | כל פונקציה רגישה מקבלת `p_actor` ו־`p_business`. השורה הראשונה בכל פונקציה היא `work_authorize(p_business, p_actor, p_operation, p_target)`, שבודקת שהחברות קיימת, `accepted_at` לא null ו־`deactivated_at` null, שהתפקיד מתאים למטריצה (§8), ושהיעד שייך לעסק. בנוסף, guard triggers על `tasks`/`time_entries`/`task_*` מסרבים ל־DML ישיר, אלא אם הפונקציה הגדירה `set_config('work.via_function','on',true)`. כך אי אפשר לעקוף את המדיניות מקוד ישן. ה־route handler מבצע את אותן בדיקות לפני כן (הגנה כפולה). |
+| 12 | **הרשאה וגבול ה־DB (עודכן ב־v2.1)** | **היום** ה־runtime וה־migrations מתחברים שניהם כ־`neondb_owner` (בעל הטבלאות) ב־prod וב־staging — לכן `work.via_function` ו־triggers הם **guardrail בלבד, לא גבול אבטחה**. **יעד (שער בעלים):** תפקיד runtime חדש `mytiv_app` (LOGIN, דרך Neon API) ללא `INSERT/UPDATE/DELETE` על טבלאות Work; טבלאות Work בבעלות `mytiv_work_owner` (NOLOGIN); כל כתיבה דרך פונקציה `SECURITY DEFINER` עם `SET search_path = pg_catalog, public, pg_temp`, ‏`REVOKE ALL … FROM PUBLIC` ו־`GRANT EXECUTE` מצומצם; `neondb_owner` רק ל־migrations. בכל פונקציה `work_authorize` (חברות פעילה, תפקיד, תחום עסק). `p_actor`/`p_business` נגזרים מה־session בצד השרת (`guard()`), לעולם לא מגוף הבקשה. סיכון שנותר ומתועד: אפליקציה פרוצה יכולה לפעול בשם חבר דרך הפונקציות, אך לא לעקוף את חוקיהן. פירוט ב־ADR החלטה 8. |
 | 13 | מחיקה | **soft delete, סל וארכוב בלבד. `purge` הוסר מה־MVP.** מחיקה פיזית תתוכנן בנפרד, יחד עם retention, פרטיות ובקשות מחיקה. |
 | 14 | מעבר | לכל פרויקט: `projects.work_source ∈ {clickup, mytiv}`. יבוא חד־פעמי ואידמפוטנטי מתוך snapshot קפוא (§9). בלי סנכרון דו־כיווני, בלי עותק צל ב־prod, ושינויים ב־ClickUp אחרי ה־flip רק מדווחים. |
-| 15 | **`TaskSource` ניטרלי** | מודל `WorkItem` חדש בלי אוצר מילים של ספק. ClickUp ו־Mytiv הם מתאמים אליו (פירוט בחבילה 1). הליבה והממשק לא מכירים `listId`, URL של ClickUp, `statusType`, ids מספריים או "Me". |
+| 15 | **`TaskSource` ניטרלי — Query/Command/Capabilities (עודכן ב־v2.1)** | `TaskQuerySource` ו־`TaskCommandSource` (`prepare` → payload לאודיט, `apply` → כתיבה) נפרדים, שניהם עם `TaskSourceCapabilities`; ה־UI מציע פעולה רק אם הספק מצהיר עליה **וגם** הפריט שייך לאותו ספק. כל זהות כוללת provider (`WorkRef` לפריט, אדם, scope של סטטוס, שורת זמן); `refKey()` היא הצורה היחידה כמחרוזת. קטגוריות: `open/active/waiting/review/done/cancelled/unknown`; ClickUp custom ממופה רק לפי טבלת שמות מפורשת, אחרת `unknown` — לא נספר כהושלם או כפעיל, מוצג "לא ממופה", ואין פעולה שמסתמכת עליו. ארכוב וסל הם flags. |
 | 16 | ראיות לסגירה | ב־MVP: `task_evidence` (URL מאומת + "בדקתי") ומדיניות לכל פרויקט, שקולה ל־`assertClosure`. |
 | 17 | דגל | `WORK_MODULE_ENABLED` (מתג חירום) + הגדרה לכל עסק. נאכף ב־routes ובדפים. |
 | 18 | אזור זמן | `lib/work/time.ts` לפי `businesses.timezone`. עמודות `date` ו־`timestamptz` חדשות (expand). |
@@ -170,8 +171,10 @@
 
 ## 4. ERD (עיקרי)
 ```
-work_statuses(key, category, label_he, position)        # MVP: סט קבוע
-tasks (+ status_key, status_category FK→work_statuses, parent_id, position, owner_user_id,
+work_status_templates(key PK, category, label_he, position)   # קטלוג מערכת גלובלי
+work_statuses(id, business_id, key, template_key?, category, label_he, position, retired_at)  # לכל עסק; UNIQUE(business_id,key), UNIQUE(business_id,id,category)
+work_status_revisions(append-only)
+tasks (+ status_id, status_category FK(business_id,status_id,status_category)→work_statuses, parent_id, position, owner_user_id,
        created_by, type task|bug|decision, waiting_on, start_on date, due_on date,
        estimate_minutes, billable, source, external_status, version, last_activity_at,
        completed_at, archived_at, deleted_at, deleted_by, trash_batch_id)
@@ -195,7 +198,8 @@ clickup_user_map · clickup_status_map
 | 0 | סקריפט `scripts/work/legacy-tasks-report.ts` (קריאה בלבד) | ערכי status/priority לא מוכרים, `due_date` פסולים, `project_id`/`lead_id` יתומים או של עסק אחר, תפקידים לא מוכרים, נפחים | הרצה על prod באישור; הפלט ללא PII |
 | expand | `0012_work_expand` | עמודות חדשות nullable בלבד (`status_key`, `due_on date`, `start_on`, …); טבלאות חדשות; `work_statuses` + seed; unique `(business_id,id)` ל־tasks ו־leads; CHECK/FK על **העמודות החדשות בלבד**, כ־`NOT VALID` כשנדרש. `due_date`/`status` הישנים לא נגעים. | staging, ואז prod |
 | backfill | סקריפט אידמפוטנטי `scripts/work/backfill-tasks.ts` (batched, מדווח) | `status` → `status_key`; `due_date` תקין → `due_on`; ערכים פסולים → `work_legacy_quarantine` ודוח; `source='legacy'`. ה־app כותב לשתי העמודות בתקופה הזו (dual-write). | אחרי דוח שלב 0 והחלטה על יתומים |
-| validate | `0013_work_validate` | `VALIDATE CONSTRAINT`; `SET NOT NULL` על `status_key`/`status_category`; CHECK תפקידים; FK מורכב ל־`project_id`/`lead_id`; guard triggers של `work.via_function` | רק כשדוח ה־backfill נקי |
+| validate | `0013_work_validate` | `VALIDATE CONSTRAINT`; `SET NOT NULL` על `status_id`/`status_category`; CHECK תפקידים; FK מורכב ל־`project_id`/`lead_id`; guard triggers של `work.via_function` (**guardrail בלבד**) | רק כשדוח ה־backfill נקי |
+| role split | `00xx_work_roles` + שינוי `DATABASE_URL` של ה־runtime | `mytiv_work_owner` (NOLOGIN), ‏`mytiv_app` (LOGIN, נוצר ב־Neon API), העברת בעלות טבלאות Work, ‏`REVOKE` DML, ‏`GRANT EXECUTE` לפונקציות; בדיקה מקומית שה־runtime לא יכול DML ישיר | **שער בעלים** (תפקיד וסוד חדשים, env ב־Vercel) |
 | (פונקציות) | `0014_work_functions`, `0015_work_time` (+`btree_gist`), `0016_work_collab` (תגובות, checklist, התראות), `0017_work_import` | לפי ה־PRs | לכל אחד |
 | contract | `0018_work_contract` | הסרת `status`/`due_date` הישנים (או הפיכתם לעמודות generated לקריאה ישנה). רק אחרי מחזור שחרור שבו אף קורא לא נוגע בהם. | שער נפרד |
 

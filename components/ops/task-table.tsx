@@ -5,7 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import type { StatusOptions, WorkItem, WorkPerson } from "@/lib/work-source/types";
+import { parseRefKey, refKey, sameWorkRef, type StatusOptions, type TaskSourceCapabilities, type WorkItem, type WorkPerson } from "@/lib/work-source/types";
 import { waitingOnLabel } from "@/lib/work-source/labels";
 import { REVIEW_PROMPT, needsReviewConfirmation, statusChange } from "@/lib/ops-closure";
 
@@ -14,8 +14,10 @@ type Props = {
   projectId: string;
   tasks: WorkItem[];
   members: WorkPerson[];
-  /** Allowed statuses per status scope — the vocabulary can differ per scope. */
+  /** Allowed statuses per status scope (keyed by refKey) — the vocabulary can differ per scope. */
   statusOptions: StatusOptions;
+  /** What the project's source supports (null: no source) — an action it does not declare is never offered. */
+  capabilities: TaskSourceCapabilities | null;
   /** Members can look but not write; the server refuses anyway (403), this just says so up front. */
   readOnly?: boolean;
   emptyMessage: string;
@@ -29,7 +31,12 @@ type Props = {
  * toast — a silent rollback is indistinguishable from a change that never
  * registered.
  */
-export function TaskTable({ businessSlug, projectId, tasks, members, statusOptions, emptyMessage, readOnly = false }: Props) {
+/** An action is offered only if the source declares it AND the item belongs to that source (the write route is the source's own). */
+function allowed(capabilities: TaskSourceCapabilities | null, task: WorkItem, action: "changeStatus" | "assign"): boolean {
+  return Boolean(capabilities && capabilities.provider === task.ref.provider && capabilities[action]);
+}
+
+export function TaskTable({ businessSlug, projectId, tasks, members, statusOptions, capabilities, emptyMessage, readOnly = false }: Props) {
   const { toast } = useToast();
   const [rows, setRows] = React.useState(tasks);
   const activeRequests = React.useRef(new Set<string>());
@@ -45,13 +52,14 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusOptio
   }
 
   async function patch(task: WorkItem, body: Record<string, unknown>, optimistic: Partial<WorkItem>, label: string) {
-    const id = task.ref.id;
-    if (activeRequests.current.has(id)) return;
+    // Rows, requests and pending state are keyed by provider+id; the write URL takes the source's own id.
+    const key = refKey(task.ref), id = task.ref.id;
+    if (activeRequests.current.has(key)) return;
     if (!window.confirm(`${label}? This will update ${task.sourceLabel}.`)) return;
-    activeRequests.current.add(id);
+    activeRequests.current.add(key);
     const before = task;
-    setRows((prev) => prev.map((r) => (r.ref.id === id ? { ...r, ...optimistic } : r)));
-    setPending((p) => ({ ...p, [id]: true }));
+    setRows((prev) => prev.map((r) => (sameWorkRef(r.ref, task.ref) ? { ...r, ...optimistic } : r)));
+    setPending((p) => ({ ...p, [key]: true }));
     try {
       const res = await fetch(`/api/${businessSlug}/ops/tasks/${id}`, {
         method: "PATCH",
@@ -66,7 +74,7 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusOptio
       }
       toast({ message: label, href: task.sourceLink?.href, tone: "ok" });
     } catch (err) {
-      setRows(prev => prev.map(row => row.ref.id === id ? before : row));
+      setRows(prev => prev.map(row => sameWorkRef(row.ref, task.ref) ? before : row));
       const reason = err instanceof Error ? err.message : "unknown";
       toast({
         message:
@@ -76,13 +84,13 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusOptio
         tone: "error",
       });
     } finally {
-      activeRequests.current.delete(id);
-      setPending((p) => ({ ...p, [id]: false }));
+      activeRequests.current.delete(key);
+      setPending((p) => ({ ...p, [key]: false }));
     }
   }
 
   function onStatus(task: WorkItem, status: string) {
-    if (status === task.statusLabel) return;
+    if (!allowed(capabilities, task, "changeStatus") || status === task.statusLabel) return;
     const evidenceUrl = window.prompt('For closing: paste the exact attached recording URL you have reviewed. Otherwise leave blank.', '');
     if (evidenceUrl === null) return;
     // A URL is not a review. The reviewed flag comes only from this second, explicit answer;
@@ -95,16 +103,21 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusOptio
         return;
       }
     }
-    patch(task, statusChange(status, evidenceUrl, reviewConfirmed), { statusLabel: status }, `Status set to “${status}”`);
+    // The new status's meaning comes from the source's own options for this scope; absent there, it is unknown.
+    const category = statusOptions[refKey(task.statusScope)]?.find((s) => s.label === status)?.category ?? "unknown";
+    patch(task, statusChange(status, evidenceUrl, reviewConfirmed), { statusLabel: status, statusCategory: category }, `Status set to “${status}”`);
   }
 
   function onAssignee(task: WorkItem, raw: string) {
-    const nextRef = raw || null;
-    if (nextRef === (task.assignee?.ref ?? null)) return;
-    const member = members.find((m) => m.ref === nextRef) ?? null;
+    if (!allowed(capabilities, task, "assign")) return;
+    const nextRef = raw ? parseRefKey(raw) : null;
+    if (raw && !nextRef) return;
+    if (nextRef ? sameWorkRef(nextRef, task.assignee?.ref) : !task.assignee) return;
+    const member = nextRef ? members.find((m) => sameWorkRef(m.ref, nextRef)) ?? null : null;
+    if (nextRef && !member) return;
     patch(
       task,
-      // Person refs are opaque; the write route turns them back into the source's own ids.
+      // Neutral person refs ({provider, id}); the source's own route turns them back into its ids.
       { assignee: { add: nextRef ? [nextRef] : [], rem: task.assignee ? [task.assignee.ref] : [] } },
       { assignee: member },
       member ? `Assigned to ${member.name}` : "Assignee cleared"
@@ -122,11 +135,11 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusOptio
   return (
     <div className="flex flex-col gap-2">
       {rows.map((task) => {
-        const statuses = statusOptions[task.statusScope] ?? (task.statusLabel ? [task.statusLabel] : []);
-        const busy = pending[task.ref.id];
+        const statuses = statusOptions[refKey(task.statusScope)] ?? (task.statusLabel ? [{ label: task.statusLabel, category: task.statusCategory }] : []);
+        const busy = pending[refKey(task.ref)];
         return (
           <div
-            key={`${task.ref.provider}:${task.ref.id}`}
+            key={refKey(task.ref)}
             className={cn(
               "bg-card border-border rounded-xl border p-3.5 transition-opacity",
               busy && "opacity-60"
@@ -150,22 +163,22 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusOptio
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <select
                 value={task.statusLabel}
-                disabled={busy || readOnly}
+                disabled={busy || readOnly || !allowed(capabilities, task, "changeStatus")}
                 title={readOnly ? "Owners and admins only" : undefined}
                 onChange={(e) => onStatus(task, e.target.value)}
                 aria-label="Status"
                 className="border-border bg-muted text-foreground rounded-lg border px-2 py-1 text-xs"
               >
                 {statuses.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                  <option key={s.label} value={s.label}>
+                    {s.label}
                   </option>
                 ))}
               </select>
 
               <select
-                value={task.assignee?.ref ?? ""}
-                disabled={busy || readOnly}
+                value={task.assignee ? refKey(task.assignee.ref) : ""}
+                disabled={busy || readOnly || !allowed(capabilities, task, "assign")}
                 title={readOnly ? "Owners and admins only" : undefined}
                 onChange={(e) => onAssignee(task, e.target.value)}
                 aria-label="Assignee"
@@ -173,12 +186,15 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusOptio
               >
                 <option value="">Unassigned</option>
                 {members.map((m) => (
-                  <option key={m.ref} value={m.ref}>
+                  <option key={refKey(m.ref)} value={refKey(m.ref)}>
                     {m.name}
                   </option>
                 ))}
               </select>
 
+              {task.statusCategory === "unknown" && (
+                <Badge title="This status has no agreed meaning yet — it is not counted as done or as active work">Unmapped status</Badge>
+              )}
               {task.daysIdle >= 3 && <Badge variant="stuck">{task.daysIdle}d idle</Badge>}
               {task.dueDate ? (
                 task.overdue ? (

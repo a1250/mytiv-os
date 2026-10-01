@@ -1,6 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { WorkItem } from "@/lib/work-source/types";
+import { refKey, type WorkItem } from "@/lib/work-source/types";
 import { waitingOnLabel } from "@/lib/work-source/labels";
 
 function IdleCell({ days }: { days: number }) {
@@ -48,13 +48,14 @@ export function StuckList({ tasks }: { tasks: WorkItem[] }) {
           </thead>
           <tbody>
             {tasks.map((task) => (
-              <tr key={`${task.ref.provider}:${task.ref.id}`} className="border-border/60 hover:bg-muted/40 border-b transition-colors last:border-0">
+              <tr key={refKey(task.ref)} className="border-border/60 hover:bg-muted/40 border-b transition-colors last:border-0">
                 <td className="max-w-md px-4 py-3">
                   <div className="truncate font-medium" title={task.title}>
                     {task.title}
                   </div>
                   <div className="text-muted-foreground mt-0.5 text-xs">
                     {task.groupLabel} · {task.statusLabel}
+                    {task.statusCategory === "unknown" && " (unmapped status)"}
                   </div>
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap">{task.projectLabel}</td>
@@ -92,7 +93,7 @@ export function StuckList({ tasks }: { tasks: WorkItem[] }) {
       {/* Phone */}
       <ul className="flex flex-col gap-2 md:hidden">
         {tasks.map((task) => (
-          <li key={`${task.ref.provider}:${task.ref.id}`} className="bg-card border-border rounded-xl border p-3.5">
+          <li key={refKey(task.ref)} className="bg-card border-border rounded-xl border p-3.5">
             <a href={task.sourceLink?.href} target="_blank" rel="noreferrer" className="flex items-start gap-2">
               <span className="flex-1 text-sm leading-snug font-medium">{task.title}</span>
               <ExternalLink className="text-muted-foreground mt-0.5 size-4 shrink-0" />

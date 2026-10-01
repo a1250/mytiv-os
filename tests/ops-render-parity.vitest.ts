@@ -15,9 +15,9 @@ import { TaskTable } from '../components/ops/task-table';
 import { ClientWorkspace } from '../components/ops/client-workspace';
 import { MarketingPanel } from '../components/ops/marketing-panel';
 import { StatTiles } from '../components/ops/stat-tiles';
-import { fromClickUpMember, fromClickUpTask } from '../lib/work-source/clickup-adapter';
+import { CLICKUP_CAPABILITIES, clickUpStatusOptions, fromClickUpMember, fromClickUpTask } from '../lib/work-source/clickup-adapter';
 import { workStats } from '../lib/work-source/types';
-import { OPS_TASKS, MEMBERS, STATUSES_BY_LIST, PLAN } from './fixtures/ops-tasks';
+import { OPS_TASKS, MEMBERS, FOLDER_LISTS, PLAN } from './fixtures/ops-tasks';
 
 /**
  * Package-1 parity guard (Mytiv Work): the Ops screens' rendered HTML for a fixed ClickUp-shaped fixture.
@@ -29,6 +29,7 @@ const render = (node: ReturnType<typeof h>) => renderToStaticMarkup(h(Toaster, n
 // Since the refactor the screens take neutral WorkItems: the same ClickUp fixture goes through the adapter.
 const tasks = OPS_TASKS.map(fromClickUpTask);
 const members = MEMBERS.map(fromClickUpMember);
+const statusOptions = clickUpStatusOptions(FOLDER_LISTS);
 const work = tasks.filter(t => t.kind === 'task' || t.kind === 'other');
 const bugs = tasks.filter(t => t.kind === 'bug');
 const decisions = tasks.filter(t => t.kind === 'decision');
@@ -40,13 +41,13 @@ test('StuckList markup is unchanged', () => {
   expect(render(h(StuckList, { tasks: work.filter(t => t.daysIdle >= 3) }))).toMatchSnapshot();
 });
 test('TaskTable markup is unchanged (writer and read-only)', () => {
-  const props = { businessSlug: 'mytiv', projectId: 'p-1', tasks: work, members, statusOptions: STATUSES_BY_LIST, emptyMessage: 'none' };
+  const props = { businessSlug: 'mytiv', projectId: 'p-1', tasks: work, members, statusOptions, capabilities: CLICKUP_CAPABILITIES, emptyMessage: 'none' };
   expect(render(h(TaskTable, props))).toMatchSnapshot();
   expect(render(h(TaskTable, { ...props, readOnly: true }))).toMatchSnapshot();
   expect(render(h(TaskTable, { ...props, tasks: [] }))).toMatchSnapshot();
 });
 test('ClientWorkspace markup is unchanged (all tabs)', () => {
-  const props = { businessSlug: 'mytiv', project, tasks: work, bugs, decisions, members, statusOptions: STATUSES_BY_LIST, marketing, canWrite: true, incomplete: false };
+  const props = { businessSlug: 'mytiv', project, tasks: work, bugs, decisions, members, statusOptions, capabilities: CLICKUP_CAPABILITIES, marketing, canWrite: true, incomplete: false };
   expect(render(h(ClientWorkspace, props))).toMatchSnapshot();
   expect(render(h(ClientWorkspace, { ...props, incomplete: true, canWrite: false }))).toMatchSnapshot();
 });

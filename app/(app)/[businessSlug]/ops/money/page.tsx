@@ -6,7 +6,7 @@ import { listAcceptedProposalsForProject } from "@/lib/db/queries/proposals";
 import { computeTotals } from "@/lib/pdf-helpers";
 import { folderFromProject } from "@/lib/ops-config";
 import { projectTaskSource } from "@/lib/work-source";
-import type { TimeByItem } from "@/lib/work-source/types";
+import { refKey, type TimeByItem } from "@/lib/work-source/types";
 import {
   allTimeWindow,
   compareEstimates,
@@ -92,7 +92,7 @@ export default async function MoneyPage({
       const incomplete = !complete;
       if (incomplete) anyTasksIncomplete = true;
       const estimates = new Map(
-        items.map((t) => [t.ref.id, { name: t.title, estimateHours: t.estimateHours }])
+        items.map((t) => [refKey(t.ref), { name: t.title, estimateHours: t.estimateHours }])
       );
 
       rows.push({
@@ -104,7 +104,8 @@ export default async function MoneyPage({
           hourlyCost,
           revenue,
         }),
-        overruns: compareEstimates(monthTime.perItem.map((t) => ({ taskId: t.itemId, taskName: t.itemName, hours: t.hours })), estimates).filter(
+        // Keyed by provider+id so equal ids from two sources can never share an estimate.
+        overruns: compareEstimates(monthTime.perItem.map((t) => ({ taskId: t.item ? refKey(t.item) : "(no item)", taskName: t.itemName, hours: t.hours })), estimates).filter(
           (e) => e.overrunPct !== null && e.overrunPct > 0
         ),
         incomplete,

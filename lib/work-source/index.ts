@@ -5,9 +5,9 @@
 import 'server-only';
 import type { ClientFolder } from '../ops-config';
 import { clickupOpenItems, clickupProjectSource } from './clickup-adapter';
-import type { ProjectTaskSource, WorkItemsRead } from './types';
+import type { TaskQuerySource, WorkItemsRead } from './types';
 
-export function projectTaskSource(folder: ClientFolder | null): ProjectTaskSource | null {
+export function projectTaskSource(folder: ClientFolder | null): TaskQuerySource | null {
   return folder ? clickupProjectSource(folder) : null;
 }
 

@@ -110,6 +110,7 @@ export default async function ClientWorkspacePage({
         decisions={rows.filter((t) => t.kind === "decision")}
         members={members}
         statusOptions={statusOptions}
+        capabilities={source ? source.capabilities : null}
       />
       <Suspense fallback={<p className="mt-6 text-xs">טוען היסטוריית אישורים…</p>}>
         <AuditLog businessSlug={businessSlug} businessId={business.id} projectId={projectId} canWrite={role === "owner" || role === "admin"} />
