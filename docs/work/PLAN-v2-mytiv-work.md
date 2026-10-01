@@ -1,6 +1,7 @@
 # תוכנית מימוש — Mytiv Work (גרסה 2, אחרי review הבעלים)
 
 > **מצב:** תוכנית מעודכנת לפי 12 החלטות הבעלים, ובסופה מפרט מימוש לחבילה 1 בלבד.
+> **התקדמות (מקומית בלבד, ענף `auto/work-pkg1`, לא נדחף):** חבילה 1 + תיקוני ביקורת ✔ · PR 2 דוח נתונים ישנים ✔ · PR 3 `0012_work_expand` + dual-write ✔ · PR 4 backfill ✔. השערים הבאים חיצוניים: הרצת הדוח על production, החלת 0012 על staging/production, ה־backfill שם, החלטות על יתומים/סטטוסים לא מוכרים, ופיצול תפקיד ה־runtime. ראיות: `docs/work/pkg1-verification.md`.
 > **v2.1 (2026-10-01):** תיקוני ביקורת — קטגוריות סטטוס עם `unknown`, זהויות ספק־ניטרליות, הפרדת Query/Command/Capabilities, גבול אבטחת DB מוצהר בכנות, ו־`work_statuses` לכל עסק. ראו החלטות 9, 12, 15.
 > בחבילה 1 אין migrations, אין שינוי ב־staging/production ואין נגיעה ב־ClickUp.
 

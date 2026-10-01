@@ -74,3 +74,25 @@ Local stack: fresh Postgres DB built from the 12 migrations + `scripts/staging/s
 | Any `OpsTask`/`listId`/`statusType`/`blockedOn`/numeric person id in a neutral component | — | **None found** (no bugs) |
 
 Regressions checked: permissions (writer-only route, member read-only UI, capability gating), Money (estimates and logged time keyed by provider+id; "(no task)" time has no item), marketing panel (matches by `WorkRef`), Ops Home counts (never read the category).
+
+---
+
+# PR 2–4 (local only) — legacy report, expand migration, backfill — head 68fdb02
+
+| Check | Result |
+|---|---|
+| `npm test` | node:test 28/28 · vitest 23 files, 199 |
+| `tsc --noEmit` / eslint on new code | clean / clean |
+| DB integration (`run.sh`, 13 migrations) | 10 files, **40** tests · 4 SQL fixtures · 3 concurrency scripts · **21** checks in `tests/work-expand-on-legacy.sh` |
+| `drizzle-kit migrate` (real runner, breakpoints) on a fresh local DB | 13 migrations applied; 7 templates; 4 Work triggers |
+| 0012 on legacy junk | every legacy task/business/membership/project value byte-identical (md5 fingerprint) |
+| Legacy report script (neon client via shim) | runs in one READ ONLY transaction; remote host refused (exit 2) |
+| Backfill script (neon client via shim), 1200 generated legacy rows | status 900/300 unknown, due_on 960/240 invalid, completed_at 300, last_activity 1200; second run changes 0; remote host refused (exit 2) |
+| Isolated `next build` | pass (68fdb02) |
+| Ops / marketing HTTP matrices (local DB with 0012) | 67/67 · 67/67 |
+| `work-http-check.mjs` (dual-write path) | 14/14 |
+| Mutation | 0012: 8/8 killed (one test tightened); dual-write 3/3; backfill 2 real killed + 3 equivalent (documented) |
+
+**Deploy order** (when the gates open): apply `0012_work_expand` → then deploy code containing the dual-write
+(the `/tasks` writes reference the new columns). The legacy report may run before or after 0012; the backfill only
+after 0012. Nothing here has run on staging, Preview or production.
