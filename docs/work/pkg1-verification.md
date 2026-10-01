@@ -41,3 +41,36 @@ Local stack: fresh Postgres DB built from the 12 migrations + `scripts/staging/s
 ## Not verified
 - Tasks page error message in a browser (UI change is a single alert line; API behaviour verified above).
 - Nothing ran on staging, Preview or production.
+
+---
+
+# Package 1 review fixes (v2.1, commit d766992 + this one)
+
+| Check | Result |
+|---|---|
+| `npm test` | node:test 28/28 · vitest 23 files, **199** |
+| `tsc --noEmit` | clean |
+| eslint (repo) | 51 errors, 44 warnings — unchanged pre-existing total; new/changed code adds none |
+| DB integration (local PG) | 8 files, **32** + 4 SQL fixtures + 3 concurrency scripts |
+| Isolated `next build` | pass (d766992) |
+| Ops HTTP matrix (local, ClickUp mock) | **67/67** |
+| Marketing HTTP matrix (local) | **67/67** |
+| `scripts/staging/work-http-check.mjs` (new, local only) | **14/14** — 12 legacy `/tasks` checks + 2 neutral-assignee checks on the ClickUp write route |
+| Mutation (review fixes) | **10/10 killed**: custom→active default, closed→unknown, Mytiv ref accepted by ClickUp, refKey without provider, sameWorkRef without provider, unknown counted finished, UI ignoring the changeStatus capability, unmapped badge removed, command source accepting a foreign target, marker validated only after the claim |
+| Ops markup parity | identical to e35a189 after normalising assignee `<option>` values (`101` → `clickup:101`) — the only change |
+
+## Self-review — every remaining ClickUp reference in the migrated consumers
+
+| Where | What | Classification |
+|---|---|---|
+| `lib/work-source/clickup-adapter.ts` | `OpsTask`, `listId`, `statusType`, `blockedOn`, numeric member ids, ClickUp URLs | **Correct** — the adapter is the one place allowed to know them |
+| `lib/work-source/index.ts` | always selects the ClickUp source | **Correct for now** — `projects.work_source` arrives with the expand migration |
+| `lib/marketing/task-ref.ts` | reads `clickupTaskId` | **Correct** — the single translation point until the C1 `taskRef` contract (PR 14) |
+| `app/api/[slug]/ops/tasks/[taskId]/route.ts` | ClickUp-specific route (scope, closing evidence, audit snapshots) | **Documented debt** — provider-specific by design; writes now go through `clickupCommandSource` |
+| `components/ops/task-table.tsx` | write URL uses `task.ref.id` | **Correct** — only offered when `capabilities.provider === task.ref.provider` (tested) |
+| Ops Home / Projects / workspace / Money copy: "Live from ClickUp", "ClickUp folder …", "hours logged in ClickUp", `ClickUpFailed`/`ClickUpNotConfigured` notices, `project.clickupFolderId` texts | project-level link to ClickUp, not task model | **Documented debt** — becomes source-aware with `projects.work_source` (PR 12) |
+| `components/ops/marketing-panel.tsx` header "מצב הביצוע מ־ClickUp" | copy | **Documented debt** (PR 12/14) |
+| Copilot, rollback/reconcile, `/ops/snapshot`, `/ops/members`, `assertClosure` | ClickUp-only features | **Documented debt** (PR 12) |
+| Any `OpsTask`/`listId`/`statusType`/`blockedOn`/numeric person id in a neutral component | — | **None found** (no bugs) |
+
+Regressions checked: permissions (writer-only route, member read-only UI, capability gating), Money (estimates and logged time keyed by provider+id; "(no task)" time has no item), marketing panel (matches by `WorkRef`), Ops Home counts (never read the category).
