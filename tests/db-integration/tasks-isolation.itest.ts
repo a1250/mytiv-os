@@ -83,3 +83,21 @@ test('members cannot delete; owners can; a deleted task is then 404', async () =
   expect(await row(id.ta)).toBeUndefined();
   expect((await DELETE(req('DELETE', `/${id.ta}`), one(id.ta))).status).toBe(404);
 });
+
+// Mytiv Work expand (0012): every legacy write fills the typed columns in the same statement.
+test('dual-write: own-business status row + category, due_on, completed_at, source, version, activity', async () => {
+  as(id.a, id.owner, 'owner');
+  const created = await (await POST(req('POST', '', { title: 'Dual', dueDate: '2026-11-05' }), list)).json();
+  const q = async () => (await pool.query(`SELECT t.status_category, t.due_on::text AS due_on, t.completed_at, t.source, t.version, t.last_activity_at,
+      s.key AS status_key, s.business_id AS status_business FROM tasks t LEFT JOIN work_statuses s ON s.id = t.status_id WHERE t.id = $1`, [created.id])).rows[0];
+  expect(await q()).toMatchObject({ status_key: 'todo', status_category: 'open', status_business: id.a, due_on: '2026-11-05', completed_at: null, source: 'manual', version: 1 });
+  expect((await q()).last_activity_at).toBeInstanceOf(Date);
+  await PATCH(req('PATCH', `/${created.id}`, { status: 'done', dueDate: '' }), one(created.id));
+  const done = await q();
+  expect(done).toMatchObject({ status_key: 'done', status_category: 'done', due_on: null, version: 2 });
+  expect(done.completed_at).toBeInstanceOf(Date);
+  await PATCH(req('PATCH', `/${created.id}`, { status: 'done' }), one(created.id));
+  expect((await q()).completed_at).toEqual(done.completed_at); // a repeated 'done' keeps the first completion
+  await PATCH(req('PATCH', `/${created.id}`, { status: 'in_progress' }), one(created.id));
+  expect(await q()).toMatchObject({ status_key: 'in_progress', status_category: 'active', completed_at: null, version: 4 });
+});

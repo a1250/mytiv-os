@@ -17,4 +17,5 @@ done
 echo "migrations applied: $(node -e "console.log(require('./drizzle/migrations/meta/_journal.json').entries.length)")"
 for f in tests/ops-database.sql tests/marketing-*.sql; do $P -d "$ITEST_DB" -f "$f" >/dev/null 2>&1 && echo "SQL PASS  $f" || { echo "SQL FAIL  $f"; exit 1; }; done
 for c in tests/marketing-*-concurrency.sh; do "$c" "-d $ITEST_DB"; done
+for w in tests/work-*.sh; do ITEST_DB="$ITEST_DB" "$w"; done
 node node_modules/vitest/vitest.mjs run --config tests/db-integration/vitest.config.mjs

@@ -34,7 +34,7 @@ const work = tasks.filter(t => t.kind === 'task' || t.kind === 'other');
 const bugs = tasks.filter(t => t.kind === 'bug');
 const decisions = tasks.filter(t => t.kind === 'decision');
 const project = { id: 'p-1', businessId: 'b-1', name: 'UMINO', client: 'UMINO', status: 'active', brief: '', budget: '', deadline: null,
-  clickupFolderId: '901816026303', createdAt: new Date('2026-01-01T00:00:00Z'), updatedAt: new Date('2026-01-01T00:00:00Z'), folderState: 'linked' as const };
+  clickupFolderId: '901816026303', workSource: 'clickup', cutoverAt: null, archivedAt: null, createdAt: new Date('2026-01-01T00:00:00Z'), updatedAt: new Date('2026-01-01T00:00:00Z'), folderState: 'linked' as const };
 const marketing = { binding: 'umino-demo', plan: PLAN, canImport: true, unavailable: false, now: '2026-10-01T12:00:00Z', bindingVersion: 1, previousPlans: [], moduleEnabled: true };
 
 test('StuckList markup is unchanged', () => {
