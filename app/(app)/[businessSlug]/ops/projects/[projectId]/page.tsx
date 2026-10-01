@@ -12,7 +12,8 @@ import { auth } from "@/lib/auth";
 import { resolveBusiness } from "@/lib/tenant";
 import { getProject } from "@/lib/db/queries/projects";
 import { folderFromProject } from "@/lib/ops-config";
-import { getFolderLists, getTasksByFolderWithCompleteness, getWorkspaceMembers, type OpsTask, type WorkspaceMember } from "@/lib/clickup";
+import { projectTaskSource } from "@/lib/work-source";
+import type { StatusOptions, WorkItem, WorkPerson } from "@/lib/work-source/types";
 import { ClientWorkspace } from "@/components/ops/client-workspace";
 import { ClickUpFailed } from "@/components/ops/notice";
 
@@ -29,7 +30,7 @@ export default async function ClientWorkspacePage({
   const project = await getProject(business.id, projectId);
   if (!project) notFound();
 
-  const folder = folderFromProject(project);
+  const source = projectTaskSource(folderFromProject(project));
   const activeMarketing = await getMarketingBinding(business.id, projectId);
   const binding = activeMarketing?.marketingBusiness ?? null;
   // The raw binding row (incl. revoked) is loaded only for owners — the only role that may edit it.
@@ -47,23 +48,23 @@ export default async function ClientWorkspacePage({
     } catch { marketingUnavailable = true; }
   }
 
-  let rows: OpsTask[] = [];
+  let rows: WorkItem[] = [];
   let tasksIncomplete = false;
-  let members: WorkspaceMember[] = [];
-  let statusesByList: Record<string, string[]> = {};
+  let members: WorkPerson[] = [];
+  let statusOptions: StatusOptions = {};
   let failure: string | null = null;
 
-  if (folder) {
+  if (source) {
     try {
-      const [taskResult, lists, people] = await Promise.all([
-        getTasksByFolderWithCompleteness(folder, { fresh: true }),
-        getFolderLists(folder),
-        getWorkspaceMembers(),
+      const [read, options, people] = await Promise.all([
+        source.items({ fresh: true }),
+        source.statusOptions(),
+        source.people(),
       ]);
-      rows = taskResult.tasks;
-      tasksIncomplete = taskResult.incomplete;
+      rows = read.items;
+      tasksIncomplete = !read.complete;
       members = people;
-      statusesByList = Object.fromEntries(lists.map((l) => [l.id, l.statuses]));
+      statusOptions = options;
     } catch (err) {
       failure = err instanceof Error ? err.message : "Unknown ClickUp error";
     }
@@ -104,11 +105,11 @@ export default async function ClientWorkspacePage({
           previousPlans: previousPlans.map((p) => ({ bindingVersion: p.bindingVersion, revision: p.revision, importedAt: p.importedAt.toISOString() })) }}
         canWrite={role === "owner" || role === "admin"}
         incomplete={tasksIncomplete}
-        tasks={rows.filter((t) => t.listKind === "tasks" || t.listKind === "other")}
-        bugs={rows.filter((t) => t.isBug)}
-        decisions={rows.filter((t) => t.isDecision)}
+        tasks={rows.filter((t) => t.kind === "task" || t.kind === "other")}
+        bugs={rows.filter((t) => t.kind === "bug")}
+        decisions={rows.filter((t) => t.kind === "decision")}
         members={members}
-        statusesByList={statusesByList}
+        statusOptions={statusOptions}
       />
       <Suspense fallback={<p className="mt-6 text-xs">טוען היסטוריית אישורים…</p>}>
         <AuditLog businessSlug={businessSlug} businessId={business.id} projectId={projectId} canWrite={role === "owner" || role === "admin"} />

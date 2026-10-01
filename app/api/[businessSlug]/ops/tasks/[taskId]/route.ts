@@ -8,6 +8,7 @@ import { expectedMarker } from '@/lib/ops-policy';
 import { requireScopedTask, requireStatusEvidence } from '@/lib/ops-access';
 import { OpsPolicyError, assertWriter, assertConfirmation, objectInput, requiredText } from '@/lib/ops-policy';
 import { auditedAction } from '@/lib/ops-audit';
+import { clickUpAssigneeIds } from '@/lib/work-source/clickup-adapter';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ businessSlug: string; taskId: string }> }) {
   try {
@@ -28,13 +29,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bu
     }
     if (body.assignee !== undefined) {
       const value = objectInput(body.assignee);
+      // Neutral person refs (strings) or legacy numeric ids → ClickUp member ids, each a current member.
       const members = new Set((await getWorkspaceMembers()).map(m => m.id));
-      const parseIds = (input: unknown): number[] => {
-        if (input === undefined) return [];
-        if (!Array.isArray(input) || input.length > 50 || input.some(id => !Number.isSafeInteger(id) || !members.has(id))) throw new OpsPolicyError('invalid_assignee');
-        return input;
-      };
-      patch.assignees = { add: parseIds(value.add), rem: parseIds(value.rem) };
+      patch.assignees = { add: clickUpAssigneeIds(value.add, members), rem: clickUpAssigneeIds(value.rem, members) };
     }
     if (!Object.keys(patch).length) throw new OpsPolicyError('nothing_to_update');
     // The row the human acted on carries the `date_updated` they saw; a task that moved on

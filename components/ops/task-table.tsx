@@ -5,31 +5,31 @@ import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import type { OpsTask } from "@/lib/clickup";
-import type { WorkspaceMember } from "@/lib/clickup";
+import type { StatusOptions, WorkItem, WorkPerson } from "@/lib/work-source/types";
+import { waitingOnLabel } from "@/lib/work-source/labels";
 import { REVIEW_PROMPT, needsReviewConfirmation, statusChange } from "@/lib/ops-closure";
 
 type Props = {
   businessSlug: string;
   projectId: string;
-  tasks: OpsTask[];
-  members: WorkspaceMember[];
-  /** Allowed statuses per ClickUp list id — the vocabulary differs per list. */
-  statusesByList: Record<string, string[]>;
+  tasks: WorkItem[];
+  members: WorkPerson[];
+  /** Allowed statuses per status scope — the vocabulary can differ per scope. */
+  statusOptions: StatusOptions;
   /** Members can look but not write; the server refuses anyway (403), this just says so up front. */
   readOnly?: boolean;
   emptyMessage: string;
 };
 
 /**
- * Live ClickUp rows with inline status and assignee.
+ * Live work rows (from whichever source holds the project) with inline status and assignee.
  *
  * Changes apply optimistically and roll back on rejection, because a work
  * board that pauses on every dropdown stops being used. Every outcome raises a
  * toast — a silent rollback is indistinguishable from a change that never
  * registered.
  */
-export function TaskTable({ businessSlug, projectId, tasks, members, statusesByList, emptyMessage, readOnly = false }: Props) {
+export function TaskTable({ businessSlug, projectId, tasks, members, statusOptions, emptyMessage, readOnly = false }: Props) {
   const { toast } = useToast();
   const [rows, setRows] = React.useState(tasks);
   const activeRequests = React.useRef(new Set<string>());
@@ -44,44 +44,45 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
     setRows(tasks);
   }
 
-  async function patch(task: OpsTask, body: Record<string, unknown>, optimistic: Partial<OpsTask>, label: string) {
-    if (activeRequests.current.has(task.id)) return;
-    if (!window.confirm(`${label}? This will update ClickUp.`)) return;
-    activeRequests.current.add(task.id);
+  async function patch(task: WorkItem, body: Record<string, unknown>, optimistic: Partial<WorkItem>, label: string) {
+    const id = task.ref.id;
+    if (activeRequests.current.has(id)) return;
+    if (!window.confirm(`${label}? This will update ${task.sourceLabel}.`)) return;
+    activeRequests.current.add(id);
     const before = task;
-    setRows((prev) => prev.map((r) => (r.id === task.id ? { ...r, ...optimistic } : r)));
-    setPending((p) => ({ ...p, [task.id]: true }));
+    setRows((prev) => prev.map((r) => (r.ref.id === id ? { ...r, ...optimistic } : r)));
+    setPending((p) => ({ ...p, [id]: true }));
     try {
-      const res = await fetch(`/api/${businessSlug}/ops/tasks/${task.id}`, {
+      const res = await fetch(`/api/${businessSlug}/ops/tasks/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         // The marker this row was rendered from: the server refuses the write if the task moved on since.
-        body: JSON.stringify({ ...body, projectId, confirmed: true, requestId: crypto.randomUUID(), expectedUpdatedAt: task.updatedAt }),
+        body: JSON.stringify({ ...body, projectId, confirmed: true, requestId: crypto.randomUUID(), expectedUpdatedAt: task.concurrencyToken }),
       });
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: "unknown" }));
-        if (error === "task_changed_since_read") throw new Error("the task changed in ClickUp since it was loaded — refresh and try again");
+        if (error === "task_changed_since_read") throw new Error(`the task changed in ${task.sourceLabel} since it was loaded — refresh and try again`);
         throw new Error(error);
       }
-      toast({ message: label, href: task.url, tone: "ok" });
+      toast({ message: label, href: task.sourceLink?.href, tone: "ok" });
     } catch (err) {
-      setRows(prev => prev.map(row => row.id === task.id ? before : row));
+      setRows(prev => prev.map(row => row.ref.id === id ? before : row));
       const reason = err instanceof Error ? err.message : "unknown";
       toast({
         message:
-          reason === "clickup_rate_limited"
-            ? "ClickUp rate limit — the change was not saved."
-            : `Could not update in ClickUp (${reason}). Change reverted.`,
+          reason === `${task.ref.provider}_rate_limited`
+            ? `${task.sourceLabel} rate limit — the change was not saved.`
+            : `Could not update in ${task.sourceLabel} (${reason}). Change reverted.`,
         tone: "error",
       });
     } finally {
-      activeRequests.current.delete(task.id);
-      setPending((p) => ({ ...p, [task.id]: false }));
+      activeRequests.current.delete(id);
+      setPending((p) => ({ ...p, [id]: false }));
     }
   }
 
-  function onStatus(task: OpsTask, status: string) {
-    if (status === task.status) return;
+  function onStatus(task: WorkItem, status: string) {
+    if (status === task.statusLabel) return;
     const evidenceUrl = window.prompt('For closing: paste the exact attached recording URL you have reviewed. Otherwise leave blank.', '');
     if (evidenceUrl === null) return;
     // A URL is not a review. The reviewed flag comes only from this second, explicit answer;
@@ -94,16 +95,17 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
         return;
       }
     }
-    patch(task, statusChange(status, evidenceUrl, reviewConfirmed), { status }, `Status set to “${status}”`);
+    patch(task, statusChange(status, evidenceUrl, reviewConfirmed), { statusLabel: status }, `Status set to “${status}”`);
   }
 
-  function onAssignee(task: OpsTask, raw: string) {
-    const nextId = raw ? Number(raw) : null;
-    if (nextId === (task.assignee?.id ?? null)) return;
-    const member = members.find((m) => m.id === nextId) ?? null;
+  function onAssignee(task: WorkItem, raw: string) {
+    const nextRef = raw || null;
+    if (nextRef === (task.assignee?.ref ?? null)) return;
+    const member = members.find((m) => m.ref === nextRef) ?? null;
     patch(
       task,
-      { assignee: { add: nextId ? [nextId] : [], rem: task.assignee ? [task.assignee.id] : [] } },
+      // Person refs are opaque; the write route turns them back into the source's own ids.
+      { assignee: { add: nextRef ? [nextRef] : [], rem: task.assignee ? [task.assignee.ref] : [] } },
       { assignee: member },
       member ? `Assigned to ${member.name}` : "Assignee cleared"
     );
@@ -120,11 +122,11 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
   return (
     <div className="flex flex-col gap-2">
       {rows.map((task) => {
-        const statuses = statusesByList[task.listId] ?? (task.status ? [task.status] : []);
-        const busy = pending[task.id];
+        const statuses = statusOptions[task.statusScope] ?? (task.statusLabel ? [task.statusLabel] : []);
+        const busy = pending[task.ref.id];
         return (
           <div
-            key={task.id}
+            key={`${task.ref.provider}:${task.ref.id}`}
             className={cn(
               "bg-card border-border rounded-xl border p-3.5 transition-opacity",
               busy && "opacity-60"
@@ -132,20 +134,22 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
           >
             <div className="flex items-start gap-2">
               <span className="flex-1 text-sm leading-snug font-medium">{task.title}</span>
-              <a
-                href={task.url}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="Open in ClickUp"
-                className="text-muted-foreground hover:text-foreground mt-0.5 shrink-0"
-              >
-                <ExternalLink className="size-4" />
-              </a>
+              {task.sourceLink && (
+                <a
+                  href={task.sourceLink.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Open in ${task.sourceLink.label}`}
+                  className="text-muted-foreground hover:text-foreground mt-0.5 shrink-0"
+                >
+                  <ExternalLink className="size-4" />
+                </a>
+              )}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <select
-                value={task.status}
+                value={task.statusLabel}
                 disabled={busy || readOnly}
                 title={readOnly ? "Owners and admins only" : undefined}
                 onChange={(e) => onStatus(task, e.target.value)}
@@ -160,7 +164,7 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
               </select>
 
               <select
-                value={task.assignee?.id ?? ""}
+                value={task.assignee?.ref ?? ""}
                 disabled={busy || readOnly}
                 title={readOnly ? "Owners and admins only" : undefined}
                 onChange={(e) => onAssignee(task, e.target.value)}
@@ -169,7 +173,7 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
               >
                 <option value="">Unassigned</option>
                 {members.map((m) => (
-                  <option key={m.id} value={m.id}>
+                  <option key={m.ref} value={m.ref}>
                     {m.name}
                   </option>
                 ))}
@@ -185,7 +189,7 @@ export function TaskTable({ businessSlug, projectId, tasks, members, statusesByL
               ) : (
                 <Badge>No date</Badge>
               )}
-              {task.blockedOn && <Badge variant="active">Blocked on {task.blockedOn}</Badge>}
+              {task.waitingOn && <Badge variant="active">Blocked on {waitingOnLabel(task.waitingOn)}</Badge>}
             </div>
           </div>
         );

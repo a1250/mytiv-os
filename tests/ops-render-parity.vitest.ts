@@ -15,7 +15,8 @@ import { TaskTable } from '../components/ops/task-table';
 import { ClientWorkspace } from '../components/ops/client-workspace';
 import { MarketingPanel } from '../components/ops/marketing-panel';
 import { StatTiles } from '../components/ops/stat-tiles';
-import { statsFor } from '../lib/clickup';
+import { fromClickUpMember, fromClickUpTask } from '../lib/work-source/clickup-adapter';
+import { workStats } from '../lib/work-source/types';
 import { OPS_TASKS, MEMBERS, STATUSES_BY_LIST, PLAN } from './fixtures/ops-tasks';
 
 /**
@@ -25,10 +26,12 @@ import { OPS_TASKS, MEMBERS, STATUSES_BY_LIST, PLAN } from './fixtures/ops-tasks
  */
 vi.mock('server-only', () => ({}));
 const render = (node: ReturnType<typeof h>) => renderToStaticMarkup(h(Toaster, null, node));
-const tasks = OPS_TASKS;
-const work = tasks.filter(t => t.listKind === 'tasks' || t.listKind === 'other');
-const bugs = tasks.filter(t => t.isBug);
-const decisions = tasks.filter(t => t.isDecision);
+// Since the refactor the screens take neutral WorkItems: the same ClickUp fixture goes through the adapter.
+const tasks = OPS_TASKS.map(fromClickUpTask);
+const members = MEMBERS.map(fromClickUpMember);
+const work = tasks.filter(t => t.kind === 'task' || t.kind === 'other');
+const bugs = tasks.filter(t => t.kind === 'bug');
+const decisions = tasks.filter(t => t.kind === 'decision');
 const project = { id: 'p-1', businessId: 'b-1', name: 'UMINO', client: 'UMINO', status: 'active', brief: '', budget: '', deadline: null,
   clickupFolderId: '901816026303', createdAt: new Date('2026-01-01T00:00:00Z'), updatedAt: new Date('2026-01-01T00:00:00Z'), folderState: 'linked' as const };
 const marketing = { binding: 'umino-demo', plan: PLAN, canImport: true, unavailable: false, now: '2026-10-01T12:00:00Z', bindingVersion: 1, previousPlans: [], moduleEnabled: true };
@@ -37,13 +40,13 @@ test('StuckList markup is unchanged', () => {
   expect(render(h(StuckList, { tasks: work.filter(t => t.daysIdle >= 3) }))).toMatchSnapshot();
 });
 test('TaskTable markup is unchanged (writer and read-only)', () => {
-  const props = { businessSlug: 'mytiv', projectId: 'p-1', tasks: work, members: MEMBERS, statusesByList: STATUSES_BY_LIST, emptyMessage: 'none' };
+  const props = { businessSlug: 'mytiv', projectId: 'p-1', tasks: work, members, statusOptions: STATUSES_BY_LIST, emptyMessage: 'none' };
   expect(render(h(TaskTable, props))).toMatchSnapshot();
   expect(render(h(TaskTable, { ...props, readOnly: true }))).toMatchSnapshot();
   expect(render(h(TaskTable, { ...props, tasks: [] }))).toMatchSnapshot();
 });
 test('ClientWorkspace markup is unchanged (all tabs)', () => {
-  const props = { businessSlug: 'mytiv', project, tasks: work, bugs, decisions, members: MEMBERS, statusesByList: STATUSES_BY_LIST, marketing, canWrite: true, incomplete: false };
+  const props = { businessSlug: 'mytiv', project, tasks: work, bugs, decisions, members, statusOptions: STATUSES_BY_LIST, marketing, canWrite: true, incomplete: false };
   expect(render(h(ClientWorkspace, props))).toMatchSnapshot();
   expect(render(h(ClientWorkspace, { ...props, incomplete: true, canWrite: false }))).toMatchSnapshot();
 });
@@ -51,7 +54,7 @@ test('MarketingPanel execution-status column is unchanged', () => {
   expect(render(h(MarketingPanel, { businessSlug: 'mytiv', projectId: 'p-1', tasks: [...work, ...bugs], ...marketing }))).toMatchSnapshot();
 });
 test('StatTiles numbers are unchanged', () => {
-  const open = tasks.filter(t => !t.isDecision);
-  expect(statsFor(open, 3)).toEqual({ stuck: 3, overdue: 1, openTasks: 3, openBugs: 1 });
-  expect(render(h(StatTiles, { stats: statsFor(open, 3) }))).toMatchSnapshot();
+  const open = tasks.filter(t => t.kind !== 'decision');
+  expect(workStats(open, 3)).toEqual({ stuck: 3, overdue: 1, openTasks: 3, openBugs: 1 });
+  expect(render(h(StatTiles, { stats: workStats(open, 3) }))).toMatchSnapshot();
 });

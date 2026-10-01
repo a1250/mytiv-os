@@ -5,7 +5,8 @@ import { listProjects } from "@/lib/db/queries/projects";
 import { listAcceptedProposalsForProject } from "@/lib/db/queries/proposals";
 import { computeTotals } from "@/lib/pdf-helpers";
 import { folderFromProject } from "@/lib/ops-config";
-import { getTasksByFolderWithCompleteness, getTimeByTask } from "@/lib/clickup";
+import { projectTaskSource } from "@/lib/work-source";
+import type { TimeByItem } from "@/lib/work-source/types";
 import {
   allTimeWindow,
   compareEstimates,
@@ -59,8 +60,8 @@ export default async function MoneyPage({
   const rows: { money: ClientMoney; overruns: EstimateVsActual[]; incomplete: boolean }[] = [];
 
   for (const project of projects) {
-    const folder = folderFromProject(project);
-    if (!folder) continue;
+    const source = projectTaskSource(folderFromProject(project));
+    if (!source) continue;
 
     // Revenue comes from the database, so it is resolved before any ClickUp
     // call — a retainer client needs only the month window, which halves the
@@ -84,13 +85,14 @@ export default async function MoneyPage({
     }
 
     try {
-      const monthTime = await getTimeByTask(folder, window);
-      const allTime = revenue.kind === "budget" ? await getTimeByTask(folder, allTimeWindow()) : monthTime;
+      const monthTime: TimeByItem = await source.timeByItem(window);
+      const allTime = revenue.kind === "budget" ? await source.timeByItem(allTimeWindow()) : monthTime;
 
-      const { tasks, incomplete } = await getTasksByFolderWithCompleteness(folder, { includeClosed: true });
+      const { items, complete } = await source.items({ includeClosed: true });
+      const incomplete = !complete;
       if (incomplete) anyTasksIncomplete = true;
       const estimates = new Map(
-        tasks.map((t) => [t.id, { name: t.title, estimateHours: t.estimateHours }])
+        items.map((t) => [t.ref.id, { name: t.title, estimateHours: t.estimateHours }])
       );
 
       rows.push({
@@ -102,7 +104,7 @@ export default async function MoneyPage({
           hourlyCost,
           revenue,
         }),
-        overruns: compareEstimates(monthTime.perTask, estimates).filter(
+        overruns: compareEstimates(monthTime.perItem.map((t) => ({ taskId: t.itemId, taskName: t.itemName, hours: t.hours })), estimates).filter(
           (e) => e.overrunPct !== null && e.overrunPct > 0
         ),
         incomplete,
