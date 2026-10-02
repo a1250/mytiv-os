@@ -48,7 +48,12 @@ export function ScreenMap() {
             <input type="checkbox" checked={demo.state.failNext} onChange={(e) => demo.setFailNext(e.target.checked)} />
             <span>הפעולה החיצונית הבאה תיכשל (Gmail / Meta / ClickUp)</span>
           </label>
-          <Button variant="neutral" size="sm" onClick={() => { demo.reset(); toast.push({ title: "נתוני הדמו אופסו", detail: "כל ההחלטות, המשימות והטיימר חזרו למצב ההתחלתי." }); }}>אפס נתוני דמו</Button>
+          <Button variant="neutral" size="sm" onClick={() => {
+            demo.reset();
+            try { Object.keys(sessionStorage).filter((k) => k.startsWith("mytiv-focus")).forEach((k) => sessionStorage.removeItem(k)); localStorage.removeItem("mytiv-focus-timer-v1"); } catch { /* storage blocked */ }
+            toast.push({ title: "נתוני הדמו אופסו", detail: "כל ההחלטות, המשימות, הלידים והטיימר חזרו למצב ההתחלתי." });
+            setTimeout(() => window.location.reload(), 600);
+          }}>אפס נתוני דמו</Button>
         </div>
       </section>
       <Chips label="קבוצת מסכים" value={group} onChange={(k) => { setGroup(k); setPhone(null); }} items={GROUPS.map((x) => ({ key: x.key, label: x.title.split(" · ")[0], count: SCREENS.filter((s) => s.id.startsWith(x.key)).length }))} />

@@ -10,8 +10,9 @@ import { cx } from "./cx";
  */
 type FieldShell = { label: ReactNode; note?: ReactNode; help?: ReactNode; error?: string | null; className?: string; labelClassName?: string };
 
-function useFieldIds(error?: string | null, help?: ReactNode) {
-  const id = useId();
+function useFieldIds(error?: string | null, help?: ReactNode, given?: string) {
+  const generated = useId();
+  const id = given ?? generated;
   const describedBy = error ? `${id}-err` : help ? `${id}-help` : undefined;
   return { id, describedBy };
 }
@@ -33,28 +34,28 @@ function Shell({ id, label, note, help, error, className, labelClassName, childr
 }
 
 export function TextField({ label, note, help, error, className, labelClassName, inputClassName, ...input }: FieldShell & { inputClassName?: string } & InputHTMLAttributes<HTMLInputElement>) {
-  const { id, describedBy } = useFieldIds(error, help);
+  const { id, describedBy } = useFieldIds(error, help, input.id);
   return (
     <Shell id={id} label={label} note={note} help={help} error={error} className={className} labelClassName={labelClassName}>
-      <input id={id} {...input} aria-invalid={error ? true : undefined} aria-describedby={describedBy} className={cx("f-input", inputClassName)} />
+      <input {...input} id={id} aria-invalid={error ? true : undefined} aria-describedby={describedBy} className={cx("f-input", inputClassName)} />
     </Shell>
   );
 }
 
 export function TextAreaField({ label, note, help, error, className, labelClassName, inputClassName, ...input }: FieldShell & { inputClassName?: string } & TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  const { id, describedBy } = useFieldIds(error, help);
+  const { id, describedBy } = useFieldIds(error, help, input.id);
   return (
     <Shell id={id} label={label} note={note} help={help} error={error} className={className} labelClassName={labelClassName}>
-      <textarea id={id} {...input} aria-invalid={error ? true : undefined} aria-describedby={describedBy} className={cx("f-input", inputClassName)} />
+      <textarea {...input} id={id} aria-invalid={error ? true : undefined} aria-describedby={describedBy} className={cx("f-input", inputClassName)} />
     </Shell>
   );
 }
 
 export function SelectField({ label, note, help, error, className, labelClassName, inputClassName, options, ...input }: FieldShell & { inputClassName?: string; options: { value: string; label: string }[] } & SelectHTMLAttributes<HTMLSelectElement>) {
-  const { id, describedBy } = useFieldIds(error, help);
+  const { id, describedBy } = useFieldIds(error, help, input.id);
   return (
     <Shell id={id} label={label} note={note} help={help} error={error} className={className} labelClassName={labelClassName}>
-      <select id={id} {...input} aria-invalid={error ? true : undefined} aria-describedby={describedBy} className={cx("f-input", "f-select", inputClassName)}>
+      <select {...input} id={id} aria-invalid={error ? true : undefined} aria-describedby={describedBy} className={cx("f-input", "f-select", inputClassName)}>
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </Shell>

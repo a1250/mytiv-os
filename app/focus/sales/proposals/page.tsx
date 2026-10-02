@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/H9";
+import SalesProposalsScreen from "@/components/focus/screens/sales-proposals";
 
 export const metadata: Metadata = { title: "הצעות מחיר · רשימה — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <SalesProposalsScreen />;
 }

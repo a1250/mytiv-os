@@ -89,7 +89,7 @@
   .f-focusbar { padding: 0 16px; gap: 10px; height: 60px; }
   .f-focusbar__exit-text, .f-focusbar__glyph { display: none; }
   .f-focusbar__back { display: inline; font-size: 18px; }
-  .f-focusbar__exit { width: 44px; padding: 0; justify-content: center; }
+  .f-focusbar__exit { width: 44px; min-width: 44px; padding: 0; justify-content: center; flex: none; }
   .f-focusbar { border-bottom-color: var(--f-surface-2); }
   .f-focusbar__progress { flex: 1; justify-content: space-between; font-size: 15px; }
   .f-focusbar__spacer { display: none; }
