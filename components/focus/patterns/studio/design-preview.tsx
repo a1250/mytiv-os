@@ -44,7 +44,7 @@ export function DesignPreview({
   const s = scale;
   const w = variant.base.w * s, h = variant.base.h * s;
   return (
-    <div className={cx("f-design", className)} style={{ width: w, height: h, background: variant.background }} role="img" aria-label={label}>
+    <div className={cx("f-design", className)} style={{ width: w, height: h, background: variant.background }} role={onSelect ? "group" : "img"} aria-label={label}>
       {showSafeZones && variant.safeZones.map((z) => (
         <div key={z.edge} className={cx("f-design__safe", `f-design__safe--${z.edge}`)} style={{ height: z.height * s }} aria-hidden>{z.label}</div>
       ))}

@@ -23,7 +23,7 @@
 .f-qside__h--gap { margin-top: 10px; }
 .f-qside__card { background: var(--f-surface); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: var(--f-line); }
 .f-qside__card:hover { box-shadow: 0 0 0 1px var(--f-line-strong); }
-.f-qside__card--dim { opacity: .75; }
+.f-qside__card--dim { background: var(--f-surface-sunk); }
 .f-qside__status { font-size: 12px; font-weight: 700; }
 .f-qside__status--done { color: var(--f-green-text); }
 .f-qside__status--changes { color: var(--f-accent-ink); }

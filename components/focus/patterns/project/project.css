@@ -37,9 +37,9 @@
 
 .f-hero { grid-column: span 2; background: var(--f-accent); color: #fff; border-radius: 16px; padding: 22px 24px; display: flex; align-items: center; gap: 20px; }
 .f-hero__text { flex: 1; display: flex; flex-direction: column; gap: 6px; }
-.f-hero__label { font-size: 13px; font-weight: 700; color: light-dark(#e2dcfb, #ece8fb); }
+.f-hero__label { font-size: 13px; font-weight: 700; color: light-dark(#e2dcfb, #ffffff); }
 .f-hero__title { font-size: 22px; line-height: 1.3; }
-.f-hero__detail { font-size: 15px; color: light-dark(#ece8fb, #f3f0ff); }
+.f-hero__detail { font-size: 15px; color: light-dark(#ece8fb, #ffffff); }
 .f-hero__cta { font-size: 15px; padding: 14px 22px; }
 .f-hero :focus-visible { outline-color: #fff; }
 

@@ -12,7 +12,7 @@ export const HEALTH: Record<ProjectHealth["state"], { glyph: string; word: strin
   at_risk: { glyph: "▲", word: "בסיכון", tone: "high" },
   attention: { glyph: "◆", word: "דורש מעקב", tone: "medium" },
   on_track: { glyph: "●", word: "תקין", tone: "low" },
-  done: { glyph: "✓", word: "הושלם", tone: "neutral" },
+  done: { glyph: "✓", word: "הושלם", tone: "low" },
 };
 
 export function HealthPill({ health, withBlockers, size = "sm" }: { health: ProjectHealth; withBlockers?: boolean; size?: "sm" | "xl" }) {

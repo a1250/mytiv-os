@@ -25,7 +25,7 @@
   --f-ink-soft: light-dark(#2c364b, #d3d9e6);
   --f-muted: light-dark(#4d5870, #a9b2c5);         /* ink-2: meta, labels (6.5:1) */
   --f-faint: light-dark(#8a93a6, #7b869c);         /* decorative only — never body text */
-  --f-faint-2: light-dark(#aeb6c7, #8f99ae);       /* text on the strong (dark) bar */
+  --f-faint-2: light-dark(#aeb6c7, #aab3c6);       /* text on the strong (dark) bar */
   /* accent — action, link, location, selection; nothing else */
   --f-accent: light-dark(#5b45c9, #6e58e0);
   --f-accent-hover: light-dark(#4b37b3, #5f49d1);

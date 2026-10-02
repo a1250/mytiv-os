@@ -39,7 +39,7 @@ export function Tabs<K extends string>({
             type="button"
             role="tab"
             id={idBase ? `${idBase}-tab-${t.key}` : undefined}
-            aria-controls={idBase ? `${idBase}-panel-${t.key}` : undefined}
+            aria-controls={idBase && selected ? `${idBase}-panel-${t.key}` : undefined}
             aria-selected={selected}
             aria-label={t.ariaLabel}
             tabIndex={selected ? 0 : -1}
