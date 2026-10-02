@@ -16,7 +16,7 @@ export function FocusBar({
   return (
     <div className="f-focusbar" role="banner">
       <Link href={exitHref} className="f-focusbar__exit" aria-label={exitLabel}>
-        <span aria-hidden>{exitGlyph}</span><span className="f-focusbar__exit-text">&nbsp;{exitLabel}</span>
+        <span aria-hidden className="f-focusbar__glyph">{exitGlyph}</span><span aria-hidden className="f-focusbar__back">→</span><span className="f-focusbar__exit-text">&nbsp;{exitLabel}</span>
       </Link>
       {center}
       {progress && (

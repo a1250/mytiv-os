@@ -18,6 +18,8 @@ export type Reversibility =
  */
 export type ExternalAction = {
   target: SourceRef;                       // e.g. Gmail · ron@mytiv.co.il
+  /** sending account at the target */
+  from: string;
   recipient: { name: string; address: string };
   payload: { title: string; detail: string; amount?: Money; attachment?: "pdf" };
   after: string;                           // what happens after execution
@@ -58,6 +60,10 @@ export type Approval = {
   aiNote?: string;
   reasonHint?: string;                     // help text under the reason field
   managerNote?: string;                    // "רק בעלים יכול לאשר שינוי מחיר"
+  /** one-line versions for the mobile summary (M3) */
+  short?: { what: string; why: string };
+  /** content items (D7, M8): the design under review and the reviewer's draft annotations */
+  content?: ContentUnderReview;
   execution?: ExternalAction;
   /** demo-only: how the simulated target system answers */
   simulate?: { latencyMs: number; outcome: "success" | "failure" };
@@ -75,3 +81,17 @@ export type Decision = {
 
 /** Result of trying to record a decision — the UI shows `error` in place of the field help text. */
 export type DecisionCheck = { ok: true } | { ok: false; field: "reason"; error: string };
+
+/** A content item under review: previews per format + caption + the reviewer's pinned notes. */
+export type ContentUnderReview = {
+  designId: string;
+  formats: { key: string; label: string; where: string }[];
+  channel: string;
+  scheduledAt: string;
+  createdBy: string;
+  editedBy: string;
+  caption: { before: string; flagged: string; after: string };
+  /** notes pinned to parts of the design (request-changes draft) */
+  annotations: { id: string; n: number; target: string; text: string; format?: string }[];
+  draftReason: string;
+};

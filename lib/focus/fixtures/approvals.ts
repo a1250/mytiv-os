@@ -29,6 +29,7 @@ export const APPROVALS: Approval[] = [
     history: [],
     execution: {
       target: { system: "gmail", label: "Gmail" },
+      from: "ron@mytiv.co.il",
       recipient: { name: "נועה כהן", address: "noa.cohen@example.co.il" },
       payload: { title: "אירוח עסקי — 8,750 ₪", detail: "גרסה 1 · כולל מע״מ · בתוקף עד 15.10", amount: { amount: 8750, currency: "ILS" }, attachment: "pdf" },
       after: "גרסה 1 ננעלת לעריכה. נוצרת משימת מעקב לדנה ל־4.10.",
@@ -85,6 +86,7 @@ export const APPROVALS: Approval[] = [
       { at: at("2026-09-28", "09:30"), text: "מנוע השיווק הציע את השינוי" },
       { at: at("2026-09-29", "11:05"), text: "דנה: \"לבדוק תוקף מול רון\"" },
     ],
+    short: { what: "יתווסף מבצע 1+1 לשלושה תכנים. דבר לא יפורסם.", why: "יותר הזמנות 19:00–22:00 מזוגות וקבוצות." },
     aiNote: "המנוע השתמש בבריף, בתפריט ובמטרות הקמפיין. הוא לא בדק זמינות מטבח או רווחיות.",
     reasonHint: "התוקף שתכתוב יישמר כעובדה מאומתת במוח העסק של UMINO.",
     managerNote: "רק בעלים יכול לאשר שינוי מחיר.",
@@ -113,6 +115,20 @@ export const APPROVALS: Approval[] = [
     impact: { effect: "הסטורי יעלה ב־Instagram במועד המתוכנן.", whyRisk: "", reversibility: { kind: "until", until: at("2026-10-02", "18:00"), label: "אפשר לבטל עד 18:00 ביום הפרסום" } },
     history: [],
     reasonHint: "הפריט יעבור לדנה כ\"נדרש תיקון\". גרסה 2 נשמרת.",
+    content: {
+      designId: "thursday-sushi",
+      formats: [{ key: "story", label: "סטורי", where: "Instagram" }, { key: "post", label: "פוסט אנכי", where: "פיד" }],
+      channel: "Instagram · @umino",
+      scheduledAt: at("2026-10-02", "18:00"),
+      createdBy: "דנה",
+      editedBy: "דנה",
+      caption: { before: "חמישי בערב ב־UMINO. סושי, קוקטיילים וחברים, מ־19:00 ועד 22:00. ", flagged: "1+1 על סטים נבחרים.", after: " הזמנת שולחן בקישור." },
+      annotations: [
+        { id: "n1", n: 1, target: "כותרת הסטורי", text: "הכותרת נוגעת בשם החשבון. להוריד קצת.", format: "story" },
+        { id: "n2", n: 2, target: "טקסט נלווה", text: "לא לכתוב 1+1 עד שהתוקף מאומת." },
+      ],
+      draftReason: "שני תיקונים קטנים, אחר כך אפשר לתזמן.",
+    },
     simulate: { latencyMs: 1600, outcome: "success" },
   },
   {

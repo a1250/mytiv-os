@@ -80,13 +80,19 @@
 }
 .f-focusbar__exit { font-size: 14px; font-weight: 600; padding: 10px 16px; line-height: 19px; border-radius: var(--f-r-pill); background: var(--f-surface-2); white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
 .f-focusbar__exit:hover { background: var(--f-surface-3); }
+.f-focusbar__back { display: none; }
 .f-focusbar__spacer { flex: 1; }
 .f-focusbar__progress { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; }
 .f-focusbar__skip { font-size: 14px; color: var(--f-muted); position: relative; border-radius: 6px; }
 .f-focusbar__skip:hover { color: var(--f-ink); text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 767px) {
   .f-focusbar { padding: 0 16px; gap: 10px; height: 60px; }
-  .f-focusbar__exit-text { display: none; }
+  .f-focusbar__exit-text, .f-focusbar__glyph { display: none; }
+  .f-focusbar__back { display: inline; font-size: 18px; }
+  .f-focusbar__exit { width: 44px; padding: 0; justify-content: center; }
+  .f-focusbar { border-bottom-color: var(--f-surface-2); }
+  .f-focusbar__progress { flex: 1; justify-content: space-between; font-size: 15px; }
+  .f-focusbar__spacer { display: none; }
   .f-focusbar__skip { display: none; }
 }
 
