@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/H13";
+import CommsUsersScreen from "@/components/focus/screens/comms-users";
 
 export const metadata: Metadata = { title: "הגדרות › משתמשים והרשאות — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <CommsUsersScreen />;
 }

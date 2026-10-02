@@ -30,11 +30,13 @@ export function StepTrail({ steps, current }: { steps: string[]; current: number
 }
 
 export function PreExecSummary({
-  action, title, context, impact, state, onToggle, onSubmit, onRetry, backHref, activityHref, nextHref, mobile,
+  action, title, context, impact, state, onToggle, onSubmit, onRetry, backHref, activityHref, nextHref, mobile, headingLevel = 1,
 }: {
   action: ExternalAction; title: string; context: string; impact: string; state: ExecState;
   onToggle: () => void; onSubmit: () => void; onRetry: () => void; backHref: string; activityHref: string; nextHref: string | null; mobile?: boolean;
+  headingLevel?: 1 | 2;
 }) {
+  const H = headingLevel === 1 ? "h1" : "h2";
   const resultRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (state.step === "sent" || state.step === "failed") resultRef.current?.focus(); }, [state.step]);
   const step = state.step === "summary" ? 1 : 2;
@@ -49,7 +51,7 @@ export function PreExecSummary({
       <div className="f-pre__body">
         <div className="f-pre__head">
           <span className="f-pre__ctx">{context}</span>
-          <h1 id="pre-title" className="f-pre__title">{title}</h1>
+          <H id="pre-title" className="f-pre__title">{title}</H>
         </div>
         <div className="f-pre__risk" role="note">
           <span className="f-pre__risk-glyph" aria-hidden>▲</span>
@@ -117,7 +119,7 @@ export function PreExecSummary({
             {!sending && <Link href={backHref} className="f-btn f-btn--neutral f-pre__back">חזור לבדיקה</Link>}
             <span className="f-grow" />
             <span className="f-pre__note" role={sending ? "status" : undefined}>
-              {state.step === "summary" && !state.confirmed ? "יש לסמן את תיבת האישור. " : ""}{sending ? "ממתין לאישור מ־Gmail. דבר עדיין לא סומן כנשלח." : action.pendingNote}
+              {state.step === "summary" && !state.confirmed ? "יש לסמן את תיבת האישור. " : ""}{sending ? `ממתין לאישור מ־${action.target.label}. דבר עדיין לא סומן כנשלח.` : action.pendingNote}
             </span>
           </div>
         )}

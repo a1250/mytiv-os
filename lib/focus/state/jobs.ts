@@ -3,7 +3,7 @@
  * happening, the user may leave the screen (a notification arrives when ready), and a failure keeps what was saved.
  * Pure: the store ticks `now`; status is derived, so it survives navigation and reloads.
  */
-export type JobKind = "ai_directions" | "sync_clickup" | "schedule_meta" | "reconnect";
+export type JobKind = "ai_directions" | "ai_improve" | "ai_check" | "sync_clickup" | "schedule_meta" | "send_mail" | "reminder" | "reconnect" | "refresh_sources";
 
 export type Job = {
   id: string;

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/focus/ui/icon";
 import { cx } from "@/components/focus/ui/cx";
 import { APPROVALS } from "@/lib/focus/fixtures/approvals";
+import { NOTIFICATIONS } from "@/lib/focus/fixtures/comms";
 import { CLIENTS, VIEWER } from "@/lib/focus/fixtures/people";
 import { R } from "@/lib/focus/routes";
 import { SCREENS } from "@/lib/focus/screens";
@@ -62,7 +63,8 @@ const CREATE = [
 function useCounts() {
   const { state, approval } = useDemo();
   const pendingApprovals = APPROVALS.filter((a) => approval(a.id)?.status === "pending").length;
-  const unread = 3 + state.notifications.filter((n) => !n.read).length;
+  const readIds = (state.drafts["notifications-read"] as string[] | undefined) ?? [];
+  const unread = NOTIFICATIONS.filter((n) => !n.read && !readIds.includes(n.id)).length + state.notifications.filter((n) => !n.read && !readIds.includes(n.id)).length;
   return { pendingApprovals, unread };
 }
 
@@ -155,7 +157,7 @@ export function FocusTopBar() {
           <Icon name="search" className="f-icon-dim" />
         </button>
         <Link href={R.notifications} className="f-iconbtn" aria-label={`התראות · ${unread} חדשות`} title="התראות">
-          <Icon name="bell" className="f-icon-dim" /><span className="f-iconbtn__count" aria-hidden>{unread}</span>
+          <Icon name="bell" className="f-icon-dim" />{unread > 0 && <span className="f-iconbtn__count" aria-hidden>{unread}</span>}
         </Link>
         <CreateMenu className="f-create" content={<>+ יצירה</>} />
         <AvatarMenu />
@@ -168,7 +170,7 @@ export function FocusTopBar() {
           <Icon name="search" className="f-icon-dim" />
         </button>
         <Link href={R.notifications} className="f-iconbtn f-iconbtn--surface" aria-label={`התראות · ${unread} חדשות`}>
-          <Icon name="bell" className="f-icon-dim" /><span className="f-iconbtn__count" aria-hidden>{unread}</span>
+          <Icon name="bell" className="f-icon-dim" />{unread > 0 && <span className="f-iconbtn__count" aria-hidden>{unread}</span>}
         </Link>
       </header>
 

@@ -244,7 +244,7 @@ textarea.f-input { resize: vertical; min-height: 88px; line-height: 1.5; }
 .f-dialog { border: 0; padding: 0; color: var(--f-ink); background: var(--f-surface); box-shadow: var(--f-shadow-float); max-height: 100dvh; }
 .f-dialog::backdrop { background: var(--f-scrim); }
 .f-dialog--drawer { margin: 0; margin-inline-end: auto; height: 100dvh; max-height: 100dvh; width: min(760px, 100vw); max-width: 100vw; border-radius: 0; inset-inline-start: 0; inset-inline-end: auto; }
-.f-dialog--center { border-radius: 20px; width: min(560px, calc(100vw - 32px)); }
+.f-dialog--center { border-radius: 20px; width: min(560px, calc(100vw - 32px)); margin: auto; }
 @media (max-width: 767px) {
   .f-dialog--drawer { margin: auto 0 0; width: 100vw; height: auto; max-height: 92dvh; border-radius: 22px 22px 0 0; }
 }

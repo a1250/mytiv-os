@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/F6";
+import CommsMailScreen from "@/components/focus/screens/comms-mail";
 
 export const metadata: Metadata = { title: "דואר · שיחה וטיוטת תשובה — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <CommsMailScreen />;
 }
