@@ -9,6 +9,7 @@ import { APPROVALS } from "@/lib/focus/fixtures/approvals";
 import { CLIENTS, VIEWER } from "@/lib/focus/fixtures/people";
 import { R } from "@/lib/focus/routes";
 import { SCREENS } from "@/lib/focus/screens";
+import { plainShortcut } from "@/lib/focus/state/keyboard";
 import { CommandPalette } from "./command-palette";
 import { useDemo } from "./demo-store";
 import { Menu, MenuLink } from "./menu";
@@ -130,8 +131,7 @@ export function FocusTopBar() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = (e.target as HTMLElement)?.closest?.("input, textarea, select, [contenteditable]");
-      if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || (e.key === "/" && !typing)) { e.preventDefault(); setSearch(true); }
+      if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || plainShortcut(e, ["/"])) { e.preventDefault(); setSearch(true); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

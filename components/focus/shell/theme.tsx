@@ -17,11 +17,15 @@ export function ThemeScript() {
   return <script dangerouslySetInnerHTML={{ __html: SCRIPT }} />;
 }
 
+/** Stored value → preference; anything unknown is "system". Pure (unit-tested). */
+export const parseThemePref = (v: string | null | undefined): ThemePref => (v === "light" || v === "dark" ? v : "system");
+/** The attribute to put on <html> for a preference (null = remove, follow prefers-color-scheme). */
+export const themeAttr = (p: ThemePref): "light" | "dark" | null => (p === "system" ? null : p);
+
 const listeners = new Set<() => void>();
 function read(): ThemePref {
   try {
-    const t = localStorage.getItem(THEME_KEY);
-    return t === "light" || t === "dark" ? t : "system";
+    return parseThemePref(localStorage.getItem(THEME_KEY));
   } catch {
     return "system";
   }
@@ -34,8 +38,9 @@ function subscribe(fn: () => void) {
 }
 function apply(p: ThemePref) {
   const d = document.documentElement;
-  if (p === "system") d.removeAttribute("data-f-theme");
-  else d.setAttribute("data-f-theme", p);
+  const a = themeAttr(p);
+  if (a) d.setAttribute("data-f-theme", a);
+  else d.removeAttribute("data-f-theme");
 }
 
 export function useTheme() {

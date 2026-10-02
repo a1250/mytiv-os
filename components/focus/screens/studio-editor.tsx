@@ -7,6 +7,7 @@ import { designById } from "@/lib/focus/fixtures/studio";
 import { fmtAgo } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { blockingErrors, editorReducer, initEditor, liveChecks } from "@/lib/focus/state/editor";
+import { isTypingTarget, type KeyTarget } from "@/lib/focus/state/keyboard";
 import { DesignPreview } from "@/components/focus/patterns/studio/design-preview";
 import { BrandSwatches, CanvasToolbar, ChecksPanel, LayersPanel, PropertyCard, SideTabs } from "@/components/focus/patterns/studio/editor-parts";
 import { useDemo } from "@/components/focus/shell/demo-store";
@@ -41,7 +42,7 @@ export default function StudioEditorScreen({ designId }: { designId: string }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z" || (e.target as HTMLElement)?.closest?.("input, textarea")) return;
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z" || isTypingTarget(e.target as KeyTarget)) return;
       e.preventDefault();
       dispatch({ type: e.shiftKey ? "redo" : "undo" });
     };

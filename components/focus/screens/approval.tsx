@@ -7,6 +7,7 @@ import { designById } from "@/lib/focus/fixtures/studio";
 import { fmtAgo, fmtDayMonth, fmtTime, fmtWaiting, fmtWeekday } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { initialExec } from "@/lib/focus/state/execution";
+import { plainShortcut } from "@/lib/focus/state/keyboard";
 import { ApprovalHead, ChangeTable, FactLines, FactsSplit, ImpactTiles, MobileSummary, QueueSide, WhyBlock, type QueueEntry } from "@/components/focus/patterns/approval/approval-parts";
 import { ContentReviewPanel } from "@/components/focus/patterns/approval/content-review";
 import { DecisionBlock, type DecisionResult } from "@/components/focus/patterns/approval/decision-block";
@@ -54,8 +55,7 @@ export default function ApprovalScreen({ id }: { id: string }) {
   // J = next item (never while typing)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || (e.target as HTMLElement)?.closest?.("input, textarea, select, dialog")) return;
-      if ((e.key === "j" || e.key === "J") && nextHref) { e.preventDefault(); if (dirty) setLeaving(nextHref); else router.push(nextHref); }
+      if (plainShortcut(e, ["j", "J"]) && nextHref) { e.preventDefault(); if (dirty) setLeaving(nextHref); else router.push(nextHref); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

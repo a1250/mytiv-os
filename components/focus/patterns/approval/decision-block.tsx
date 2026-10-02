@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { DecisionCheck, DecisionOutcome } from "@/lib/focus/contracts/approvals";
 import type { RiskLevel } from "@/lib/focus/contracts/status";
 import { reasonRequired } from "@/lib/focus/state/approvals";
+import { plainShortcut } from "@/lib/focus/state/keyboard";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
 
@@ -45,9 +46,8 @@ export function DecisionBlock({
   useEffect(() => {
     if (result) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement)?.closest?.("input, textarea, select, [contenteditable], dialog")) return;
-      if (e.key === "a" || e.key === "A") { e.preventDefault(); decideRef.current("approve"); }
-      if (e.key === "r" || e.key === "R") { e.preventDefault(); decideRef.current("request_changes"); }
+      if (plainShortcut(e, ["a", "A"])) { e.preventDefault(); decideRef.current("approve"); }
+      if (plainShortcut(e, ["r", "R"])) { e.preventDefault(); decideRef.current("request_changes"); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

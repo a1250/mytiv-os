@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { KeyboardEvent, ReactNode } from "react";
 import type { RiskLevel } from "@/lib/focus/contracts/status";
+import { plainShortcut } from "@/lib/focus/state/keyboard";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
 import { RiskPill, riskText } from "@/components/focus/ui/status";
@@ -28,7 +29,7 @@ export function ActionCard({
 }) {
   const H = headingLevel === 2 ? "h2" : "h3";
   const onKey = (e: KeyboardEvent<HTMLElement>) => {
-    if (onQuickApprove && phase.kind === "default" && (e.key === "a" || e.key === "A" || e.key === "ש") && !e.metaKey && !e.ctrlKey) {
+    if (onQuickApprove && phase.kind === "default" && plainShortcut(e, ["a", "A", "ש"])) {
       e.preventDefault();
       onQuickApprove();
     }

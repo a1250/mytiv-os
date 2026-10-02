@@ -8,6 +8,7 @@ import { personName } from "@/lib/focus/fixtures/people";
 import { fmtTime, fmtWaiting } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { canQuickApprove } from "@/lib/focus/state/approvals";
+import { plainShortcut } from "@/lib/focus/state/keyboard";
 import { Page, PageHeader } from "@/components/focus/patterns/page";
 import { useDemo } from "@/components/focus/shell/demo-store";
 import { useQueue } from "@/components/focus/shell/use-queue";
@@ -75,7 +76,7 @@ export default function ApprovalsListScreen() {
                     const d = demo.state.decisions[a.id];
                     return (
                       <tr key={a.id} className={cx("f-atable__row", a.id === first && "f-atable__row--first")}
-                        onKeyDown={(e) => { if (quick && (e.key === "a" || e.key === "A") && !(e.target as HTMLElement).closest("input,select,textarea")) { e.preventDefault(); q.quickApprove(a.id); } }}>
+                        onKeyDown={(e) => { if (quick && plainShortcut(e, ["a", "A"])) { e.preventDefault(); q.quickApprove(a.id); } }}>
                         <th scope="row" className="f-atable__what">
                           <Link href={R.approval(a.id)} className="f-atable__title">{a.title}{a.version ? ` · גרסה ${a.version}` : ""}</Link>
                           <span className="f-atable__meta">{a.summary}</span>
