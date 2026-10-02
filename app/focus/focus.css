@@ -1,124 +1,110 @@
 /*
- * Mytiv OS — "Focus" (Direction C). Tokens are the handoff's Design System (docs/focus/reference/handoff/README.md).
- * Scoped under .focus-app so the legacy dark app (globals.css) is untouched. Screens are generated from the handoff
- * frames with inline styles that reference these variables, so light/dark switch everywhere at once.
+ * Mytiv OS — "Focus" (Direction C). Design tokens = the handoff's Design System
+ * (docs/focus/reference/handoff/README.md → "Design Tokens").
+ *
+ * Tokens live on :root while a .focus-app is mounted, so the legacy dark app (globals.css) is untouched and the page
+ * background follows the theme. Every colour is written once with light-dark(): the theme is chosen by color-scheme —
+ *   system (default)  → follows prefers-color-scheme
+ *   data-f-theme=light|dark on <html> → forced (set before first paint by the inline script in app/focus/layout.tsx)
+ * Shadows are composed from colour tokens so they switch too (dark: shadow → 1px line, per the handoff).
  */
-.focus-app {
+:root:has(.focus-app) {
+  color-scheme: light dark;
+
   /* surfaces */
-  --f-bg: #f3f5f9;           /* canvas */
-  --f-surface: #ffffff;      /* cards, panels, top bar */
-  --f-surface-2: #eef1f6;    /* fill: neutral button, icon button, inner row */
-  --f-border: #dde2ea;       /* line */
-  --f-line-strong: #c3cad6;  /* field border */
+  --f-bg: light-dark(#f3f5f9, #11141c);            /* canvas */
+  --f-surface: light-dark(#ffffff, #1a1f2b);       /* cards, panels, top bar */
+  --f-surface-2: light-dark(#eef1f6, #222838);     /* fill: neutral button, icon button, inner row */
+  --f-surface-3: light-dark(#e2e7ef, #2b3244);     /* fill hover */
+  --f-surface-sunk: light-dark(#fbfbfd, #161a24);  /* decision footer, quiet band */
+  --f-border: light-dark(#dde2ea, #2e3546);        /* line */
+  --f-line-strong: light-dark(#c3cad6, #435069);   /* field border */
+  --f-disabled-bg: light-dark(#dde2ea, #2e3546);
   /* text */
-  --f-ink: #161d2e;
-  --f-ink-soft: #2c364b;
-  --f-muted: #4d5870;        /* ink-2 */
-  --f-faint: #8a93a6;
-  --f-faint-2: #aeb6c7;
-  /* accent */
-  --f-accent: #5b45c9;
-  --f-accent-ink: #3f2ea3;   /* text on accent-soft */
-  --f-accent-weak: #ece8fb;  /* accent-soft */
-  --f-accent-avatar: #c9c1f0;
-  --f-accent-soft-2: #d4cdf5;
-  --f-accent-tint: #f8f7fe;
-  /* status: *-bg + *-ink = chip; *-text = status text on a surface. Always with a symbol + word. */
-  --f-red-bg: #fbe4e1;     --f-red-ink: #b8322a;     --f-red-text: #b8322a;
-  --f-amber-bg: #fbf0d9;   --f-amber-ink: #8c5a00;   --f-amber-text: #8c5a00;  --f-amber-ink-strong: #5e3d00;
-  --f-green-bg: #e3f3ea;   --f-green-ink: #23774a;   --f-green-text: #23774a;
-  --f-neutral-bg: #e9edf3; --f-neutral-ink: #56617a; --f-neutral-text: #56617a;
+  --f-ink: light-dark(#161d2e, #eef1f7);
+  --f-ink-soft: light-dark(#2c364b, #d3d9e6);
+  --f-muted: light-dark(#4d5870, #a9b2c5);         /* ink-2: meta, labels (6.5:1) */
+  --f-faint: light-dark(#8a93a6, #7b869c);         /* decorative only — never body text */
+  --f-faint-2: light-dark(#aeb6c7, #8f99ae);       /* text on the strong (dark) bar */
+  /* accent — action, link, location, selection; nothing else */
+  --f-accent: light-dark(#5b45c9, #6e58e0);
+  --f-accent-hover: light-dark(#4b37b3, #5f49d1);
+  --f-accent-press: light-dark(#3f2ea3, #5340c0);
+  --f-on-accent: #ffffff;
+  --f-accent-ink: light-dark(#3f2ea3, #b3a6f7);    /* text on accent-soft; links */
+  --f-accent-weak: light-dark(#ece8fb, #2a2550);   /* accent-soft */
+  --f-accent-weak-hover: light-dark(#ddd6f8, #332c63);
+  --f-accent-soft-2: light-dark(#d4cdf5, #3d3577);
+  --f-accent-avatar: light-dark(#c9c1f0, #3b3470);
+  --f-accent-tint: light-dark(#f8f7fe, #1e1a36);
+  --f-accent-line: light-dark(rgba(91,69,201,.28), rgba(179,166,247,.35));
+  /* strong (inverse) bar: timer, "start one-by-one", toast */
+  --f-strong-bg: light-dark(#161d2e, #2b3346);
+  --f-strong-bg-2: light-dark(#2b3245, #3a4359);
+  --f-strong-text: light-dark(#ffffff, #eef1f7);
+  /* status: *-bg + *-ink = chip; *-text = status text on a surface. Always with a symbol + word.
+     Dark rule: risk colours become solid fills with dark text. */
+  --f-red-bg: light-dark(#fbe4e1, #f3887c);     --f-red-ink: light-dark(#b8322a, #2a0f0c);     --f-red-text: light-dark(#b8322a, #f3887c);
+  --f-red-line: light-dark(#f3c4bf, #6b2a24);   --f-red-solid: light-dark(#b8322a, #e0574a);   --f-red-press: light-dark(#9a2820, #c84436);
+  --f-red-ink-strong: light-dark(#7f1f19, #ffd0ca);
+  --f-amber-bg: light-dark(#fbf0d9, #e8b75a);   --f-amber-ink: light-dark(#8c5a00, #2a1c00);   --f-amber-text: light-dark(#8c5a00, #e8b75a);
+  --f-amber-ink-strong: light-dark(#5e3d00, #f3d28f);  /* text inside a warning panel */
+  --f-green-bg: light-dark(#e3f3ea, #6fcf97);   --f-green-ink: light-dark(#23774a, #0c2417);   --f-green-text: light-dark(#23774a, #6fcf97);
+  --f-green-ink-strong: light-dark(#185436, #b9ebcd);  --f-green-ink-soft: light-dark(#1f4a33, #a3dcbb);
+  --f-green-line: light-dark(#bcd4c6, #2f5a43);
+  --f-neutral-bg: light-dark(#e9edf3, #2b3344); --f-neutral-ink: light-dark(#56617a, #a9b2c5); --f-neutral-text: light-dark(#56617a, #a9b2c5);
+  /* panels that sit on a status background keep their own readable text */
+  --f-red-panel: light-dark(#fbe4e1, #3a1d1b);   --f-red-panel-ink: light-dark(#7f1f19, #ffd0ca);
+  --f-amber-panel: light-dark(#fbf0d9, #33280f); --f-amber-panel-ink: light-dark(#5e3d00, #f3d28f);
+  --f-green-panel: light-dark(#e3f3ea, #13301f); --f-green-panel-ink: light-dark(#185436, #b9ebcd);
   /* shape + elevation */
   --f-r-pill: 999px;
-  --f-shadow: 0 1px 2px rgba(22,29,46,.06), 0 0 0 1px var(--f-border);
-  --f-shadow-float: 0 0 0 1px var(--f-border), 0 24px 48px -28px rgba(22,29,46,.45);
+  --f-shadow-c: light-dark(rgba(22,29,46,.06), transparent);
+  --f-float-c: light-dark(rgba(22,29,46,.45), rgba(0,0,0,.6));
+  --f-scrim: light-dark(rgba(22,29,46,.5), rgba(0,0,0,.6));
+  --f-line: 0 0 0 1px var(--f-border);                                   /* elevation 0 */
+  --f-shadow: 0 1px 2px var(--f-shadow-c), 0 0 0 1px var(--f-border);    /* elevation 1 · action card */
+  --f-shadow-float: 0 0 0 1px var(--f-border), 0 24px 48px -28px var(--f-float-c); /* elevation 2 */
   --f-nav-h: 68px;
+  --f-motion: 160ms;
 
+  background: var(--f-bg);
+}
+:root[data-f-theme="light"]:has(.focus-app) { color-scheme: light; }
+:root[data-f-theme="dark"]:has(.focus-app) { color-scheme: dark; }
+
+/* The legacy globals.css paints <body> dark; while Focus is mounted it owns the page background. */
+body:has(.focus-app) { background: var(--f-bg); }
+
+.focus-app {
   font-family: var(--font-focus, "Open Sans"), system-ui, sans-serif;
   background: var(--f-bg);
   color: var(--f-ink);
   min-height: 100vh;
   flex: 1 0 auto; /* the root <body> is a flex column — grow with content */
+  overflow-x: clip;
 }
-
-/* Dark — handoff "מצב כהה": risk colours become solid with dark text; purple brightens; shadow → 1px line. */
-.focus-app[data-theme="dark"] { color-scheme: dark; }
-@media (prefers-color-scheme: dark) { .focus-app:not([data-theme="light"]) { color-scheme: dark; } }
-@media (prefers-color-scheme: dark) {
-  .focus-app:not([data-theme="light"]) {
-    --f-bg: #11141c; --f-surface: #1a1f2b; --f-surface-2: #222838; --f-border: #2e3546; --f-line-strong: #435069;
-    --f-ink: #eef1f7; --f-ink-soft: #d3d9e6; --f-muted: #a9b2c5; --f-faint: #7b869c; --f-faint-2: #5d6780;
-    --f-accent: #6e58e0; --f-accent-ink: #b3a6f7; --f-accent-weak: #2a2550; --f-accent-avatar: #3b3470; --f-accent-soft-2: #352d66; --f-accent-tint: #1e1a36;
-    --f-red-bg: #f3887c; --f-red-ink: #2a0f0c; --f-red-text: #f3887c;
-    --f-amber-bg: #e8b75a; --f-amber-ink: #2a1c00; --f-amber-text: #e8b75a; --f-amber-ink-strong: #f3d28f;
-    --f-green-bg: #6fcf97; --f-green-ink: #0c2417; --f-green-text: #6fcf97;
-    --f-neutral-bg: #2b3344; --f-neutral-ink: #a9b2c5; --f-neutral-text: #a9b2c5;
-    --f-shadow: 0 0 0 1px var(--f-border);
-    --f-shadow-float: 0 0 0 1px var(--f-border), 0 24px 48px -28px rgba(0,0,0,.6);
-  }
-}
-.focus-app[data-theme="dark"] {
-  --f-bg: #11141c; --f-surface: #1a1f2b; --f-surface-2: #222838; --f-border: #2e3546; --f-line-strong: #435069;
-  --f-ink: #eef1f7; --f-ink-soft: #d3d9e6; --f-muted: #a9b2c5; --f-faint: #7b869c; --f-faint-2: #5d6780;
-  --f-accent: #6e58e0; --f-accent-ink: #b3a6f7; --f-accent-weak: #2a2550; --f-accent-avatar: #3b3470; --f-accent-soft-2: #352d66; --f-accent-tint: #1e1a36;
-  --f-red-bg: #f3887c; --f-red-ink: #2a0f0c; --f-red-text: #f3887c;
-  --f-amber-bg: #e8b75a; --f-amber-ink: #2a1c00; --f-amber-text: #e8b75a; --f-amber-ink-strong: #f3d28f;
-  --f-green-bg: #6fcf97; --f-green-ink: #0c2417; --f-green-text: #6fcf97;
-  --f-neutral-bg: #2b3344; --f-neutral-ink: #a9b2c5; --f-neutral-text: #a9b2c5;
-  --f-shadow: 0 0 0 1px var(--f-border);
-  --f-shadow-float: 0 0 0 1px var(--f-border), 0 24px 48px -28px rgba(0,0,0,.6);
-}
-
-/* The legacy globals.css paints <body> dark; while Focus is mounted it owns the page background. */
-html:has(.focus-app), body:has(.focus-app) { background: var(--f-bg, #f3f5f9); }
-.focus-app *, .focus-app *::before, .focus-app *::after { box-sizing: border-box; }
-.focus-app a { color: inherit; text-decoration: none; }
-.focus-app button { font: inherit; color: inherit; cursor: pointer; border: 0; }
+.focus-app :where(*, *::before, *::after) { box-sizing: border-box; }
+:where(.focus-app) a { color: inherit; text-decoration: none; }
+:where(.focus-app) button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; margin: 0; text-align: inherit; }
+:where(.focus-app) button:disabled { cursor: not-allowed; }
+:where(.focus-app) input, :where(.focus-app) textarea, :where(.focus-app) select { font: inherit; color: inherit; }
+:where(.focus-app) h1, :where(.focus-app) h2, :where(.focus-app) h3, :where(.focus-app) h4, :where(.focus-app) p { margin: 0; }
 .focus-app :focus-visible { outline: 3px solid var(--f-ink); outline-offset: 2px; } /* handoff: focus = 3px ink, offset 2 */
 .focus-app .f-mono { font-family: var(--font-mono, "IBM Plex Mono"), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-@media (prefers-reduced-motion: reduce) { .focus-app * { transition: none !important; animation: none !important; } }
-
-/* ---------- top bar (handoff TopBar.dc.html) ---------- */
-.f-topbar {
-  position: sticky; top: 0; z-index: 50;
-  min-height: var(--f-nav-h); display: flex; align-items: center; gap: 6px;
-  padding: 0 clamp(12px, 2vw, 28px); min-width: 0;
-  background: var(--f-surface); border-bottom: 1px solid var(--f-border);
+.focus-app .f-num { font-variant-numeric: tabular-nums; }
+.focus-app .f-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .focus-app *, .focus-app *::before, .focus-app *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
-.f-brand { font-size: 19px; font-weight: 800; margin-inline-end: 6px; flex: none; }
-.f-switcher { font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: var(--f-r-pill); background: var(--f-surface-2); margin-inline-end: 8px; white-space: nowrap; flex: none; }
-.f-nav { flex: 1 1 auto; min-width: 0; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
-.f-nav::-webkit-scrollbar { display: none; }
-.f-nav__item { font-size: 14px; padding: 9px 14px; border-radius: var(--f-r-pill); white-space: nowrap; flex: none; }
-.f-nav__item:hover { background: var(--f-surface-2); }
-.f-nav__item[aria-current="page"] { font-weight: 700; background: var(--f-accent-weak); color: var(--f-accent-ink); }
-.f-iconbtn { position: relative; flex: none; width: 44px; height: 44px; border-radius: var(--f-r-pill); background: var(--f-surface-2); display: flex; align-items: center; justify-content: center; }
-.f-iconbtn__count { position: absolute; top: 4px; inset-inline-end: 4px; font-size: 10px; font-weight: 700; background: #b8322a; color: #fff; border-radius: var(--f-r-pill); padding: 0 5px; }
-.f-create { font-size: 14px; font-weight: 700; padding: 11px 16px; border-radius: var(--f-r-pill); background: var(--f-accent); color: #fff !important; white-space: nowrap; flex: none; }
-.f-avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--f-accent-avatar); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: var(--f-accent-ink); }
 
-/* focus mode + mobile previews hide the global nav (the screen draws its own focus bar) */
-.focus-app:has(.f-focusmode) .f-topbar { display: none; }
-
-/* ---------- generated screens ---------- */
+/* ---------- visual reference (raw handoff conversion, /focus/reference/[id]) ---------- */
 .f-screen { max-width: 1440px; margin-inline: auto; }
-
-/* mobile preview: the handoff phone frame, centred */
 .f-device { min-height: 100vh; display: flex; justify-content: center; padding: 40px 16px 64px; }
 .f-device__stage { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .f-device__note { max-width: 560px; text-align: center; color: var(--f-muted); font-size: 13px; line-height: 1.5; margin: 0; }
 
-/* prototype-only: screen map button + index */
-.f-screenmap { position: fixed; bottom: 16px; inset-inline-start: 16px; z-index: 60; font-size: 13px; font-weight: 700; padding: 10px 14px; border-radius: var(--f-r-pill); background: #161d2e; color: #fff !important; box-shadow: var(--f-shadow-float); }
-.f-index { max-width: 1200px; margin: 0 auto; padding: 32px 40px 72px; }
-.f-index h1 { font-size: 30px; font-weight: 800; margin: 0; }
-.f-index__lead { color: var(--f-muted); font-size: 15px; line-height: 1.55; margin: 8px 0 0; max-width: 720px; }
-.f-index__group { margin-top: 28px; }
-.f-index__group h2 { font-size: 16px; font-weight: 700; margin: 0 0 12px; }
-.f-index__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-.f-index__card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 14px; background: var(--f-surface); box-shadow: var(--f-shadow); }
-.f-index__card:hover { box-shadow: 0 0 0 2px var(--f-accent); }
-.f-index__id { align-self: flex-start; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 6px; background: var(--f-accent); color: #fff; }
-.f-index__t { font-size: 15px; font-weight: 700; }
-.f-index__s { font-size: 13px; color: var(--f-muted); }
-.f-index__mode { font-size: 12px; color: var(--f-muted); }
+/* skip link + main landmark */
+.f-skip { position: absolute; inset-inline-start: 12px; top: -60px; z-index: 100; padding: 10px 16px; border-radius: 999px; background: var(--f-strong-bg); color: var(--f-strong-text); font-weight: 700; }
+.f-skip:focus { top: 12px; }
+.f-main:focus { outline: none; }

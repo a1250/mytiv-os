@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/screens/W3";
+import Screen from "@/components/focus/reference/W3";
 
 export const metadata: Metadata = { title: "ביצוע › Kanban לפי סטטוס — Mytiv OS" };
 

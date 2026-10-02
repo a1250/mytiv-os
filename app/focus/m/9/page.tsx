@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/screens/M9";
+import Screen from "@/components/focus/reference/M9";
 
 export const metadata: Metadata = { title: "עבודה · המשימות שלי — Mytiv OS" };
 

@@ -1,0 +1,43 @@
+/* Mytiv Work patterns — task cards (W1, D1, M9). */
+.f-tcard { background: var(--f-surface); border-radius: 12px; display: flex; flex-direction: column; box-shadow: var(--f-line); min-width: 0; position: relative; }
+.f-tcard__title { margin: 0; font-weight: 700; line-height: 1.35; }
+.f-tcard__link { border-radius: 4px; }
+.f-tcard__link:hover { color: var(--f-accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+.f-tcard__top, .f-tcard__row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.f-tcard__ctx { font-size: 13px; color: var(--f-muted); }
+.f-tcard__meta, .f-tcard__next { font-size: 12px; color: var(--f-muted); }
+.f-tcard__late { font-size: 11px; color: var(--f-red-text); font-weight: 700; }
+.f-tcard__foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 4px; border-top: 1px solid var(--f-surface-2); }
+.f-tcard__timer, .f-tcard__open { position: relative; display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--f-accent-ink); border-radius: 6px; white-space: nowrap; }
+.f-tcard__timer::after, .f-tcard__open::after { content: ""; position: absolute; inset: -14px -8px; }
+.f-tcard__timer:hover, .f-tcard__open:hover { text-decoration: underline; text-underline-offset: 3px; }
+.f-tcard__timer[aria-pressed="true"] { color: var(--f-green-text); }
+.f-tcard__dep { display: flex; gap: 7px; align-items: center; padding: 8px 10px; border-radius: 8px; background: var(--f-bg); font-size: 12.5px; color: var(--f-muted); }
+.f-tcard__dep b { color: var(--f-ink); }
+.f-tcard__dep:hover { box-shadow: inset 0 0 0 1px var(--f-border); }
+.f-tcard__depicon { opacity: .7; }
+.f-tcard__tag { align-self: flex-start; }
+/* md (W1) */
+.f-tcard--md { padding: 12px 14px; gap: 4px; }
+.f-tcard--md .f-tcard__title { font-size: 14px; }
+.f-tcard--md.f-tcard--rich, .f-tcard--md.f-tcard--blocked { padding: 14px; gap: 9px; box-shadow: var(--f-shadow); }
+.f-tcard--md.f-tcard--blocked { box-shadow: var(--f-line); }
+.f-tcard--md.f-tcard--rich .f-tcard__title, .f-tcard--md.f-tcard--blocked .f-tcard__title { font-size: 15px; }
+.f-tcard--md.f-tcard--waiting { gap: 6px; }
+.f-tcard--md .f-risk { font-size: 11.5px; padding: 2px 8px; line-height: 16px; }
+.f-tcard--row { flex-direction: row; align-items: center; justify-content: space-between; padding: 12px 14px; }
+/* sm (D1 "העבודה שלי להיום") */
+.f-tcard--sm { padding: 12px 13px; gap: 3px; }
+.f-tcard--sm .f-tcard__title { font-size: 13.5px; }
+.f-tcard--sm.f-tcard--rich { padding: 13px; gap: 7px; box-shadow: var(--f-shadow); }
+.f-tcard--sm.f-tcard--rich .f-tcard__title, .f-tcard--sm.f-tcard--blocked .f-tcard__title { font-size: 14px; }
+.f-tcard--sm.f-tcard--rich .f-tcard__foot { border: 0; padding: 0; flex-direction: column; align-items: flex-start; gap: 7px; }
+.f-tcard--sm .f-tcard__timer { font-size: 12.5px; }
+.f-tcard--sm.f-tcard--blocked { padding: 13px; gap: 7px; }
+.f-tcard--sm .f-tcard__dep { padding: 7px 9px; gap: 6px; font-size: 11.5px; }
+.f-tcard--sm.f-tcard--waiting { gap: 5px; }
+.f-tcard--sm.f-tcard--overdue.f-tcard--rich { gap: 6px; }
+/* overdue = red line + inline-start bar */
+.f-tcard--overdue { box-shadow: 0 0 0 1px var(--f-red-line); border-inline-start: 3px solid var(--f-red-solid); }
+.f-tcard--overdue.f-tcard--rich { box-shadow: 0 1px 2px var(--f-shadow-c), 0 0 0 1px var(--f-red-line); }
+@media (max-width: 767px) { .f-tcard { border-radius: 14px; } }

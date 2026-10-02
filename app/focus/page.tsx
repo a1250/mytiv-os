@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/screens/D1";
+import TodayScreen from "@/components/focus/screens/today";
 
-export const metadata: Metadata = { title: "היום שלי · לפי זמן — Mytiv OS" };
+export const metadata: Metadata = { title: "היום שלי — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <TodayScreen />;
 }
