@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { HOURS_SYNC, PROJECT_UMINO } from "@/lib/focus/fixtures/projects";
+import { demoIso } from "@/lib/focus/fixtures/clock";
 import Link from "next/link";
 import { PEOPLE } from "@/lib/focus/fixtures/people";
 import { fmtAgo, fmtTime } from "@/lib/focus/format";
@@ -48,7 +49,7 @@ function Inner() {
   const task = state.tasks.find((t) => t.id === selected) ?? null;
   const job = state.jobs.find((j) => j.id === `sync-${selected}`);
   const js = job && !job.cancelledAt ? jobStatus(job, state.clock) : null;
-  const sync: SyncState = !js ? { kind: "idle" } : js.state === "running" ? { kind: "syncing" } : js.state === "done" ? { kind: "synced", at: fmtTime(new Date(js.at).toISOString()) } : { kind: "failed", message: "ClickUp לא אישר את השינוי." };
+  const sync: SyncState = !js ? { kind: "idle" } : js.state === "running" ? { kind: "syncing" } : js.state === "done" ? { kind: "synced", at: fmtTime(demoIso(js.at)) } : { kind: "failed", message: "ClickUp לא אישר את השינוי." };
   const onDirty = useCallback((d: boolean) => setDirty(d), []);
   const refreshJob = state.jobs.find((j) => j.id === "refresh-clickup");
   const refreshing = refreshJob && !refreshJob.cancelledAt && jobStatus(refreshJob, state.clock).state === "running";
@@ -64,7 +65,7 @@ function Inner() {
 
   const save = (d: BlockedDraft) => {
     if (!task) return;
-    const r = demo.patchTask(task.id, { assigneeId: d.assigneeId, nextAction: d.nextAction, followUp: d.followUp, ...(d.note.trim() ? { addComment: { id: `c-${Date.now()}`, authorId: demo.viewer.id, at: new Date().toISOString(), text: d.note.trim() } } : {}) }, task.version);
+    const r = demo.patchTask(task.id, { assigneeId: d.assigneeId, nextAction: d.nextAction, followUp: d.followUp, ...(d.note.trim() ? { addComment: { id: `c-${Date.now()}`, authorId: demo.viewer.id, at: demoIso(), text: d.note.trim() } } : {}) }, task.version);
     if (!r.ok) { toast.push({ kind: "error", title: "לא נשמר", detail: "refused" in r ? r.refused : "המשימה עודכנה במקביל. רענן ונסה שוב." }); return; }
     setDirty(false);
     if (task.source === "clickup") {

@@ -22,11 +22,13 @@ const OUTCOME_TEXT: Record<Exclude<DecisionOutcome, "defer">, { glyph: string; t
 };
 
 export function DecisionBlock({
-  risk, hint, onDecide, result, onUndo, nextHref, deferHref, labels, managerNote, compactActions,
+  risk, hint, onDecide, result, onUndo, nextHref, deferHref, labels, managerNote, compactActions, onDirtyChange,
 }: {
   risk: RiskLevel; hint?: string; onDecide: (o: DecisionOutcome, reason: string) => DecisionCheck;
   result: DecisionResult | null; onUndo: () => void; nextHref: string | null; deferHref: string;
   labels?: Partial<Record<DecisionOutcome, string>>; managerNote?: string; compactActions?: boolean;
+  /** a typed reason that was not recorded yet counts as unsaved */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,7 @@ export function DecisionBlock({
   const required = reasonRequired(risk, "approve");
 
   useEffect(() => { if (result) nextRef.current?.focus(); }, [result]);
+  useEffect(() => { onDirtyChange?.(!result && reason.trim().length > 0); }, [reason, result, onDirtyChange]);
 
   // keyboard: A = approve, R = request changes (never while typing). A on medium+ still demands the reason.
   const decideRef = useRef<(o: DecisionOutcome) => void>(() => {});

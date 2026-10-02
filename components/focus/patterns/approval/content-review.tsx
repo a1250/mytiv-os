@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ContentUnderReview, DecisionCheck, DecisionOutcome } from "@/lib/focus/contracts/approvals";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
@@ -12,12 +12,13 @@ import type { DecisionResult } from "./decision-block";
  * request-changes, where the reviewer's notes are pinned to parts of the design and a general reason is mandatory.
  */
 export function ContentReviewPanel({
-  content, hint, onDecide, result, onUndo, nextHref, onCommentOnly,
+  content, hint, onDecide, result, onUndo, nextHref, onCommentOnly, onDirtyChange,
 }: {
   content: ContentUnderReview; hint?: string; onDecide: (o: DecisionOutcome, reason: string) => DecisionCheck;
   result: DecisionResult | null; onUndo: () => void; nextHref: string | null;
   /** save the notes without deciding (the item stays in the queue) */
   onCommentOnly: (notes: number) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [mode, setMode] = useState<"decide" | "changes">(content.annotations.length ? "changes" : "decide");
   const [reason, setReason] = useState(content.draftReason);
@@ -25,6 +26,7 @@ export function ContentReviewPanel({
   const [notes, setNotes] = useState(content.annotations);
   const field = useRef<HTMLTextAreaElement>(null);
   const id = useId();
+  useEffect(() => { onDirtyChange?.(!result && mode === "changes" && (reason !== content.draftReason || notes.length !== content.annotations.length)); }, [reason, notes, mode, result, content, onDirtyChange]);
 
   const decide = (o: DecisionOutcome) => {
     const r = onDecide(o, o === "approve" ? "" : reason);

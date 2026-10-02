@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Approval, DecisionOutcome } from "@/lib/focus/contracts/approvals";
 import { designById } from "@/lib/focus/fixtures/studio";
 import { fmtAgo, fmtDayMonth, fmtTime, fmtWaiting, fmtWeekday } from "@/lib/focus/format";
@@ -17,6 +17,8 @@ import { FocusBar } from "@/components/focus/shell/focus-bar";
 import { useQueue } from "@/components/focus/shell/use-queue";
 import { cx } from "@/components/focus/ui/cx";
 import { Chips } from "@/components/focus/ui/tabs";
+import { Button } from "@/components/focus/ui/button";
+import { Dialog } from "@/components/focus/ui/dialog";
 import { ApprovalPill, OriginTag, riskText, RiskPill } from "@/components/focus/ui/status";
 import { useToast } from "@/components/focus/ui/toast";
 
@@ -37,15 +39,27 @@ export default function ApprovalScreen({ id }: { id: string }) {
   const nextPending = ordered.slice(idx + 1).concat(ordered.slice(0, idx)).find((x) => x.status === "pending" && x.id !== id) ?? null;
   const nextHref = nextPending ? R.approval(nextPending.id) : null;
 
+  // unsaved reason → ask before leaving (exit, skip, J, closing the tab)
+  const [dirty, setDirty] = useState(false);
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const onDirty = useCallback((d: boolean) => setDirty(d), []);
+  const navigate = (href: string) => { if (dirty) { setLeaving(href); return false; } return true; };
+  useEffect(() => {
+    if (!dirty) return;
+    const h = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [dirty]);
+
   // J = next item (never while typing)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || (e.target as HTMLElement)?.closest?.("input, textarea, select, dialog")) return;
-      if ((e.key === "j" || e.key === "J") && nextHref) { e.preventDefault(); router.push(nextHref); }
+      if ((e.key === "j" || e.key === "J") && nextHref) { e.preventDefault(); if (dirty) setLeaving(nextHref); else router.push(nextHref); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [nextHref, router]);
+  }, [nextHref, router, dirty]);
 
   const handled: QueueEntry[] = ordered.filter((x) => x.status !== "pending" && x.id !== id).map((x) => {
     const d = demo.state.decisions[x.id];
@@ -81,9 +95,10 @@ export default function ApprovalScreen({ id }: { id: string }) {
         exitHref={R.approvals}
         progress={{ index: Math.max(0, idx), total: ordered.length, done, label: "אישור" }}
         skipHref={nextHref}
+        onNavigate={navigate}
       />
       {mode === "summary" && <SummaryLayout a={a} next={next} nextHref={nextHref} />}
-      {mode === "content" && <ContentLayout a={a} result={result} onDecide={onDecide} nextHref={nextHref} onUndo={() => q.undo(id)} onComment={(n) => toast.push({ title: `${n} הערות נשמרו לגרסה ${a.version}`, detail: "ההחלטה עדיין פתוחה והפריט נשאר בתור." })} />}
+      {mode === "content" && <ContentLayout a={a} result={result} onDecide={onDecide} nextHref={nextHref} onUndo={() => q.undo(id)} onDirty={onDirty} onComment={(n) => toast.push({ title: `${n} הערות נשמרו לגרסה ${a.version}`, detail: "ההחלטה עדיין פתוחה והפריט נשאר בתור." })} />}
       {mode === "decision" && (
         <div className="f-afocus__grid">
           <QueueSide handled={handled} next={next} />
@@ -123,6 +138,7 @@ export default function ApprovalScreen({ id }: { id: string }) {
               nextHref={nextHref}
               deferHref={nextHref ?? R.approvals}
               managerNote={undefined}
+              onDirtyChange={onDirty}
             />
           </article>
           <aside className="f-afocus__aside" aria-label="הקשר">
@@ -138,6 +154,16 @@ export default function ApprovalScreen({ id }: { id: string }) {
           </aside>
         </div>
       )}
+      <Dialog open={!!leaving} onClose={() => setLeaving(null)} label="הנימוק לא נשמר">
+        <div className="f-confirm">
+          <h2 className="f-confirm__h">כתבת נימוק, אבל ההחלטה עוד לא נרשמה</h2>
+          <p className="f-meta">אם תצא עכשיו, הנימוק יימחק והפריט יישאר בתור.</p>
+          <div className="f-confirm__actions">
+            <Button variant="primary" onClick={() => setLeaving(null)}>חזור להחלטה</Button>
+            <Button variant="neutral" onClick={() => { const h = leaving!; setLeaving(null); setDirty(false); router.push(h); }}>צא בלי לשמור</Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
@@ -195,9 +221,9 @@ function SummaryLayout({ a, next, nextHref }: { a: Approval; next: QueueEntry[];
   );
 }
 
-function ContentLayout({ a, result, onDecide, nextHref, onUndo, onComment }: {
+function ContentLayout({ a, result, onDecide, nextHref, onUndo, onComment, onDirty }: {
   a: Approval; result: DecisionResult | null; onDecide: (o: DecisionOutcome, r: string) => ReturnType<ReturnType<typeof useDemo>["decide"]>;
-  nextHref: string | null; onUndo: () => void; onComment: (n: number) => void;
+  nextHref: string | null; onUndo: () => void; onComment: (n: number) => void; onDirty: (d: boolean) => void;
 }) {
   const c = a.content!;
   const design = designById(c.designId)!;
@@ -258,7 +284,7 @@ function ContentLayout({ a, result, onDecide, nextHref, onUndo, onComment }: {
             </div>
           ))}
         </section>
-        <ContentReviewPanel content={c} hint={a.reasonHint} onDecide={onDecide} result={result} onUndo={onUndo} nextHref={nextHref} onCommentOnly={onComment} />
+        <ContentReviewPanel content={c} hint={a.reasonHint} onDecide={onDecide} result={result} onUndo={onUndo} nextHref={nextHref} onCommentOnly={onComment} onDirtyChange={onDirty} />
       </aside>
     </div>
   );

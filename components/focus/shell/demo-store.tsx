@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import type { Approval, Decision, DecisionCheck, DecisionOutcome } from "@/lib/focus/contracts/approvals";
 import type { ActiveTimer, BoardColumn, Task, TaskPatch, TimeEntry, WorkRole } from "@/lib/focus/contracts/work";
 import { APPROVALS } from "@/lib/focus/fixtures/approvals";
-import { DEMO_NOW } from "@/lib/focus/fixtures/clock";
+import { DEMO_NOW, demoIso } from "@/lib/focus/fixtures/clock";
 import { VIEWER } from "@/lib/focus/fixtures/people";
 import { ACTIVE_TIMER, TASKS, TIME_ENTRIES } from "@/lib/focus/fixtures/work";
 import { checkDecision } from "@/lib/focus/state/approvals";
@@ -168,7 +168,7 @@ function useStoreValue() {
     if (!check.ok) return check;
     if (outcome === "defer") return check;
     const status = outcome === "approve" ? "approved" : outcome === "request_changes" ? "changes_requested" : "rejected";
-    dispatch({ type: "decide", decision: { approvalId: id, outcome, reason: reason.trim(), decidedAt: new Date().toISOString(), decidedBy: VIEWER.id }, status });
+    dispatch({ type: "decide", decision: { approvalId: id, outcome, reason: reason.trim(), decidedAt: demoIso(), decidedBy: VIEWER.id }, status });
     return check;
   }, [approval]);
 
@@ -188,7 +188,7 @@ function useStoreValue() {
         if (fail) dispatch({ type: "exec", id, event: { type: "targetFailed", now: Date.now(), message: a.execution?.failureDetail ?? "המערכת לא אישרה." } });
         else {
           dispatch({ type: "exec", id, event: { type: "targetConfirmed", now: Date.now() } });
-          dispatch({ type: "decide", decision: { approvalId: id, outcome: "approve", reason: "", decidedAt: new Date().toISOString(), decidedBy: VIEWER.id }, status: "approved" });
+          dispatch({ type: "decide", decision: { approvalId: id, outcome: "approve", reason: "", decidedAt: demoIso(), decidedBy: VIEWER.id }, status: "approved" });
         }
       }, a.simulate.latencyMs);
     }
@@ -197,7 +197,7 @@ function useStoreValue() {
   const patchTask = useCallback((id: string, patch: TaskPatch, expectedVersion: number): PatchResult & { previous?: Task } => {
     const cur = s.tasks.find((t) => t.id === id);
     if (!cur) return { ok: false, refused: "המשימה לא נמצאה." };
-    const r = applyPatch(cur, patch, expectedVersion, new Date().toISOString(), s.tasks);
+    const r = applyPatch(cur, patch, expectedVersion, demoIso(), s.tasks);
     if (r.ok) dispatch({ type: "replaceTask", task: r.task });
     return { ...r, previous: cur };
   }, [s.tasks]);
@@ -207,7 +207,7 @@ function useStoreValue() {
   /** Demo: another person edits the task meanwhile (bumps the version) — exercises the version-conflict state. */
   const simulateRemoteEdit = useCallback((id: string, patch: Partial<Task>) => {
     const cur = s.tasks.find((t) => t.id === id);
-    if (cur) dispatch({ type: "replaceTask", task: { ...cur, ...patch, version: cur.version + 1, updatedAt: new Date().toISOString() } });
+    if (cur) dispatch({ type: "replaceTask", task: { ...cur, ...patch, version: cur.version + 1, updatedAt: demoIso() } });
   }, [s.tasks]);
 
   const moveTask = useCallback((id: string, to: BoardColumn): { ok: true; previous: Task } | { ok: false; reason: string } => {
@@ -215,7 +215,7 @@ function useStoreValue() {
     if (!cur) return { ok: false, reason: "המשימה לא נמצאה." };
     const gate = checkMove(cur, to, s.tasks);
     if (!gate.ok) return gate;
-    dispatch({ type: "replaceTask", task: { ...cur, status: statusForColumn(cur, to), version: cur.version + 1, updatedAt: new Date().toISOString() } });
+    dispatch({ type: "replaceTask", task: { ...cur, status: statusForColumn(cur, to), version: cur.version + 1, updatedAt: demoIso() } });
     return { ok: true, previous: cur };
   }, [s.tasks]);
 
@@ -223,8 +223,8 @@ function useStoreValue() {
     const t: Task = {
       id: `t-new-${Date.now()}`, notes: "", status: "todo", assigneeId: VIEWER.id, participantIds: [], startDate: null,
       estimateMinutes: null, spentMinutes: 0, subtasks: [], checklist: [], dependsOn: [], links: {}, context: {}, comments: [],
-      evidence: [], activity: [{ id: "a0", at: new Date().toISOString(), actorId: VIEWER.id, text: "נוצרה ביצירה מהירה", tone: "done" }],
-      source: "mytiv", state: "live", version: 1, updatedAt: new Date().toISOString(), parentId: null, ...draft,
+      evidence: [], activity: [{ id: "a0", at: demoIso(), actorId: VIEWER.id, text: "נוצרה ביצירה מהירה", tone: "done" }],
+      source: "mytiv", state: "live", version: 1, updatedAt: demoIso(), parentId: null, ...draft,
     };
     dispatch({ type: "addTask", task: t });
     return t;
@@ -232,7 +232,7 @@ function useStoreValue() {
   const removeTask = useCallback((id: string) => dispatch({ type: "removeTask", id }), []);
 
   const addEntry = (taskId: string, minutes: number, source: TimeEntry["source"]) => {
-    const entry: TimeEntry = { id: `te-${Date.now()}-${taskId}`, taskId, personId: VIEWER.id, start: new Date().toISOString(), minutes, source, certainty: "known" };
+    const entry: TimeEntry = { id: `te-${Date.now()}-${taskId}`, taskId, personId: VIEWER.id, start: demoIso(), minutes, source, certainty: "known" };
     dispatch({ type: "timeEntry", entry });
     return entry;
   };
@@ -287,20 +287,27 @@ function useStoreValue() {
   }, [scheduleJobNotice]);
   const cancelJob = useCallback((id: string) => { clearTimeout(timers.current[id]); const at = Date.now(); dispatch({ type: "cancelJob", id, at }); dispatch({ type: "tick", at }); }, []);
 
-  return useMemo(() => ({
-    hydrated, now: DEMO_NOW, viewer: VIEWER, state: s,
-    approval, decide, undoDecision, exec, resetExec: (id: string) => dispatch({ type: "resetExec", id }),
-    patchTask, restoreTask, moveTask, createTask, removeTask, simulateRemoteEdit,
-    timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry,
+  /** dispatch-only actions — stable identities, safe in effect dependencies */
+  const stable = useMemo(() => ({
+    resetExec: (id: string) => dispatch({ type: "resetExec", id }),
     restoreEntry: (entry: TimeEntry) => dispatch({ type: "timeEntry", entry }),
     setRole: (role: WorkRole) => dispatch({ type: "role", role }),
-    startJob, cancelJob,
     setFormats: (designId: string, formats: string[]) => dispatch({ type: "formats", designId, formats }),
     setDraft: (key: string, value: unknown) => dispatch({ type: "draft", key, value }),
     readNotifications: () => dispatch({ type: "readNotifications" }),
     setFailNext: (value: boolean) => dispatch({ type: "failNext", value }),
     reset: () => dispatch({ type: "reset" }),
-  }), [hydrated, s, approval, decide, undoDecision, exec, patchTask, restoreTask, moveTask, createTask, removeTask, simulateRemoteEdit, timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry, startJob, cancelJob]);
+  }), []);
+
+  return useMemo(() => ({
+    hydrated, now: DEMO_NOW, viewer: VIEWER, state: s,
+    approval, decide, undoDecision, exec, ...stable,
+    patchTask, restoreTask, moveTask, createTask, removeTask, simulateRemoteEdit,
+    timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry,
+
+    startJob, cancelJob,
+
+  }), [hydrated, s, stable, approval, decide, undoDecision, exec, patchTask, restoreTask, moveTask, createTask, removeTask, simulateRemoteEdit, timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry, startJob, cancelJob]);
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

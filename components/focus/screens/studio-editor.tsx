@@ -24,7 +24,11 @@ export default function StudioEditorScreen({ designId }: { designId: string }) {
   const variant = design.variants.find((v) => v.format === "story")!;
   const { now } = useDemo();
   const toast = useToast();
-  const [ed, dispatch] = useReducer(editorReducer, variant, initEditor);
+  const { state: demoState, setDraft } = useDemo();
+  const saved = demoState.drafts[`design-layers-${designId}`] as typeof variant.layers | undefined;
+  const [ed, dispatch] = useReducer(editorReducer, saved ? { ...variant, layers: saved } : variant, initEditor);
+  // autosave: every change is kept as a draft (the editor never holds unsaved state)
+  useEffect(() => { if (ed.past.length || ed.future.length) setDraft(`design-layers-${designId}`, ed.present); }, [ed.present, ed.past.length, ed.future.length, designId, setDraft]);
   const [left, setLeft] = useState<"layers" | "brand" | "inspo">("layers");
   const [right, setRight] = useState<"design" | "checks" | "history">("checks");
   const [safe, setSafe] = useState(true);

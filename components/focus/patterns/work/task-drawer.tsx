@@ -5,6 +5,7 @@ import { useId, useState, type ReactNode } from "react";
 import type { Priority, WorkStatus } from "@/lib/focus/contracts/status";
 import type { ActiveTimer, CapabilityState, Task, TaskPatch, TimeEntry, WorkCapabilities, WorkRole } from "@/lib/focus/contracts/work";
 import { fmtAgo, fmtDate, fmtDayMonth, fmtDuration, fmtTime } from "@/lib/focus/format";
+import { demoIso } from "@/lib/focus/fixtures/clock";
 import { PEOPLE, PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
 import { R } from "@/lib/focus/routes";
 import { blocking, canComplete, canDepend, canDo, childrenOf, openBlockers, parseDuration } from "@/lib/focus/state/work";
@@ -281,7 +282,7 @@ export function TaskDrawerBody(p: DrawerProps) {
             <form className="f-td__newcomment" onSubmit={(e) => {
               e.preventDefault();
               if (!commentDraft.trim()) return;
-              patch({ addComment: { id: `c-${Date.now()}`, authorId: p.viewerId, at: new Date().toISOString(), text: commentDraft.trim() } });
+              patch({ addComment: { id: `c-${Date.now()}`, authorId: p.viewerId, at: demoIso(), text: commentDraft.trim() } });
               setCommentDraft(""); setDirty("", subDraft, checkDraft, manual);
             }}>
               <span className={cx("f-tl__av", `f-tl__av--${p.viewerId}`)} aria-hidden>{PEOPLE_BY_ID[p.viewerId]?.initial}</span>

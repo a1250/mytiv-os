@@ -2,6 +2,7 @@
 
 import type { ActionItem } from "@/lib/focus/contracts/today";
 import { APPROVAL_DUE, APPROVALS } from "@/lib/focus/fixtures/approvals";
+import { demoIso } from "@/lib/focus/fixtures/clock";
 import { columnFor, TODAY_QUEUE } from "@/lib/focus/fixtures/today";
 import { fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
@@ -55,7 +56,7 @@ export function useQueue() {
       if (st.state === "running") return { kind: "working", label: "שומר ומבקש תזמון מ־Meta…" };
       if (st.state === "failed") return { kind: "failed", title: "התזמון לא בוצע", detail: "האישור נשמר. Meta לא זמינה כרגע.", onRetry: () => scheduleWithMeta(id, false) };
       return {
-        kind: "done", title: "אושר ומתוזמן", detail: `Meta אישרה ב־${fmtTime(new Date(st.at).toISOString())}. הסטורי יעלה מחר ב־18:00.`,
+        kind: "done", title: "אושר ומתוזמן", detail: `Meta אישרה ב־${fmtTime(demoIso(st.at))}. הסטורי יעלה מחר ב־18:00.`,
         undo: { label: "בטל עד 18:00", onUndo: () => undo(id) },
       };
     }
