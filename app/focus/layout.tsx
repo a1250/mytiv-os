@@ -6,6 +6,7 @@ import "@/components/focus/shell/shell.css";
 import "@/components/focus/patterns/patterns.css";
 import "@/components/focus/patterns/work/work.css";
 import "@/components/focus/patterns/approval/approval.css";
+import "@/components/focus/patterns/project/project.css";
 import { DemoStoreProvider } from "@/components/focus/shell/demo-store";
 import { ThemeScript } from "@/components/focus/shell/theme";
 import { FocusTopBar, ScreenMapButton } from "@/components/focus/shell/top-bar";
