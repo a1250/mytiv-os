@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/E3";
+import StudioNewScreen from "@/components/focus/screens/studio-new";
 
-export const metadata: Metadata = { title: "יצירה · שלבים 1–3: מטרה, פורמט ובריף — Mytiv OS" };
+export const metadata: Metadata = { title: "תוכן חדש · בריף — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <StudioNewScreen />;
 }

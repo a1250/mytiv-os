@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/D4";
+import ApprovalsListScreen from "@/components/focus/screens/approvals-list";
 
-export const metadata: Metadata = { title: "מרכז האישורים · רשימה — Mytiv OS" };
+export const metadata: Metadata = { title: "אישורים — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <ApprovalsListScreen />;
 }

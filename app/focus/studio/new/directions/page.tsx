@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/E4";
+import StudioDirectionsScreen from "@/components/focus/screens/studio-directions";
 
-export const metadata: Metadata = { title: "יצירה · שלב 4: כיוונים — Mytiv OS" };
+export const metadata: Metadata = { title: "שלושה כיוונים — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <StudioDirectionsScreen />;
 }

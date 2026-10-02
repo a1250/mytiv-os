@@ -32,6 +32,8 @@ type State = {
   role: WorkRole;
   jobs: Job[];
   formats: Record<string, string[]>;
+  /** unsent drafts kept across navigation (forms, briefs) */
+  drafts: Record<string, unknown>;
   notifications: Notification[];
   /** demo control: make the next external action fail (to exercise the failure path) */
   failNext: boolean;
@@ -42,7 +44,7 @@ type State = {
 
 const initial: State = {
   decisions: {}, approvals: {}, executions: {}, tasks: TASKS, timer: ACTIVE_TIMER, timerLog: [], timeEntries: TIME_ENTRIES, role: "owner", jobs: [],
-  formats: {}, notifications: [], failNext: false, clock: 0, hydrated: false,
+  formats: {}, drafts: {}, notifications: [], failNext: false, clock: 0, hydrated: false,
 };
 
 type Action =
@@ -61,6 +63,7 @@ type Action =
   | { type: "job"; job: Job }
   | { type: "cancelJob"; id: string; at: number }
   | { type: "formats"; designId: string; formats: string[] }
+  | { type: "draft"; key: string; value: unknown }
   | { type: "notify"; n: Notification }
   | { type: "readNotifications" }
   | { type: "failNext"; value: boolean }
@@ -93,6 +96,7 @@ function reducer(s: State, a: Action): State {
     case "job": return { ...s, jobs: [...s.jobs.filter((j) => j.id !== a.job.id), a.job] };
     case "cancelJob": return { ...s, jobs: s.jobs.map((j) => (j.id === a.id ? { ...j, cancelledAt: a.at } : j)) };
     case "formats": return { ...s, formats: { ...s.formats, [a.designId]: a.formats } };
+    case "draft": { const drafts = { ...s.drafts }; if (a.value === undefined) delete drafts[a.key]; else drafts[a.key] = a.value; return { ...s, drafts }; }
     case "notify": return { ...s, notifications: [a.n, ...s.notifications.filter((n) => n.id !== a.n.id)] };
     case "readNotifications": return { ...s, notifications: s.notifications.map((n) => ({ ...n, read: true })) };
     case "failNext": return { ...s, failNext: a.value };
@@ -292,6 +296,7 @@ function useStoreValue() {
     setRole: (role: WorkRole) => dispatch({ type: "role", role }),
     startJob, cancelJob,
     setFormats: (designId: string, formats: string[]) => dispatch({ type: "formats", designId, formats }),
+    setDraft: (key: string, value: unknown) => dispatch({ type: "draft", key, value }),
     readNotifications: () => dispatch({ type: "readNotifications" }),
     setFailNext: (value: boolean) => dispatch({ type: "failNext", value }),
     reset: () => dispatch({ type: "reset" }),

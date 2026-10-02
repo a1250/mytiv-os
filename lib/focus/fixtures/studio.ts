@@ -1,4 +1,4 @@
-import type { Design, FormatDef } from "@/lib/focus/contracts/studio";
+import type { Brief, Design, Direction, FormatDef } from "@/lib/focus/contracts/studio";
 import { at } from "./clock";
 
 /**
@@ -70,3 +70,27 @@ export const DESIGNS: Design[] = [
 ];
 
 export const designById = (id: string) => DESIGNS.find((d) => d.id === id);
+
+/** The brief for the Thursday sushi content (E3). Steps 1–2 come from the campaign; step 3 is edited here. */
+export const BRIEF_THURSDAY: Brief = {
+  client: "UMINO",
+  campaign: "קמפיין ערבי סושי של חמישי",
+  goal: "יותר הזמנות בין 19:00 ל־22:00",
+  audienceAction: "הזמנת שולחן",
+  formats: ["story", "post"],
+  message: "ערב חמישי מתחיל כאן",
+  secondary: "סושי, קוקטיילים וחברים",
+  cta: "הזמינו שולחן",
+  promo: { text: "1+1 על סטים נבחרים", verified: "אושר ע״י רון · בתוקף עד 31.10" },
+  language: "he",
+  mustInclude: ["שעות 19:00–22:00", "לוגו"],
+  mustNotInvent: ["מחירים", "המלצות לקוחות", "מבצעים שלא אושרו"],
+  materialsNote: "צילום המנה טרם צולם. הכיוונים ישאירו מקום שמור.",
+};
+
+/** Simulated AI directions (E4): two return quickly, the photo-based one takes longer and may be cancelled. */
+export const DIRECTIONS: Direction[] = [
+  { id: "direct", name: "ישיר ומכירתי", headline: "חמישי. 19:00. שולחן מחכה.", basis: "מטרת הקמפיין, CTA, שעות מאומתות.", durationMs: 1400, outcome: "success", style: "direct" },
+  { id: "typo", name: "טיפוגרפי", headline: "ערב חמישי מתחיל כאן", basis: "טון ושפה מה־Brand Kit, מסר הקמפיין.", durationMs: 1800, outcome: "success", style: "typographic" },
+  { id: "photo", name: "מבוסס צילום", headline: "ערב חמישי מתחיל כאן", basis: "מודבורד \"ערבי חמישי\", סגנון הצילום של UMINO.", durationMs: 9000, outcome: "success", style: "photo" },
+];

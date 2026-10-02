@@ -54,3 +54,23 @@ export type Design = {
   comments: DesignComment[];
   versions: { n: number; note: string }[];
 };
+
+/** Brief for new content (handoff E3): required message + CTA; "must appear" and "must not invent" lists. */
+export type Brief = {
+  client: string;
+  campaign: string;
+  goal: string;
+  audienceAction: string;
+  formats: FormatKey[];
+  message: string;
+  secondary: string;
+  cta: string;
+  promo: { text: string; verified: string | null } | null;
+  language: "he" | "en";
+  mustInclude: string[];
+  mustNotInvent: string[];
+  materialsNote: string;
+};
+
+/** A creative direction produced by the (simulated) AI step (handoff E4). */
+export type Direction = { id: string; name: string; headline: string; basis: string; durationMs: number; outcome: "success" | "failure"; style: "typographic" | "direct" | "photo" };
