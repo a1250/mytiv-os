@@ -12,6 +12,7 @@ import "@/components/focus/patterns/sales/sales.css";
 import "@/components/focus/patterns/reports/reports.css";
 import "@/components/focus/patterns/clients/clients.css";
 import "@/components/focus/patterns/comms/comms.css";
+import "@/components/focus/patterns/marketing/marketing.css";
 import { DemoStoreProvider } from "@/components/focus/shell/demo-store";
 import { ThemeScript } from "@/components/focus/shell/theme";
 import { FocusTopBar, ScreenMapButton } from "@/components/focus/shell/top-bar";
