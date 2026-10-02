@@ -178,3 +178,20 @@
 .f-metric__note--estimated { color: var(--f-amber-text); font-weight: 600; }
 .f-metric__note--unavailable { color: var(--f-neutral-text); font-weight: 600; }
 @media (max-width: 767px) { .f-metricgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .f-metric__note { font-size: 12px; } }
+
+/* ---------- prototype screen map ---------- */
+.f-smap__demo { border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.f-smap__h { font-size: 16px; font-weight: 700; margin: 0 0 8px; }
+.f-smap__controls { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.f-smap__ctl { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.f-smap__ctl select { width: auto; }
+.f-smap__ctl--check input { width: 18px; height: 18px; accent-color: var(--f-accent); }
+.f-smap__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.f-smap__card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 14px; background: var(--f-surface); box-shadow: var(--f-line); }
+.f-smap__card:has(.f-smap__phones) { grid-column: 1 / -1; }
+.f-smap__top { display: flex; justify-content: space-between; align-items: center; }
+.f-smap__id { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 6px; background: var(--f-accent); color: var(--f-on-accent); }
+.f-smap__t { font-size: 15px; }
+.f-smap__links { display: flex; gap: 14px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+.f-smap__phones { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; padding: 20px 0; }
+@media (max-width: 767px) { .f-smap__phones .f-phone { transform: scale(.85); transform-origin: top center; } }

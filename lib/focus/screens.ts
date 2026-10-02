@@ -4,6 +4,16 @@ export type NavKey = "today" | "projects" | "marketing" | "sales" | "work" | "co
 export type ScreenEntry = { id: string; title: string; subtitle: string; route: string; mode: ScreenMode;
   nav: { active: NavKey; client: string; bell: boolean; avatar: string } | null; notes: string[] };
 
+/**
+ * Mobile frames (M1–M10) are not separate screens: each is the real responsive screen at 390px. `/focus/m/<n>`
+ * redirects there; the screen map previews it inside a phone frame. M7 shows two screens side by side.
+ */
+export const MOBILE_TARGETS: Record<string, string[]> = {
+  M1: ["/focus"], M2: ["/focus/approvals"], M3: ["/focus/approvals/promo-1plus1"], M4: ["/focus/approvals/proposal-noa"],
+  M5: ["/focus/projects/umino"], M6: ["/focus/work/all-tasks"], M7: ["/focus/sales", "/focus/sales/leads/noa-cohen"],
+  M8: ["/focus/approvals/content-sushi-story"], M9: ["/focus/work"], M10: ["/focus/work/list?task=t-post45"],
+};
+
 export const SCREENS: ScreenEntry[] = [
  {
   "id": "D1",
