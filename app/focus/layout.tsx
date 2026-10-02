@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Open_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./focus.css";
-import { FocusTopBar } from "@/components/focus/shell";
+import { FocusTopBar, ScreenMapButton } from "@/components/focus/shell";
 
 /** Open Sans with Hebrew + Latin, exposed as --font-focus (the board's typeface). */
 const openSans = Open_Sans({ subsets: ["latin", "hebrew"], variable: "--font-focus", display: "swap" });
@@ -14,15 +14,15 @@ export const metadata: Metadata = {
 };
 
 /**
- * Focus prototype shell. Self-contained and RTL: it sets its own typeface and light theme under `.focus-app`,
- * so it never touches the legacy dark app. The switcher per route is set by each page via a context-free default
- * here; project pages render their own top bar with the client name.
+ * Focus prototype shell. Self-contained and RTL: its own typefaces and theme under `.focus-app`, so the legacy
+ * dark app is untouched. The top bar takes its state (active item, switcher, bell) from the screen registry.
  */
 export default function FocusLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className={`${openSans.variable} ${plexMono.variable} focus-app`} dir="rtl" lang="he">
       <FocusTopBar />
       {children}
+      <ScreenMapButton />
     </div>
   );
 }

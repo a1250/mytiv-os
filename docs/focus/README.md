@@ -13,25 +13,27 @@ accent `#5b45c9` / ink `#3f2ea3` / weak `#ece8fb` ·
 risk high `#fbe4e1`/`#b8322a` · mid `#fbf0d9`/`#8c5a00` · low `#e3f3ea`/`#23774a` · fault `#e9edf3`/`#56617a` ·
 radii card 14 / pill 999 / chip 6 · Open Sans 800/700/400.
 
-## Status
-- [x] Shell: top bar + 6-area nav (היום שלי · לקוחות ופרויקטים · שיווק ותוכן · מכירות · עבודה ותקשורת · דוחות), switcher, +יצירה, bell, avatar.
-- [x] C1 — היום שלי (home): greeting+progress, now/today/week columns, מה תקוע, calendar, continue, projects-at-risk, KPI tiles.
-- [x] C2 — סביבת פרויקט (project environment): milestones, next action, blockers, approvals, marketing results.
-- [x] C3 — אישורים · מצב פוקוס (step-by-step approvals + high-risk send confirmation).
-- [ ] C4 — סטודיו תוכן (one brief, all formats).
-- [ ] Reports / Sales / Work, Mobile core screens, 8-flow prototype — **need the full handoff** (not reachable in this session; see below).
+## Status — all 58 handoff screens
+Every frame of the handoff (D1–D8, E1–E7, F1–F6, G1–G6, H1–H15, W1–W6, M1–M10) is a route under `/focus`
+(see `/focus/screens` — the screen map). The top bar is the handoff's shared TopBar (7 words-only items:
+היום שלי · לקוחות ופרויקטים · שיווק ותוכן · מכירות · עבודה · תקשורת · דוחות; הגדרות appears when active), driven
+by `lib/focus/screens.ts`. Focus-mode screens and mobile previews hide it. Light + dark themes from the spec.
 
-## Reference
-The **full handoff is now on disk** (`docs/focus/reference/handoff/`, gitignored): README (source of truth),
-`Design System - Focus`, the 6 desktop screens, mobile, 8 flows, wireframes, and 16 screenshots. Tokens below
-were corrected to that spec.
+Still to do: the 8 interactive flows (mandatory reason, consent before the red button, "processing" states,
+format selection, undo), cross-screen links, Mytiv Work as typed components on the handoff's props contract
+(the meeting point with `auto/work-pkg1`), and a theme toggle.
 
-<!-- prior note -->
-Only the **Focus direction board** was reachable (`docs/focus/reference/focus-direction.bundled.html`, rendered
-offline), which contains C1–C4. The Design System spec, the 5 detailed desktop screens, mobile and the 8 flows
-were not: the Claude Design MCP can't authorize headlessly here. To get them: run `/design-login` in an
-interactive `claude` terminal, use Claude Design's "Send to Claude Code Web", or drop `design_handoff_mytiv_os/`
-on disk.
+## How the screens are produced
+The handoff `.dc.html` files render through a small runtime (templating), so the screens are taken from the
+**rendered** DOM:
+1. `python3 scripts/focus/frame-server.py <handoff-dir> <out-dir>` (127.0.0.1:8779) serves the handoff and accepts
+   `POST /save?file=<ID>.html`.
+2. Open each handoff file in a browser on that server and post every `div[id=<ID>]` frame's `outerHTML` to `/save`.
+3. `python3 scripts/focus/convert-handoff.py <dir-containing-frames/> <repo>` writes
+   `components/focus/screens/<ID>.tsx`, `lib/focus/screens.ts` and the route pages.
+The converter maps every colour to the theme variables (property-aware: status text on a status background vs on a
+surface), turns Lucide images into `<Icon>`, strips the canvas-only frame chrome, and records each screen's
+top-bar state. Generated files are ordinary React — edit them freely.
 
 ## Run
-`npx next dev -p 3200` then open `/focus` (no real env needed; dummy DB vars are fine — nothing DB is imported).
+`npx next dev -p 3200` then open `/focus` or `/focus/screens` (dummy DB env is fine — nothing here touches a DB).

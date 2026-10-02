@@ -1,4 +1,8 @@
-import { FocusPlaceholder } from "@/lib/focus/placeholder";
+import type { Metadata } from "next";
+import Screen from "@/components/focus/screens/E2";
+
+export const metadata: Metadata = { title: "סטודיו התוכן · מסך פתיחה — Mytiv OS" };
+
 export default function Page() {
-  return <FocusPlaceholder title="שיווק ותוכן" note="סטודיו התוכן — בריף אחד לכל הפורמטים (C4)." />;
+  return <Screen />;
 }
