@@ -5,35 +5,41 @@
  * (lib/focus/mock.ts) until the design is approved and the real backend is wired in.
  */
 .focus-app {
-  /* surfaces */
-  --f-bg: #dfe4ec;          /* page */
-  --f-surface: #ffffff;      /* cards, top bar */
-  --f-surface-2: #f3f5f9;    /* insets, hover */
+  /* surfaces — Design System "Focus" (light). Exact tokens from docs/focus/reference README. */
+  --f-bg: #f3f5f9;           /* canvas: page background */
+  --f-surface: #ffffff;      /* cards, panels, top bar */
+  --f-surface-2: #eef1f6;    /* fill: secondary/icon button, inner row */
   --f-ink: #161d2e;          /* primary text */
-  --f-muted: #4d5870;        /* secondary text */
+  --f-muted: #4d5870;        /* ink-2: meta, labels */
   --f-faint: #8793a8;        /* tertiary text */
-  --f-border: #dde2ea;       /* hairlines, card ring */
+  --f-border: #dde2ea;       /* line: hairlines, card ring */
+  --f-line-strong: #c3cad6;  /* field border */
 
   /* accent (indigo) */
   --f-accent: #5b45c9;
-  --f-accent-ink: #3f2ea3;
-  --f-accent-weak: #ece8fb;
+  --f-accent-ink: #3f2ea3;   /* text on accent-soft */
+  --f-accent-weak: #ece8fb;  /* accent-soft */
 
-  /* status */
-  --f-red-bg: #fbe4e1;   --f-red-ink: #b8322a;
-  --f-amber-bg: #fbf0d9; --f-amber-ink: #8c5a00;
-  --f-green-bg: #e3f3ea; --f-green-ink: #23774a;
-  --f-neutral-bg: #e9edf3; --f-neutral-ink: #56617a;
+  /* status (bg + ink), each used with a symbol + word, never colour alone */
+  --f-red-bg: #fbe4e1;   --f-red-ink: #b8322a;      /* high / blocked / overdue */
+  --f-amber-bg: #fbf0d9; --f-amber-ink: #8c5a00; --f-amber-ink-strong: #5e3d00; /* medium / estimated / waiting */
+  --f-green-bg: #e3f3ea; --f-green-ink: #23774a;    /* low / done / verified */
+  --f-neutral-bg: #e9edf3; --f-neutral-ink: #56617a; /* info: unavailable / unknown */
 
   /* shape */
-  --f-r-card: 14px;
+  --f-r-tag: 6px;    /* rectangular tags, small fields */
+  --f-r-field: 10px; /* fields, inner items */
+  --f-r-card: 14px;  /* action card */
+  --f-r-panel: 18px; /* panel, focus mode */
   --f-r-chip: 6px;
   --f-r-pill: 999px;
+  /* elevation: 0 = ring only, 1 = card, 2 = float (menu/drawer/focus/toast) */
   --f-shadow: 0 1px 2px rgba(22,29,46,0.06), 0 0 0 1px var(--f-border);
-  --f-shadow-float: 0 8px 24px rgba(22,29,46,0.10), 0 0 0 1px var(--f-border);
+  --f-shadow-float: 0 0 0 1px var(--f-border), 0 24px 48px -28px rgba(22,29,46,0.45);
 
   --f-tap: 44px; /* minimum primary tap target */
   --f-maxw: 1200px;
+  --f-nav-h: 68px;
 
   font-family: var(--font-focus, "Open Sans"), system-ui, sans-serif;
   background: var(--f-bg);
@@ -42,8 +48,47 @@
   /* The root layout's <body> is a dark flex column; grow with content so the dark never shows behind overflow. */
   flex: 1 0 auto;
 }
+
+/* Dark mode — Design System "Focus" (dark). Opt-in via data-theme, or the OS preference. */
+.focus-app[data-theme="dark"],
+.focus-app.f-dark { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  .focus-app:not([data-theme="light"]) { color-scheme: dark; }
+}
+.focus-app[data-theme="dark"], .focus-app.f-dark,
+.focus-app:not([data-theme="light"]) {
+  /* applied under @media(dark) below via the same values; see block */
+}
+@media (prefers-color-scheme: dark) {
+  .focus-app:not([data-theme="light"]) {
+    --f-bg: #11141c; --f-surface: #1a1f2b; --f-surface-2: #222838;
+    --f-ink: #eef1f7; --f-muted: #a9b2c5; --f-faint: #7b869c;
+    --f-border: #2e3546; --f-line-strong: #435069;
+    --f-accent: #6e58e0; --f-accent-ink: #b3a6f7; --f-accent-weak: #2a2550;
+    --f-red-bg: #f3887c; --f-red-ink: #2a0f0c;
+    --f-amber-bg: #e8b75a; --f-amber-ink: #2a1c00; --f-amber-ink-strong: #2a1c00;
+    --f-green-bg: #6fcf97; --f-green-ink: #0c2417;
+    --f-neutral-bg: #2b3344; --f-neutral-ink: #a9b2c5;
+    --f-shadow: 0 0 0 1px var(--f-border);
+    --f-shadow-float: 0 0 0 1px var(--f-border), 0 24px 48px -28px rgba(0,0,0,0.6);
+  }
+}
+.focus-app[data-theme="dark"] {
+  --f-bg: #11141c; --f-surface: #1a1f2b; --f-surface-2: #222838;
+  --f-ink: #eef1f7; --f-muted: #a9b2c5; --f-faint: #7b869c;
+  --f-border: #2e3546; --f-line-strong: #435069;
+  --f-accent: #6e58e0; --f-accent-ink: #b3a6f7; --f-accent-weak: #2a2550;
+  --f-red-bg: #f3887c; --f-red-ink: #2a0f0c;
+  --f-amber-bg: #e8b75a; --f-amber-ink: #2a1c00; --f-amber-ink-strong: #2a1c00;
+  --f-green-bg: #6fcf97; --f-green-ink: #0c2417;
+  --f-neutral-bg: #2b3344; --f-neutral-ink: #a9b2c5;
+  --f-shadow: 0 0 0 1px var(--f-border);
+  --f-shadow-float: 0 0 0 1px var(--f-border), 0 24px 48px -28px rgba(0,0,0,0.6);
+}
+.f-mono { font-family: var(--font-mono, "IBM Plex Mono"), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
 /* The legacy globals.css paints <body> dark. While the Focus area is mounted, it owns the page background. */
-html:has(.focus-app), body:has(.focus-app) { background: #dfe4ec; }
+html:has(.focus-app), body:has(.focus-app) { background: var(--f-bg, #f3f5f9); }
 .focus-app *, .focus-app *::before, .focus-app *::after { box-sizing: border-box; }
 .focus-app h1, .focus-app h2, .focus-app h3, .focus-app p, .focus-app ul { margin: 0; }
 .focus-app ul { list-style: none; padding: 0; }
@@ -58,7 +103,7 @@ html:has(.focus-app), body:has(.focus-app) { background: #dfe4ec; }
 }
 .f-topbar__inner {
   max-width: var(--f-maxw); margin: 0 auto; padding: 0 20px;
-  height: 60px; display: flex; align-items: center; gap: 18px;
+  height: var(--f-nav-h); display: flex; align-items: center; gap: 18px;
 }
 .f-brand { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
 .f-switcher {
@@ -130,7 +175,7 @@ html:has(.focus-app), body:has(.focus-app) { background: #dfe4ec; }
 
 /* ---------- home: greeting ---------- */
 .f-greeting__date { color: var(--f-muted); font-size: 13px; font-weight: 600; }
-.f-greeting__title { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; margin-top: 4px; }
+.f-greeting__title { font-size: 36px; font-weight: 800; letter-spacing: -0.02em; margin-top: 4px; }
 .f-greeting__sub { color: var(--f-muted); font-size: 16px; margin-top: 6px; }
 .f-greeting__bar { display: flex; align-items: center; gap: 14px; margin-top: 16px; flex-wrap: wrap; }
 .f-progress { display: inline-flex; align-items: center; gap: 10px; color: var(--f-muted); font-size: 13px; font-weight: 600; }
@@ -213,7 +258,7 @@ html:has(.focus-app), body:has(.focus-app) { background: #dfe4ec; }
 /* ---------- C2: project environment ---------- */
 .f-crumb { color: var(--f-muted); font-size: 13px; font-weight: 600; }
 .f-phead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-top: 6px; flex-wrap: wrap; }
-.f-phead__title { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+.f-phead__title { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
 .f-phead__ctx { color: var(--f-muted); font-size: 15px; margin-top: 2px; }
 .f-phead__meta { color: var(--f-muted); font-size: 13px; margin-top: 8px; }
 .f-phead__right { display: flex; align-items: center; gap: 10px; }

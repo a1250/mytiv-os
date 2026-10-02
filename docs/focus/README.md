@@ -8,7 +8,7 @@ direction "Direction C — Focus" (light, airy, RTL, time-based "my day", approv
   theme in `app/focus/focus.css`). After the design is approved, we wire Mytiv Work and the real sources in.
 
 ## Tokens (sampled from the approved board — docs/focus/reference)
-page `#dfe4ec` · ink `#161d2e` · muted `#4d5870` · ring `#dde2ea` · surface `#fff` ·
+page `#f3f5f9` (canvas) · ink `#161d2e` · muted `#4d5870` · ring `#dde2ea` · surface `#fff` ·
 accent `#5b45c9` / ink `#3f2ea3` / weak `#ece8fb` ·
 risk high `#fbe4e1`/`#b8322a` · mid `#fbf0d9`/`#8c5a00` · low `#e3f3ea`/`#23774a` · fault `#e9edf3`/`#56617a` ·
 radii card 14 / pill 999 / chip 6 · Open Sans 800/700/400.
@@ -16,12 +16,17 @@ radii card 14 / pill 999 / chip 6 · Open Sans 800/700/400.
 ## Status
 - [x] Shell: top bar + 6-area nav (היום שלי · לקוחות ופרויקטים · שיווק ותוכן · מכירות · עבודה ותקשורת · דוחות), switcher, +יצירה, bell, avatar.
 - [x] C1 — היום שלי (home): greeting+progress, now/today/week columns, מה תקוע, calendar, continue, projects-at-risk, KPI tiles.
-- [ ] C2 — סביבת פרויקט (project environment): milestones, next action, blockers, approvals, marketing results.
-- [ ] C3 — אישורים · מצב פוקוס (step-by-step approvals + high-risk send confirmation).
+- [x] C2 — סביבת פרויקט (project environment): milestones, next action, blockers, approvals, marketing results.
+- [x] C3 — אישורים · מצב פוקוס (step-by-step approvals + high-risk send confirmation).
 - [ ] C4 — סטודיו תוכן (one brief, all formats).
 - [ ] Reports / Sales / Work, Mobile core screens, 8-flow prototype — **need the full handoff** (not reachable in this session; see below).
 
-## Reference available vs missing
+## Reference
+The **full handoff is now on disk** (`docs/focus/reference/handoff/`, gitignored): README (source of truth),
+`Design System - Focus`, the 6 desktop screens, mobile, 8 flows, wireframes, and 16 screenshots. Tokens below
+were corrected to that spec.
+
+<!-- prior note -->
 Only the **Focus direction board** was reachable (`docs/focus/reference/focus-direction.bundled.html`, rendered
 offline), which contains C1–C4. The Design System spec, the 5 detailed desktop screens, mobile and the 8 flows
 were not: the Claude Design MCP can't authorize headlessly here. To get them: run `/design-login` in an
