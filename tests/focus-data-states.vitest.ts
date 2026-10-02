@@ -36,7 +36,9 @@ describe("unknown vs zero", () => {
 });
 
 describe("unavailable vs empty vs error", () => {
-  const render = (value: Loadable<string[]>) => renderToStaticMarkup(createElement(LoadableView<string[]>, { value, children: (d: string[]) => createElement("ul", null, d.map((x) => createElement("li", { key: x }, x))) }));
+  const list = (d: string[]) => createElement("ul", null, d.map((x) => createElement("li", { key: x }, x)));
+  // LoadableView is a hook-free function component: call it directly to render one state
+  const render = (value: Loadable<string[]>) => renderToStaticMarkup(LoadableView<string[]>({ value, children: list }));
   it("each state renders differently and only ready/partial render the list", () => {
     const ready = render({ state: "ready", data: ["a"] });
     const empty = render({ state: "empty", title: "אין פריטים" });
