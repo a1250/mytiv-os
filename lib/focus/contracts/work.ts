@@ -5,7 +5,7 @@ import type { Priority, WorkStatus } from "./status";
 /**
  * Mytiv Work — UI contract (handoff README → "חוזה רכיבים"). This is the meeting point with `auto/work-pkg1`:
  * the Focus components accept exactly these shapes + callbacks and never import backend code. The mapping from
- * pkg1's provider-neutral `WorkItem` / tasks table onto these types is documented in docs/focus/mytiv-work-contract.md.
+ * pkg1's provider-neutral `WorkItem` / tasks table onto these types is in docs/focus/mytiv-work-contract.md.
  */
 
 /** Provider of a task during the transition. Shown only as a thin dot ("ClickUp ●"), never as the centre of the UI. */
@@ -28,32 +28,39 @@ export type Task = {
   title: string;
   notes: string;
   status: WorkStatus;
+  /** the business's own label for the status (pkg1 `work_statuses.label_he`, e.g. "בבדיקה"); falls back to the status word */
+  statusLabel?: string;
   priority: Priority;
   assigneeId: PersonId | null;
   participantIds: PersonId[];
   startDate: IsoDate | null;
   dueDate: IsoDate | null;
   estimateMinutes: number | null;
-  spentMinutes: number;
+  /** logged time; `null` = the source does not report time (unknown — never shown as 0) */
+  spentMinutes: number | null;
   subtasks: Subtask[];
   checklist: ChecklistItem[];
   /** parent task in the same project (pkg1 `tasks.parent_id`); nested rows in TaskListView */
   parentId: string | null;
-  /** "blocked_by" dependencies */
+  /** "blocked_by" dependencies (pkg1 plan: same-project `blocks` only) */
   dependsOn: TaskRef[];
   links: TaskLinks;
   /** display labels for the links (project/client), resolved by the adapter */
   context: { client?: string; project?: string };
   /** the next concrete step ("הבא: להתקשר לצלם") */
   nextAction?: string;
-  /** who we are waiting for (status `waiting`) */
+  /** who we are waiting for (status `waiting`) — pkg1 `waiting_on` + a label */
   waitingFor?: string;
+  /** a blocked task always carries its reason (handoff: "בסיכון" / "חסום" only with a written reason) */
+  blockedReason?: string;
+  /** follow-up date for blocked/waiting items */
+  followUp?: IsoDate | null;
   comments: Comment[];
   evidence: Asset[];
   activity: ActivityEvent[];
   source: TaskSource;
   state: CapabilityState;
-  /** optimistic concurrency (pkg1 `tasks.version`) — sent back with every patch */
+  /** optimistic concurrency (pkg1 `tasks.version`; ClickUp `date_updated` marker) — sent back with every patch */
   version: number;
   updatedAt: IsoDateTime;
 };
@@ -65,29 +72,52 @@ export type MyTasksBuckets = {
   blocked: Task[];
   waitingOnOthers: Task[];
   noDate: Task[];
+  /** status the source could not map — listed apart, never counted as done or active */
+  unmapped: Task[];
 };
 
 export type ActiveTimer = { taskId: string; title: string; context: string; startedAt: IsoDateTime; elapsedMs: number; running: boolean };
 
 /** Patch accepted by TaskDrawer.onPatch — only fields the user can change in the UI. */
-export type TaskPatch = Partial<Pick<Task, "title" | "notes" | "status" | "priority" | "assigneeId" | "startDate" | "dueDate" | "estimateMinutes">> & {
+export type TaskPatch = Partial<Pick<Task, "title" | "notes" | "status" | "priority" | "assigneeId" | "startDate" | "dueDate" | "estimateMinutes" | "nextAction" | "followUp" | "participantIds">> & {
   subtask?: { id: string; done: boolean };
+  addSubtask?: { id: string; title: string };
   checklistItem?: { id: string; checked: boolean };
+  addChecklistItem?: { id: string; label: string };
+  addComment?: Comment;
+  addDependency?: TaskRef;
 };
 
 export type BoardColumn = "todo" | "in_progress" | "blockedOrWaiting" | "done";
 
-export type TimeEntry = { id: string; taskId: string; personId: PersonId; start: IsoDateTime; minutes: number; certainty: "known" | "estimated" };
-export type TimeReportRow = { key: string; label: string; hours: number; budgetHours: number | null; certainty: "known" | "estimated"; note?: string };
-export type TimeReportData = { range: { from: IsoDate; to: IsoDate }; groupBy: "employee" | "project" | "client" | "task"; rows: TimeReportRow[] };
+export type TimeEntry = { id: string; taskId: string; personId: PersonId; start: IsoDateTime; minutes: number; source: "timer" | "manual"; certainty: "known" | "estimated" };
+export type TimeReportRow = { key: string; label: string; initial?: string; hours: number; budgetHours: number | null; certainty: "known" | "estimated"; note?: string };
+export type TimeReportGroup = "employee" | "project" | "client" | "task";
+export type TimeReportData = {
+  range: { from: IsoDate; to: IsoDate };
+  groupBy: TimeReportGroup;
+  rows: TimeReportRow[];
+  totals: { hours: number; unreported: number; budgetHours: number; overBudgetProjects: { count: number; label: string } };
+  basis: string;
+};
+
+/** What the current source supports (mirrors pkg1 `TaskSourceCapabilities` + the planned work API). */
+export type WorkCapabilities = {
+  changeStatus: boolean; assign: boolean; create: boolean; comment: boolean; setDueDate: boolean;
+  trackTime: boolean; depend: boolean; checklist: boolean; nest: boolean;
+};
+
+/** Viewer role (pkg1 business membership role). Members edit their own work; viewers only read and comment. */
+export type WorkRole = "owner" | "admin" | "member" | "viewer";
 
 /** Every Mytiv Work view can be in one of these system states besides ready (handoff W6). */
 export type WorkViewState =
   | { kind: "empty"; title: string; hint: string }
   | { kind: "loading" }
   | { kind: "error"; message: string }
+  | { kind: "unavailable"; reason: string; since?: IsoDateTime }
   | { kind: "permissionDenied"; reason: string }
-  | { kind: "versionConflict"; mine: Task; theirs: Task; theirsBy: string };
+  | { kind: "versionConflict"; mine: Task; theirs: Task; theirsBy: string; field: keyof Task };
 
 /** Callbacks the Mytiv Work components emit. The demo store implements them; pkg1 will implement them over its API. */
 export type WorkCommands = {
@@ -98,6 +128,7 @@ export type WorkCommands = {
   onPauseTimer(): void;
   onResumeTimer(): void;
   onStopTimer(): void;
+  onLogTime(taskId: string, minutes: number): void;
 };
 
 export type MyTasksData = { buckets: Loadable<MyTasksBuckets>; activeTimer: ActiveTimer | null };

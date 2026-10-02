@@ -4,8 +4,11 @@
  * Focus UI accepts; adapters map backend values onto them.
  */
 
-/** Work state — rectangular tag (r:6). */
-export type WorkStatus = "todo" | "in_progress" | "waiting" | "blocked" | "done" | "cancelled";
+/**
+ * Work state — rectangular tag (r:6). `unknown` = the source status could not be mapped safely (pkg1
+ * WorkStatusCategory "unknown"): never counted as done or active, shown as unmapped, no action branches on it.
+ */
+export type WorkStatus = "todo" | "in_progress" | "waiting" | "blocked" | "done" | "cancelled" | "unknown";
 
 /** Approval state — outlined pill. */
 export type ApprovalStatus = "draft" | "pending" | "approved" | "changes_requested" | "rejected";

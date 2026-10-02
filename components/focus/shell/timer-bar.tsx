@@ -55,7 +55,7 @@ export function TimerBar({ variant = "fixed", note }: { variant?: "fixed" | "inl
       onResume={timerResume}
       onStop={() => {
         const r = timerStop();
-        if (r) toast.push({ title: `נרשמו ${r.minutes} דק׳ על "${r.stopped.title}"`, detail: "נוסף לדוח השעות.", undo: { onUndo: () => timerRestore({ ...r.stopped, elapsedMs: elapsedOf(r.stopped, Date.now()), running: false }, r.task) } });
+        if (r) toast.push({ title: r.minutes > 0 ? `נרשמו ${r.minutes} דק׳ על "${r.stopped.title}"` : "הטיימר נעצר", detail: r.minutes > 0 ? "נוסף לדוח השעות." : "פחות מחצי דקה — לא נרשם זמן.", undo: { onUndo: () => timerRestore({ ...r.stopped, elapsedMs: elapsedOf(r.stopped, Date.now()), running: false }, r.task, r.entry?.id) } });
       }}
     />
   );

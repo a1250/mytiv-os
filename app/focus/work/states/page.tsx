@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/W6";
+import WorkStatesScreen from "@/components/focus/screens/work-states";
 
-export const metadata: Metadata = { title: "מצבי מערכת · יצירה מהירה · מתוכנן — Mytiv OS" };
+export const metadata: Metadata = { title: "מצבי מערכת · Mytiv Work — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <WorkStatesScreen />;
 }

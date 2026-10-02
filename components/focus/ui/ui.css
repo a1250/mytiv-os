@@ -88,6 +88,7 @@
 .f-work--blocked { background: var(--f-surface-2); color: var(--f-ink); }
 .f-work--done { background: var(--f-green-bg); color: var(--f-green-ink); }
 .f-work--cancelled { background: var(--f-neutral-bg); color: var(--f-neutral-ink); text-decoration: line-through; }
+.f-work--unknown { background: var(--f-surface); color: var(--f-neutral-ink); outline: 1px dashed var(--f-neutral-text); outline-offset: -1px; }
 .f-work--xs { border-radius: 5px; }
 /* verification: the word "אומת" + outline */
 .f-verif { padding: 3px 9px; border-radius: var(--f-r-pill); box-shadow: inset 0 0 0 1px currentColor; }
@@ -240,7 +241,7 @@ textarea.f-input { resize: vertical; min-height: 88px; line-height: 1.5; }
 /* ---------- dialog / drawer / sheet ---------- */
 .f-dialog { border: 0; padding: 0; color: var(--f-ink); background: var(--f-surface); box-shadow: var(--f-shadow-float); max-height: 100dvh; }
 .f-dialog::backdrop { background: var(--f-scrim); }
-.f-dialog--drawer { margin: 0; margin-inline-start: auto; height: 100dvh; max-height: 100dvh; width: min(760px, 100vw); max-width: 100vw; border-radius: 0; inset-inline-end: 0; inset-inline-start: auto; }
+.f-dialog--drawer { margin: 0; margin-inline-end: auto; height: 100dvh; max-height: 100dvh; width: min(760px, 100vw); max-width: 100vw; border-radius: 0; inset-inline-start: 0; inset-inline-end: auto; }
 .f-dialog--center { border-radius: 20px; width: min(560px, calc(100vw - 32px)); }
 @media (max-width: 767px) {
   .f-dialog--drawer { margin: auto 0 0; width: 100vw; height: auto; max-height: 92dvh; border-radius: 22px 22px 0 0; }

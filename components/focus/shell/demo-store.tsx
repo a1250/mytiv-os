@@ -2,15 +2,15 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import type { Approval, Decision, DecisionCheck, DecisionOutcome } from "@/lib/focus/contracts/approvals";
-import type { ActiveTimer, BoardColumn, Task, TaskPatch } from "@/lib/focus/contracts/work";
+import type { ActiveTimer, BoardColumn, Task, TaskPatch, TimeEntry, WorkRole } from "@/lib/focus/contracts/work";
 import { APPROVALS } from "@/lib/focus/fixtures/approvals";
 import { DEMO_NOW } from "@/lib/focus/fixtures/clock";
 import { VIEWER } from "@/lib/focus/fixtures/people";
-import { ACTIVE_TIMER, TASKS } from "@/lib/focus/fixtures/work";
+import { ACTIVE_TIMER, TASKS, TIME_ENTRIES } from "@/lib/focus/fixtures/work";
 import { checkDecision } from "@/lib/focus/state/approvals";
 import { execReducer, initialExec, type ExecEvent, type ExecState } from "@/lib/focus/state/execution";
 import { jobStatus, type Job } from "@/lib/focus/state/jobs";
-import { applyPatch, minutesToLog, pauseTimer, resumeTimer, startTimer, statusForColumn } from "@/lib/focus/state/work";
+import { applyPatch, checkMove, minutesToLog, pauseTimer, resumeTimer, statusForColumn, switchTimer, type PatchResult } from "@/lib/focus/state/work";
 
 /**
  * Demo store — the temporary stand-in for the backend. It holds every stateful flow on fixtures so screens behave for
@@ -27,6 +27,9 @@ type State = {
   tasks: Task[];
   timer: ActiveTimer | null;
   timerLog: { taskId: string; minutes: number; at: number }[];
+  timeEntries: TimeEntry[];
+  /** demo role switcher (owner by default) — drives permission-based hiding of actions */
+  role: WorkRole;
   jobs: Job[];
   formats: Record<string, string[]>;
   notifications: Notification[];
@@ -38,7 +41,7 @@ type State = {
 };
 
 const initial: State = {
-  decisions: {}, approvals: {}, executions: {}, tasks: TASKS, timer: ACTIVE_TIMER, timerLog: [], jobs: [],
+  decisions: {}, approvals: {}, executions: {}, tasks: TASKS, timer: ACTIVE_TIMER, timerLog: [], timeEntries: TIME_ENTRIES, role: "owner", jobs: [],
   formats: {}, notifications: [], failNext: false, clock: 0, hydrated: false,
 };
 
@@ -52,6 +55,9 @@ type Action =
   | { type: "addTask"; task: Task }
   | { type: "removeTask"; id: string }
   | { type: "timer"; timer: ActiveTimer | null; log?: { taskId: string; minutes: number; at: number } }
+  | { type: "timeEntry"; entry: TimeEntry }
+  | { type: "removeTimeEntry"; id: string }
+  | { type: "role"; role: WorkRole }
   | { type: "job"; job: Job }
   | { type: "cancelJob"; id: string; at: number }
   | { type: "formats"; designId: string; formats: string[] }
@@ -81,6 +87,9 @@ function reducer(s: State, a: Action): State {
     case "addTask": return { ...s, tasks: [a.task, ...s.tasks] };
     case "removeTask": return { ...s, tasks: s.tasks.filter((t) => t.id !== a.id) };
     case "timer": return { ...s, timer: a.timer, timerLog: a.log ? [...s.timerLog, a.log] : s.timerLog };
+    case "timeEntry": return { ...s, timeEntries: [...s.timeEntries, a.entry] };
+    case "removeTimeEntry": return { ...s, timeEntries: s.timeEntries.filter((e) => e.id !== a.id) };
+    case "role": return { ...s, role: a.role };
     case "job": return { ...s, jobs: [...s.jobs.filter((j) => j.id !== a.job.id), a.job] };
     case "cancelJob": return { ...s, jobs: s.jobs.map((j) => (j.id === a.id ? { ...j, cancelledAt: a.at } : j)) };
     case "formats": return { ...s, formats: { ...s.formats, [a.designId]: a.formats } };
@@ -91,7 +100,7 @@ function reducer(s: State, a: Action): State {
   }
 }
 
-const SESSION_KEY = "mytiv-focus-demo-v1";
+const SESSION_KEY = "mytiv-focus-demo-v2";
 const TIMER_KEY = "mytiv-focus-timer-v1";
 
 function readJson<T>(storage: () => Storage, key: string): T | null {
@@ -181,24 +190,29 @@ function useStoreValue() {
     }
   }, [s.executions, s.failNext]);
 
-  const patchTask = useCallback((id: string, patch: TaskPatch, expectedVersion: number) => {
+  const patchTask = useCallback((id: string, patch: TaskPatch, expectedVersion: number): PatchResult & { previous?: Task } => {
     const cur = s.tasks.find((t) => t.id === id);
-    if (!cur) return { ok: false as const, conflict: null };
-    const r = applyPatch(cur, patch, expectedVersion, new Date().toISOString());
+    if (!cur) return { ok: false, refused: "המשימה לא נמצאה." };
+    const r = applyPatch(cur, patch, expectedVersion, new Date().toISOString(), s.tasks);
     if (r.ok) dispatch({ type: "replaceTask", task: r.task });
-    return r.ok ? { ok: true as const, task: r.task, previous: cur } : { ok: false as const, conflict: r.conflict };
+    return { ...r, previous: cur };
   }, [s.tasks]);
 
   const restoreTask = useCallback((task: Task) => dispatch({ type: "replaceTask", task }), []);
 
-  const moveTask = useCallback((id: string, to: BoardColumn) => {
+  /** Demo: another person edits the task meanwhile (bumps the version) — exercises the version-conflict state. */
+  const simulateRemoteEdit = useCallback((id: string, patch: Partial<Task>) => {
     const cur = s.tasks.find((t) => t.id === id);
-    if (!cur) return null;
-    const status = statusForColumn(cur, to);
-    if (status === cur.status) return null;
-    const next = { ...cur, status, version: cur.version + 1, updatedAt: new Date().toISOString() };
-    dispatch({ type: "replaceTask", task: next });
-    return cur;
+    if (cur) dispatch({ type: "replaceTask", task: { ...cur, ...patch, version: cur.version + 1, updatedAt: new Date().toISOString() } });
+  }, [s.tasks]);
+
+  const moveTask = useCallback((id: string, to: BoardColumn): { ok: true; previous: Task } | { ok: false; reason: string } => {
+    const cur = s.tasks.find((t) => t.id === id);
+    if (!cur) return { ok: false, reason: "המשימה לא נמצאה." };
+    const gate = checkMove(cur, to, s.tasks);
+    if (!gate.ok) return gate;
+    dispatch({ type: "replaceTask", task: { ...cur, status: statusForColumn(cur, to), version: cur.version + 1, updatedAt: new Date().toISOString() } });
+    return { ok: true, previous: cur };
   }, [s.tasks]);
 
   const createTask = useCallback((draft: Pick<Task, "title" | "dueDate" | "priority"> & Partial<Task>) => {
@@ -206,18 +220,33 @@ function useStoreValue() {
       id: `t-new-${Date.now()}`, notes: "", status: "todo", assigneeId: VIEWER.id, participantIds: [], startDate: null,
       estimateMinutes: null, spentMinutes: 0, subtasks: [], checklist: [], dependsOn: [], links: {}, context: {}, comments: [],
       evidence: [], activity: [{ id: "a0", at: new Date().toISOString(), actorId: VIEWER.id, text: "נוצרה ביצירה מהירה", tone: "done" }],
-      source: "mytiv", state: "planned", version: 1, updatedAt: new Date().toISOString(), parentId: null, ...draft,
+      source: "mytiv", state: "live", version: 1, updatedAt: new Date().toISOString(), parentId: null, ...draft,
     };
     dispatch({ type: "addTask", task: t });
     return t;
   }, []);
   const removeTask = useCallback((id: string) => dispatch({ type: "removeTask", id }), []);
 
+  const addEntry = (taskId: string, minutes: number, source: TimeEntry["source"]) => {
+    const entry: TimeEntry = { id: `te-${Date.now()}-${taskId}`, taskId, personId: VIEWER.id, start: new Date().toISOString(), minutes, source, certainty: "known" };
+    dispatch({ type: "timeEntry", entry });
+    return entry;
+  };
+  const bumpSpent = (task: Task | undefined, minutes: number) => {
+    if (task && task.spentMinutes != null) dispatch({ type: "replaceTask", task: { ...task, spentMinutes: task.spentMinutes + minutes, version: task.version + 1 } });
+  };
+
+  /** One timer per person: starting another task stops and logs the running one first (switchTimer). */
   const timerStart = useCallback((taskId: string) => {
     const t = s.tasks.find((x) => x.id === taskId);
-    if (!t) return;
-    const log = s.timer ? { taskId: s.timer.taskId, minutes: minutesToLog(s.timer, Date.now()), at: Date.now() } : undefined;
-    dispatch({ type: "timer", timer: startTimer(t, new Date().toISOString()), log });
+    if (!t) return null;
+    const r = switchTimer(s.timer, t, new Date().toISOString());
+    if (r.logged && r.logged.minutes > 0) {
+      addEntry(r.logged.taskId, r.logged.minutes, "timer");
+      bumpSpent(s.tasks.find((x) => x.id === r.logged!.taskId), r.logged.minutes);
+    }
+    dispatch({ type: "timer", timer: r.next, log: r.logged ? { ...r.logged, at: Date.now() } : undefined });
+    return r;
   }, [s.tasks, s.timer]);
   const timerPause = useCallback(() => { if (s.timer) dispatch({ type: "timer", timer: pauseTimer(s.timer, Date.now()) }); }, [s.timer]);
   const timerResume = useCallback(() => { if (s.timer) dispatch({ type: "timer", timer: resumeTimer(s.timer, new Date().toISOString()) }); }, [s.timer]);
@@ -226,14 +255,24 @@ function useStoreValue() {
     const minutes = minutesToLog(s.timer, Date.now());
     const stopped = s.timer;
     const task = s.tasks.find((t) => t.id === stopped.taskId);
-    if (task) dispatch({ type: "replaceTask", task: { ...task, spentMinutes: task.spentMinutes + minutes, version: task.version + 1 } });
+    const entry = minutes > 0 ? addEntry(stopped.taskId, minutes, "timer") : null;
+    if (minutes > 0) bumpSpent(task, minutes);
     dispatch({ type: "timer", timer: null, log: { taskId: stopped.taskId, minutes, at: Date.now() } });
-    return { stopped, minutes, task };
+    return { stopped, minutes, task, entry };
   }, [s.timer, s.tasks]);
-  const timerRestore = useCallback((t: ActiveTimer, task?: Task) => {
+  const timerRestore = useCallback((t: ActiveTimer, task?: Task, entryId?: string) => {
     dispatch({ type: "timer", timer: { ...t, startedAt: new Date().toISOString() } });
     if (task) dispatch({ type: "replaceTask", task });
+    if (entryId) dispatch({ type: "removeTimeEntry", id: entryId });
   }, []);
+  /** Manual time (validated by parseDuration in the caller). */
+  const logTime = useCallback((taskId: string, minutes: number) => {
+    const task = s.tasks.find((t) => t.id === taskId);
+    const entry = addEntry(taskId, minutes, "manual");
+    bumpSpent(task, minutes);
+    return { entry, previous: task };
+  }, [s.tasks]);
+  const removeTimeEntry = useCallback((id: string) => dispatch({ type: "removeTimeEntry", id }), []);
 
   const startJob = useCallback((job: Omit<Job, "startedAt">) => {
     const j = { ...job, startedAt: Date.now() };
@@ -247,14 +286,16 @@ function useStoreValue() {
   return useMemo(() => ({
     hydrated, now: DEMO_NOW, viewer: VIEWER, state: s,
     approval, decide, undoDecision, exec, resetExec: (id: string) => dispatch({ type: "resetExec", id }),
-    patchTask, restoreTask, moveTask, createTask, removeTask,
-    timerStart, timerPause, timerResume, timerStop, timerRestore,
+    patchTask, restoreTask, moveTask, createTask, removeTask, simulateRemoteEdit,
+    timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry,
+    restoreEntry: (entry: TimeEntry) => dispatch({ type: "timeEntry", entry }),
+    setRole: (role: WorkRole) => dispatch({ type: "role", role }),
     startJob, cancelJob,
     setFormats: (designId: string, formats: string[]) => dispatch({ type: "formats", designId, formats }),
     readNotifications: () => dispatch({ type: "readNotifications" }),
     setFailNext: (value: boolean) => dispatch({ type: "failNext", value }),
     reset: () => dispatch({ type: "reset" }),
-  }), [hydrated, s, approval, decide, undoDecision, exec, patchTask, restoreTask, moveTask, createTask, removeTask, timerStart, timerPause, timerResume, timerStop, timerRestore, startJob, cancelJob]);
+  }), [hydrated, s, approval, decide, undoDecision, exec, patchTask, restoreTask, moveTask, createTask, removeTask, simulateRemoteEdit, timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry, startJob, cancelJob]);
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

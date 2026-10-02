@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/W3";
+import WorkProjectScreen from "@/components/focus/screens/work-project";
 
-export const metadata: Metadata = { title: "ביצוע › Kanban לפי סטטוס — Mytiv OS" };
+export const metadata: Metadata = { title: "לוח עבודה · השקת תפריט סתיו — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <WorkProjectScreen view="board" />;
 }

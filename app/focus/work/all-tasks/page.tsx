@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/F5";
+import AllTasksScreen from "@/components/focus/screens/all-tasks";
 
-export const metadata: Metadata = { title: "משימות · כל הפרויקטים — Mytiv OS" };
+export const metadata: Metadata = { title: "משימות — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <AllTasksScreen />;
 }

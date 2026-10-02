@@ -1,8 +1,7 @@
-import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/W4";
+import { redirect } from "next/navigation";
+import { R } from "@/lib/focus/routes";
 
-export const metadata: Metadata = { title: "מגירת פרטי משימה — Mytiv OS" };
-
+/** W4 (task drawer) is not a page of its own: the drawer opens over the project list for the task in `?task=`. */
 export default function Page() {
-  return <Screen />;
+  redirect(R.task("t-post45"));
 }

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/D3";
+import ProjectExecutionScreen from "@/components/focus/screens/project-execution";
 
-export const metadata: Metadata = { title: "סביבת פרויקט › ביצוע › משימות — Mytiv OS" };
+export const metadata: Metadata = { title: "ביצוע · השקת תפריט סתיו — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <ProjectExecutionScreen />;
 }

@@ -21,6 +21,7 @@ export const WORK: Record<WorkStatus, { glyph: string; word: string }> = {
   blocked: { glyph: "■", word: "חסום" },
   done: { glyph: "✓", word: "הושלם" },
   cancelled: { glyph: "✕", word: "בוטל" },
+  unknown: { glyph: "?", word: "לא ממופה" },
 };
 export const APPROVAL: Record<ApprovalStatus, { glyph: string; word: string }> = {
   draft: { glyph: "✎", word: "טיוטה" },

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/W5";
+import WorkTimeScreen from "@/components/focus/screens/work-time";
 
-export const metadata: Metadata = { title: "פס טיימר קבוע · דוח שעות בסיסי — Mytiv OS" };
+export const metadata: Metadata = { title: "זמן ודוח שעות — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <WorkTimeScreen />;
 }
