@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV } from "@/lib/focus/mock";
+import { NAV, projectsIndex } from "@/lib/focus/mock";
 
 /**
  * Focus top bar + 6-area navigation (Direction C). `switcher` shows the current scope — "כל הלקוחות" on the
  * cross-client home, a client's name inside a project. Active nav is matched by path prefix.
  */
-export function FocusTopBar({ switcher = "כל הלקוחות" }: { switcher?: string }) {
+export function FocusTopBar() {
   const pathname = usePathname();
+  const projMatch = pathname.match(/^\/focus\/projects\/([^/]+)/);
+  const switcher = projMatch ? (projectsIndex[projMatch[1]] ?? projMatch[1]) : "כל הלקוחות";
   const isActive = (href: string) => (href === "/focus" ? pathname === "/focus" : pathname.startsWith(href));
   return (
     <header className="f-topbar">

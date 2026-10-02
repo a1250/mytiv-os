@@ -154,3 +154,49 @@ export const NAV = [
   { href: "/focus/work", label: "עבודה ותקשורת" },
   { href: "/focus/reports", label: "דוחות" },
 ];
+
+// ---- C2: project environment (סביבת פרויקט) ----
+export const projectsIndex: Record<string, string> = { umino: "UMINO", gal: "גל פילאטיס" };
+
+export const projectDetail = {
+  id: "umino",
+  name: "UMINO",
+  ctx: "השקת תפריט סתיו",
+  owner: "דנה",
+  due: "יעד 8.10.2026",
+  updated: "עודכן לפני שעה",
+  riskLabel: "בסיכון · 2 חסימות",
+  tabs: [
+    { id: "overview", label: "סקירה", count: null },
+    { id: "exec", label: "ביצוע", count: 2 },
+    { id: "marketing", label: "שיווק ותוכן", count: 2 },
+    { id: "knowledge", label: "ידע ותוצאות", count: null },
+  ],
+  milestonesLead: "עוד 7 ימים להשקה",
+  milestones: [
+    { label: "בריף", state: "done", date: "15.9" },
+    { label: "תוכנית שיווק", state: "done", date: "22.9" },
+    { label: "צילום", state: "blocked", date: "3.10" },
+    { label: "תוכן לאישור", state: "todo", date: "6.10" },
+    { label: "השקה", state: "todo", date: "8.10" },
+  ] as { label: string; state: "done" | "blocked" | "todo"; date: string }[],
+  nextAction: {
+    title: "לתאם צילום של מנת הספיישל עד 3.10",
+    why: "חוסם את הפוסט 4:5 ואת הקרוסלה. אין אחראי כבר 12 ימים.",
+    action: "הקצה לי ותאם",
+  },
+  hours: { pct: 85, label: "34 מתוך 40 שעות", source: "ClickUp · לפני 4 דק׳" },
+  mediaBudget: "תקציב מדיה: — טרם התקבל",
+  blockers: [
+    { title: "צילום מנת הספיישל", meta: "ממתין לצלם · ללא אחראי · 12 ימים" },
+    { title: "פוסט 4:5", meta: "תלוי בצילום · יואב" },
+  ],
+  approvals: [
+    { title: "מבצע 1+1 בימי חמישי", risk: "mid" as Risk, meta: "ממתין לרון" },
+    { title: "סטורי ערבי סושי", risk: "low" as Risk, meta: "מחר 18:00" },
+  ],
+  results: [
+    { label: "הזמנות בימי חמישי", value: "≈ 96 מוערך", note: "מערכת ההזמנות · 30.9 · חסר יום אחד · מקור", na: false },
+    { label: "חשיפות Instagram", value: "—", note: "לא זמין עקב תקלה בחיבור מ־27.9", na: true },
+  ],
+};

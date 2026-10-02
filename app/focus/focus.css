@@ -209,3 +209,66 @@ html:has(.focus-app), body:has(.focus-app) { background: #dfe4ec; }
   .f-greeting__title { font-size: 28px; }
   .f-main { padding: 20px 16px 56px; }
 }
+
+/* ---------- C2: project environment ---------- */
+.f-crumb { color: var(--f-muted); font-size: 13px; font-weight: 600; }
+.f-phead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-top: 6px; flex-wrap: wrap; }
+.f-phead__title { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+.f-phead__ctx { color: var(--f-muted); font-size: 15px; margin-top: 2px; }
+.f-phead__meta { color: var(--f-muted); font-size: 13px; margin-top: 8px; }
+.f-phead__right { display: flex; align-items: center; gap: 10px; }
+
+.f-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--f-border); margin-top: 18px; }
+.f-tab { padding: 10px 14px; font-size: 14px; font-weight: 700; color: var(--f-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 6px; align-items: center; }
+.f-tab[aria-current="page"] { color: var(--f-ink); border-bottom-color: var(--f-accent); }
+.f-tab__count { color: var(--f-faint); font-weight: 700; }
+
+.f-ov { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; margin-top: 20px; align-items: start; }
+.f-ov__col { display: grid; gap: 18px; }
+
+/* milestones */
+.f-ms__head { display: flex; align-items: baseline; justify-content: space-between; }
+.f-ms__lead { color: var(--f-accent-ink); font-weight: 800; font-size: 14px; }
+.f-ms { display: flex; gap: 6px; margin-top: 14px; }
+.f-ms__step { flex: 1; text-align: center; position: relative; }
+.f-ms__bar { height: 6px; border-radius: 999px; background: var(--f-surface-2); box-shadow: inset 0 0 0 1px var(--f-border); }
+.f-ms__step--done .f-ms__bar { background: var(--f-accent); box-shadow: none; }
+.f-ms__step--blocked .f-ms__bar { background: var(--f-red-ink); box-shadow: none; }
+.f-ms__label { font-size: 12px; font-weight: 700; margin-top: 8px; }
+.f-ms__date { font-size: 11px; color: var(--f-faint); margin-top: 2px; }
+.f-ms__step--blocked .f-ms__date { color: var(--f-red-ink); font-weight: 700; }
+
+/* next action */
+.f-next { background: linear-gradient(0deg, var(--f-accent-weak), var(--f-accent-weak)); border-radius: var(--f-r-card); padding: 16px; box-shadow: 0 0 0 1px #e0d8f6; }
+.f-next__kicker { color: var(--f-accent-ink); font-size: 12px; font-weight: 800; letter-spacing: .02em; }
+.f-next__title { font-size: 17px; font-weight: 800; margin-top: 6px; }
+.f-next__why { color: var(--f-muted); font-size: 13px; margin-top: 6px; line-height: 1.45; }
+.f-next__foot { margin-top: 14px; }
+
+/* hours ring row */
+.f-hours { display: flex; align-items: center; gap: 14px; }
+.f-hours__pct { font-size: 26px; font-weight: 800; }
+.f-hours__meta { color: var(--f-muted); font-size: 12px; }
+.f-hours__track { flex: 1; height: 8px; border-radius: 999px; background: var(--f-surface-2); overflow: hidden; box-shadow: inset 0 0 0 1px var(--f-border); }
+.f-hours__fill { height: 100%; background: var(--f-accent); }
+
+/* blockers / approvals rows */
+.f-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--f-border); }
+.f-row:first-of-type { border-top: 0; }
+.f-row__t { font-size: 14px; font-weight: 700; }
+.f-row__s { color: var(--f-muted); font-size: 12px; margin-top: 2px; }
+
+/* results */
+.f-result { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 0; border-top: 1px solid var(--f-border); }
+.f-result:first-of-type { border-top: 0; }
+.f-result__v { font-size: 20px; font-weight: 800; }
+.f-result__v--na { color: var(--f-faint); }
+
+@media (max-width: 1000px) { .f-ov { grid-template-columns: 1fr; } }
+
+/* projects list */
+.f-plist { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 20px; }
+.f-plist__card { display: block; }
+.f-plist__name { font-size: 16px; font-weight: 800; }
+@media (max-width: 1000px) { .f-plist { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) { .f-plist { grid-template-columns: 1fr; } }
