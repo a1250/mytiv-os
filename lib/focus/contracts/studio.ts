@@ -52,4 +52,5 @@ export type Design = {
   brand: BrandKit;
   checks: DesignCheck[];
   comments: DesignComment[];
+  versions: { n: number; note: string }[];
 };

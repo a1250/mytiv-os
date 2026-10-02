@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Screen from "@/components/focus/reference/E6";
+import StudioEditorScreen from "@/components/focus/screens/studio-editor";
 
-export const metadata: Metadata = { title: "עורך · פורמט יחיד · אזורי בטיחות — Mytiv OS" };
+export const metadata: Metadata = { title: "עורך · סטורי ערבי סושי של חמישי — Mytiv OS" };
 
 export default function Page() {
-  return <Screen />;
+  return <StudioEditorScreen designId="thursday-sushi" />;
 }

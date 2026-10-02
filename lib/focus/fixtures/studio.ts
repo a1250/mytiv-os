@@ -65,6 +65,7 @@ export const DESIGNS: Design[] = [
       { id: "p5", level: "pass", text: "ניגודיות ואיות תקינים" },
     ],
     comments: [{ id: "cm1", author: "רון", target: "כותרת", text: "להוריד קצת את הכותרת", resolvedIn: 3 }],
+    versions: [{ n: 3, note: "נוכחית · הכותרת הוזזה מתחת לאזור החשבון" }, { n: 2, note: "נשלחה לתיקון ע״י רון" }, { n: 1, note: "קונספט AI" }],
   },
 ];
 
