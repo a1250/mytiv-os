@@ -24,6 +24,8 @@ function layerStyle(l: Layer, s: number): CSSProperties {
     fontWeight: st.weight,
     lineHeight: st.lineHeight,
     letterSpacing: st.tracking,
+    // a layer with a bounded width wraps inside it (a design never spills past its own frame); unbounded ones stay one line
+    ...(b.width != null || b.inlineEnd != null ? { whiteSpace: "normal" } : {}),
   };
   if (l.kind === "button") Object.assign(css, { background: st.bg, padding: `${8 * s}px ${16 * s}px`, borderRadius: 999 });
   if (l.kind === "image" && st.pattern) {
