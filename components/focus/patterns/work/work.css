@@ -377,7 +377,8 @@ a.f-td__sub:hover { box-shadow: 0 0 0 1px var(--f-line-strong); }
   .f-wmy__plus { display: flex; width: 44px; height: 44px; border-radius: 50%; background: var(--f-accent); color: #fff; font-size: 24px; align-items: center; justify-content: center; }
   .f-wmy__create { display: none; }
   .f-wmy__create--open { display: block; }
-  .f-tdrawer .f-td__fl, .f-td__sec--evidence, .f-td__sec--links, .f-td__sec--comments, .f-td__sec--subs, .f-td__manual, .f-td__adddep, .f-td__demo, .f-td__people { display: none; }
+  .f-tdrawer .f-td__fl { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* the select keeps its label for AT */
+  .f-td__sec--evidence, .f-td__sec--links, .f-td__sec--comments, .f-td__sec--subs, .f-td__manual, .f-td__adddep, .f-td__demo, .f-td__people { display: none; }
   .f-td__fields { gap: 6px; }
   .f-td__box { padding: 10px 12px; gap: 8px; }
   .f-td__box .f-td__sechead { display: none; }

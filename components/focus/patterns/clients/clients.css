@@ -285,8 +285,8 @@ button.f-cl-rail__item:hover { background: var(--f-surface-2); }
 .f-cl-plan__edit .f-field__error { margin-top: 4px; }
 .f-cl-plan__btns { display: flex; gap: 4px; }
 
-.f-cl-assume { padding: 16px 18px; border-radius: 16px; background: var(--f-amber-bg); color: var(--f-amber-ink-strong); display: flex; flex-direction: column; gap: 8px; }
-.f-cl-assume--done { background: var(--f-green-bg); color: var(--f-green-ink-strong); }
+.f-cl-assume { padding: 16px 18px; border-radius: 16px; background: var(--f-amber-panel); color: var(--f-amber-panel-ink); display: flex; flex-direction: column; gap: 8px; }
+.f-cl-assume--done { background: var(--f-green-panel); color: var(--f-green-panel-ink); }
 .f-cl-assume__title { font-size: 14px; font-weight: 700; margin: 0; }
 .f-cl-assume__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .f-cl-assume__item { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; line-height: 1.5; }

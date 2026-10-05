@@ -150,8 +150,8 @@
 .f-mk-facts__list dd { display: inline; margin: 0; }
 .f-mk-facts__actions { display: flex; gap: 6px; padding-top: 4px; flex-wrap: wrap; }
 .f-mk-facts__actions .f-btn--sm { font-size: 12.5px; padding: 7px 12px; }
-.f-mk-facts__ok.f-btn--secondary { background: var(--f-green-bg); color: var(--f-green-ink-strong); }
-.f-mk-facts__ok.f-btn--secondary:hover { background: var(--f-green-line); }
+.f-mk-facts__ok.f-btn--secondary { background: var(--f-green-panel); color: var(--f-green-panel-ink); }
+.f-mk-facts__ok.f-btn--secondary:hover { background: light-dark(#cfe6d9, #1c4029); }
 .f-mk-facts__form { display: flex; flex-direction: column; gap: 10px; align-self: stretch; }
 .f-mk-flag { padding: 14px 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.5; }
 .f-mk-flag__h { font-size: 13.5px; font-weight: 700; }

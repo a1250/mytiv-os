@@ -31,7 +31,7 @@
 .f-rp-late { color: var(--f-red-text); font-weight: 700; }
 
 .f-rp-note { margin: 0; padding: 12px 14px; border-radius: 14px; font-size: 13.5px; line-height: 1.55; }
-.f-rp-note--est { background: var(--f-amber-bg); color: var(--f-amber-ink-strong); }
+.f-rp-note--est { background: var(--f-amber-panel); color: var(--f-amber-panel-ink); }
 .f-rp-note--na { background: var(--f-neutral-bg); color: var(--f-neutral-ink); }
 
 .f-rp-inline-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13.5px; }
