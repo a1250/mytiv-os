@@ -224,6 +224,7 @@
 .f-td__dates { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .f-td__date { border: 1px solid var(--f-border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
 .f-td__dateinput { border: 0; background: none; font-size: 14px; font-weight: 700; padding: 0; min-height: 28px; }
+.f-td__dateinput::-webkit-calendar-picker-indicator { border-radius: 4px; cursor: pointer; }
 .f-td__sec { display: flex; flex-direction: column; gap: 8px; }
 .f-td__box { border: 1px solid var(--f-border); border-radius: 12px; padding: 14px 16px; gap: 12px; }
 .f-td__sechead { display: flex; align-items: center; gap: 8px; }

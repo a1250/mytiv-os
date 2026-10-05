@@ -22,8 +22,19 @@ const focusInfo = () => page.evaluate(() => {
   return {
     tag: el.tagName.toLowerCase(), cls: String(el.className).split(" ")[0], name: name.slice(0, 40),
     visible: r.width > 0 && r.height > 0 && cs.visibility !== "hidden",
-    ring: (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) >= 2) || cs.boxShadow !== "none",
+    ring: (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) >= 2) || cs.boxShadow !== "none" || uaPicker(el) || ancestorRing(el),
+    inModal: !!el.closest("dialog[open]"),
   };
+  // Chromium's date/time picker button is a separate tab stop inside the UA shadow root: it draws its own ring (author
+  // CSS can't reach it) and the host reports :focus false — verified visually, see docs/focus/QA.md
+  function uaPicker(el) { return /^(date|time|datetime-local|month)$/.test(el.type) && !el.matches(":focus"); }
+  // a ring drawn on a wrapper (:has(:focus-visible) / :focus-within) counts only if it appears because of this focus
+  function ancestorRing(el) {
+    const chain = []; for (let a = el.parentElement, i = 0; a && i < 4; a = a.parentElement, i++) chain.push(a);
+    const look = () => chain.map((a) => { const s = getComputedStyle(a); return `${s.outlineStyle} ${s.outlineWidth} ${s.boxShadow}`; });
+    const focused = look(); el.blur(); const idle = look(); el.focus();
+    return focused.some((v, i) => v !== idle[i]);
+  }
 });
 
 for (const r of routes) {
@@ -34,7 +45,9 @@ for (const r of routes) {
   await page.keyboard.press("Tab");
   let first = await focusInfo();
   if (first?.dev) { await page.keyboard.press("Tab"); first = await focusInfo(); }
-  if (!first || !first.cls.includes("f-skip")) problems.push(`first stop is ${first?.cls ?? "nothing"}, not the skip link`);
+  // a deep link that opens a modal (?task=…) makes the page inert: the first stop belongs inside the dialog
+  const modalAtLoad = await page.evaluate(() => !!document.querySelector("dialog[open]:modal"));
+  if (modalAtLoad ? !first?.inModal : !first || !first.cls.includes("f-skip")) problems.push(`first stop is ${first?.cls ?? "nothing"}, not ${modalAtLoad ? "inside the open dialog" : "the skip link"}`);
   for (let i = 0; i < 45; i++) {
     const f = await focusInfo();
     if (!f) break;
