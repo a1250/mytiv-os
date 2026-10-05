@@ -22,7 +22,7 @@ export function StepTrail({ steps, current }: { steps: string[]; current: number
       {steps.map((s, i) => (
         <li key={s} className={cx("f-steps__item", i < current && "f-steps__item--done", i === current && "f-steps__item--current")} aria-current={i === current ? "step" : undefined}>
           {i > 0 && <span className="f-steps__sep" aria-hidden>—</span>}
-          <span className="f-steps__label">{i < current ? "✓ " : ""}{i + 1} {s}</span>
+          <span className="f-steps__label">{i < current ? "✓ " : ""}<span className="f-steps__n">{i + 1} </span><span className="f-steps__of">שלב {i + 1} מתוך {steps.length} · </span>{s}</span>
         </li>
       ))}
     </ol>

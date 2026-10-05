@@ -228,7 +228,7 @@ a.f-sl-lname::after { content: ""; position: absolute; inset: -12px -6px; }
   .f-sl-lphone { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .f-sl-lphone .f-btn { min-height: 48px; }
   .f-sl-lead__side { display: flex; }
-  .f-sl-side { padding: 14px 16px; }
+  .f-sl-side { padding: 14px 16px; align-self: stretch; width: auto; }
 }
 
 /* ---------- F3 proposal editor ---------- */

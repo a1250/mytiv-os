@@ -109,7 +109,7 @@ export default function ApprovalsListScreen() {
               <h2 className="f-alist__h2">ממתין לאחרים · {WAITING_ON_OTHERS.length}</h2>
               <table className="f-atable f-atable--others">
                 <caption className="f-sr">פריטים שממתינים להחלטה של אחרים</caption>
-                <thead className="f-sr"><tr><th scope="col">פריט</th><th scope="col">אחראי</th><th scope="col">סיכון</th><th scope="col">ממתין</th><th scope="col">פעולה</th></tr></thead>
+                <thead className="f-atable__shead"><tr><th scope="col">פריט</th><th scope="col">אחראי</th><th scope="col">סיכון</th><th scope="col">ממתין</th><th scope="col">פעולה</th></tr></thead>
                 <tbody>
                   {WAITING_ON_OTHERS.map((w) => (
                     <tr key={w.id} className="f-atable__row f-atable__row--others">

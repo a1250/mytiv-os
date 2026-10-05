@@ -125,6 +125,8 @@ textarea.f-decision__input, textarea.f-review__input { font-size: 15px; padding:
 .f-steps__item--done { color: var(--f-green-text); font-weight: 600; }
 .f-steps__item--current .f-steps__label { font-weight: 700; color: var(--f-accent-ink); background: var(--f-accent-weak); padding: 4px 10px; border-radius: var(--f-r-pill); }
 .f-steps__sep { color: var(--f-faint-2); font-weight: 400; }
+.f-steps__of { display: none; }
+@media (max-width: 767px) { .f-steps__of { display: inline; } .f-steps__n { display: none; } }
 .f-pre__body { padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; }
 .f-pre__head { display: flex; flex-direction: column; gap: 6px; }
 .f-pre__ctx { font-size: 13px; color: var(--f-muted); }
@@ -248,7 +250,7 @@ button.f-design__layer { cursor: pointer; text-align: start; }
   .f-decision__note, .f-decision .f-field__help { display: none; }
   .f-decision__input { font-size: 14px; border-radius: 12px; }
   .f-afocus--decision { padding-bottom: 140px; }
-  .f-decision__actions { position: fixed; z-index: 40; inset-inline: 0; bottom: 0; background: var(--f-surface); margin: 12px -16px 0; padding: 12px 16px max(16px, env(safe-area-inset-bottom)); border-top: 1px solid var(--f-surface-2); display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .f-decision__actions { position: fixed; z-index: 40; inset-inline: 0; bottom: 0; background: var(--f-surface); margin: 0; padding: 12px 16px max(16px, env(safe-area-inset-bottom)); border-top: 1px solid var(--f-surface-2); display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .f-decision__approve { grid-column: 1 / -1; font-size: 15px; padding: 14px; min-height: 48px; }
   .f-decision__btn, .f-decision__actions .f-btn--neutral.f-decision__btn { font-size: 14px; padding: 12px 0; min-height: 44px; }
   .f-decision__actions .f-grow { display: none; }
@@ -313,6 +315,8 @@ button.f-design__layer { cursor: pointer; text-align: start; }
 .f-atable__row > :last-child { border-start-end-radius: 14px; border-end-end-radius: 14px; padding-inline-end: 20px; box-shadow: 0 -1px 0 var(--f-border), 0 1px 0 var(--f-border), inset 1px 0 0 var(--f-border); }
 [dir="ltr"] .f-atable__row > :first-child { box-shadow: 0 -1px 0 var(--f-border), 0 1px 0 var(--f-border), inset 1px 0 0 var(--f-border); }
 .f-atable__row--others > * { padding-block: 14px; }
+/* header kept for screen readers but zero-height, so it stays in the table layout and columns line up with the main table */
+.f-atable thead.f-atable__shead th { height: 0; padding-block: 0; font-size: 0; line-height: 0; }
 .f-atable__what { display: table-cell; }
 .f-atable__title { display: block; font-size: 15px; font-weight: 700; border-radius: 4px; }
 .f-atable__title:hover { color: var(--f-accent-ink); text-decoration: underline; text-underline-offset: 3px; }
@@ -325,6 +329,13 @@ button.f-design__layer { cursor: pointer; text-align: start; }
 .f-atable__cta { padding: 11px 0; }
 .f-atable__acts { display: flex; gap: 10px; align-items: center; justify-content: center; }
 @media (max-width: 1199px) { .f-alist__grid { grid-template-columns: minmax(0, 1fr); } .f-atable :is(th, td):nth-child(2) { width: 120px; } }
+/* M8: on a phone the review decision is a bar pinned to the bottom (like .f-decision__actions), so "אשר / בקש תיקון"
+   is reachable without scrolling past the design; in request-changes mode the same bar carries send / cancel. */
+@media (max-width: 767px) {
+  .f-afocus--content { padding-bottom: 96px; }
+  .f-afocus--content .f-review__actions { position: fixed; z-index: 40; inset-inline: 0; bottom: 0; background: var(--f-surface); padding: 12px 16px max(16px, env(safe-area-inset-bottom)); border-top: 1px solid var(--f-surface-2); display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .f-afocus--content .f-review__actions .f-btn { width: 100%; min-height: 48px; justify-content: center; }
+}
 @media (max-width: 767px) {
   .f-alist { padding-top: 4px; gap: 12px; }
   .f-alist .f-phead__eyebrow, .f-alist__select, .f-alist__filters > .f-grow, .f-alist__side { display: none; }
