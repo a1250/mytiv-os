@@ -209,7 +209,7 @@
 .f-td__fields { display: flex; gap: 10px; flex-wrap: wrap; }
 .f-td__field { display: flex; flex-direction: column; gap: 5px; }
 .f-td__fl { font-size: 12px; color: var(--f-muted); display: inline-flex; gap: 6px; align-items: center; }
-.f-td__pill { appearance: none; border: 0; font-size: 13px; font-weight: 700; padding: 7px 13px; border-radius: var(--f-r-pill); background: var(--f-surface-2); min-height: 36px; cursor: pointer; }
+.f-td__pill { appearance: none; border: 0; font-size: 13px; font-weight: 700; padding: 7px 13px; border-radius: var(--f-r-pill); background: var(--f-surface-2); min-height: 36px; cursor: pointer; field-sizing: content; } /* as wide as the chosen value, not the longest option */
 .f-td__pill--p-medium { background: var(--f-amber-bg); color: var(--f-amber-ink); }
 .f-td__pill--p-high { background: var(--f-red-bg); color: var(--f-red-ink); }
 .f-td__pill--p-low { background: var(--f-green-bg); color: var(--f-green-ink); }
@@ -382,5 +382,6 @@ a.f-td__sub:hover { box-shadow: 0 0 0 1px var(--f-line-strong); }
   .f-td__sec--evidence, .f-td__sec--links, .f-td__sec--comments, .f-td__sec--subs, .f-td__manual, .f-td__adddep, .f-td__demo, .f-td__people { display: none; }
   .f-td__fields { gap: 6px; }
   .f-td__box { padding: 10px 12px; gap: 8px; }
-  .f-td__box .f-td__sechead { display: none; }
+  .f-td__box .f-td__sech { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* heading stays for AT; the 0h / 4h count stays visible */
+  .f-td__box .f-td__sechead .f-planned { display: none; }
 }

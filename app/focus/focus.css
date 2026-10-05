@@ -91,6 +91,11 @@ body:has(.focus-app) { background: var(--f-bg); }
 :where(.focus-app) input, :where(.focus-app) textarea, :where(.focus-app) select { font: inherit; color: inherit; }
 :where(.focus-app) h1, :where(.focus-app) h2, :where(.focus-app) h3, :where(.focus-app) h4, :where(.focus-app) p { margin: 0; }
 .focus-app :focus-visible { outline: 3px solid var(--f-ink); outline-offset: 2px; } /* handoff: focus = 3px ink, offset 2 */
+/* User-written text (task titles, notes, comments, anything typed into a field) takes its direction from its own first
+   strong letter, like dir="auto": "Fix menu PDF (v2)." keeps its period at the end inside the RTL layout. Display text
+   stays aligned to the layout (match-parent); fields follow what is typed. UI strings are not included. */
+.focus-app :where(input[type=text], input[type=search], input[type=email], input[type=url], input:not([type]), textarea) { unicode-bidi: plaintext; }
+.focus-app :where(.f-ugc, .f-tcard__link, .f-tl__title, .f-td__title, .f-td__notes, .f-td__comment, .f-td__item, .f-bpanel__title, .f-review__text, .f-cm-msg__line, .f-cm-msghead__subject) { unicode-bidi: plaintext; text-align: match-parent; }
 .focus-app .f-mono { font-family: var(--font-mono, "IBM Plex Mono"), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 .focus-app .f-num { font-variant-numeric: tabular-nums; }
 .focus-app .f-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

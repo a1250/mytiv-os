@@ -220,12 +220,12 @@ export function TaskDrawerBody(p: DrawerProps) {
 
         <Section className="f-td__sec--subs" title="תת־משימות" planned={caps.nest === "planned"} count={<span className="f-meta-sm f-num">{subDone + kids.filter((k) => k.status === "done").length}/{t.subtasks.length + kids.length}</span>}>
           {kids.map((k) => (
-            <Link key={k.id} href={R.task(k.id)} className="f-td__sub"><WorkStatusTag status={k.status} size="xs" glyphOnly /><span>{k.title}</span></Link>
+            <Link key={k.id} href={R.task(k.id)} className="f-td__sub"><WorkStatusTag status={k.status} size="xs" glyphOnly /><span className="f-td__item">{k.title}</span></Link>
           ))}
           {t.subtasks.map((s) => (
             <label key={s.id} className="f-td__sub">
               <input type="checkbox" className="f-check__box f-check__box--round f-check__box--sm" checked={s.done} disabled={!edit} onChange={() => patch({ subtask: { id: s.id, done: !s.done } })} />
-              <span className={s.done ? "f-td__struck" : undefined}>{s.title}</span>
+              <span className={cx("f-td__item", s.done && "f-td__struck")}>{s.title}</span>
             </label>
           ))}
           {edit && (
@@ -240,7 +240,7 @@ export function TaskDrawerBody(p: DrawerProps) {
           {t.checklist.map((c) => (
             <label key={c.id} className="f-td__check">
               <input type="checkbox" className="f-check__box f-check__box--sm" checked={c.checked} disabled={!edit} onChange={() => patch({ checklistItem: { id: c.id, checked: !c.checked } })} />
-              <span className={c.checked ? "f-td__struck" : undefined}>{c.label}</span>
+              <span className={cx("f-td__item", c.checked && "f-td__struck")}>{c.label}</span>
             </label>
           ))}
           {edit && (

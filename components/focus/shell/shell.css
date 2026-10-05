@@ -111,7 +111,7 @@
 .f-timerbar__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .f-timerbar__title { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .f-timerbar--inline .f-timerbar__title { font-size: 13px; }
-.f-timerbar__ctx { font-size: 12px; color: var(--f-faint-2); }
+.f-timerbar__ctx { font-size: 12px; color: var(--f-faint-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .f-timerbar--inline .f-timerbar__ctx { font-size: 11px; }
 .f-timerbar__clock { font-size: 22px; font-weight: 600; margin-inline-start: 8px; }
 .f-timerbar--inline .f-timerbar__clock { font-size: 19px; margin-inline-start: 6px; }
