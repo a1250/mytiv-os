@@ -115,10 +115,10 @@ export default function MarketingCampaignScreen() {
 
         <aside className="f-mk-camp__aside" aria-label="תוצאות, תקציב ויומן">
           <div className="f-mk-camp__results">
-            <ResultsCard results={c.results} now={now} title="תוצאות" />
-            <p className="f-meta f-mk-camp__resnote">
-              מתחילת הקמפיין. הקמפיין התחיל {fmtRelativeDay(c.start, now)}, נתון ראשון צפוי {fmtRelativeDay(c.firstDataAt, now)}.
-            </p>
+            <ResultsCard results={c.results} now={now} title="תוצאות" footer={
+              <p className="f-meta f-mk-camp__resnote">
+                מתחילת הקמפיין. הקמפיין התחיל {fmtRelativeDay(c.start, now)}, נתון ראשון צפוי {fmtRelativeDay(c.firstDataAt, now)}.
+              </p>} />
           </div>
           <section className="f-panel f-mk-camp__card" aria-labelledby="budget-h">
             <h2 id="budget-h" className="f-mk-camp__cardh">תקציב ונכסים</h2>

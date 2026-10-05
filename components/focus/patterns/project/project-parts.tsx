@@ -167,7 +167,8 @@ export function DecisionsCard({ decisions, title = "החלטות ואישורי�
   );
 }
 
-export function ResultsCard({ results, now, title = "תוצאות שיווק" }: { results: Loadable<Metric[]>; now: string; title?: string }) {
+/** `footer`: a line that belongs to the card (e.g. the campaign's "first data expected" note). */
+export function ResultsCard({ results, now, title = "תוצאות שיווק", footer }: { results: Loadable<Metric[]>; now: string; title?: string; footer?: ReactNode }) {
   return (
     <section className="f-panel f-listcard" aria-labelledby="res-h">
       <h2 id="res-h" className="f-listcard__h">{title}</h2>
@@ -192,6 +193,7 @@ export function ResultsCard({ results, now, title = "תוצאות שיווק" }:
           );
         })}</>}
       </LoadableView>
+      {footer}
     </section>
   );
 }

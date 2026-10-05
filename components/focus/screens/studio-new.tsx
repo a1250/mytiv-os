@@ -77,8 +77,8 @@ export default function StudioNewScreen() {
         <h1 className="f-snew__title">תוכן חדש</h1>
         <FlowTrail steps={STEPS} current={2} label="שלבי יצירת התוכן" />
         <span className="f-grow" />
-        <span className="f-meta" role="status">{dirty ? "יש שינויים שלא נשמרו" : stored ? "הבריף נשמר" : "בריף חדש"}</span>
-        <Button variant="neutral" size="sm" onClick={save} disabled={!dirty} disabledReason={!dirty ? "אין שינויים" : undefined}>שמור טיוטה</Button>
+        <span id="snew-save-state" className="f-meta" role="status">{dirty ? "יש שינויים שלא נשמרו" : stored ? "הבריף נשמר · אין שינויים חדשים" : "בריף חדש · אין שינויים לשמור"}</span>
+        <Button variant="neutral" size="sm" onClick={save} disabled={!dirty} aria-describedby="snew-save-state">שמור טיוטה</Button>
       </div>
 
       <div className="f-snew__grid">
