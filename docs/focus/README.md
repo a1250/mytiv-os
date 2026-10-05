@@ -1,39 +1,47 @@
 # Mytiv OS — Focus redesign (Direction C)
 
-Branch `auto/focus-redesign`, off `e35a189`. A **prototype on temporary data** of the approved Claude Design
-direction "Direction C — Focus" (light, airy, RTL, time-based "my day", approvals-first, big tap targets).
+Branch `auto/focus-redesign`, off `e35a189`. The approved Claude Design direction "Direction C — Focus" (RTL,
+time-based "my day", approvals first, large targets) built as a typed, accessible component library that runs on
+**typed fixtures**: no backend, no DB, no migrations, no API routes. Everything lives under `/focus` and is scoped to
+`.focus-app`; the rest of the app is untouched.
 
-- No DB / migration / backend-contract changes. Everything renders from `lib/focus/mock.ts`.
-- Lives under `/focus`, fully isolated from the legacy dark app (scoped `.focus-app`, own Open Sans + light
-  theme in `app/focus/focus.css`). After the design is approved, we wire Mytiv Work and the real sources in.
+| Document | What it covers |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | layers (`ui` → `patterns` → `shell` → `screens`), contracts, fixtures, data states, demo store, theming, accessibility rules |
+| [mytiv-work-contract.md](mytiv-work-contract.md) | Mytiv Work components ↔ props/callbacks/types, optimistic updates, concurrency token, errors, permissions, timer lifecycle, endpoint map, what `auto/work-pkg1` has and lacks, integration order |
+| [QA.md](QA.md) | per-screen visual QA against the handoff (two passes), test and gate results, open issues by severity |
 
-## Tokens (sampled from the approved board — docs/focus/reference)
-page `#f3f5f9` (canvas) · ink `#161d2e` · muted `#4d5870` · ring `#dde2ea` · surface `#fff` ·
-accent `#5b45c9` / ink `#3f2ea3` / weak `#ece8fb` ·
-risk high `#fbe4e1`/`#b8322a` · mid `#fbf0d9`/`#8c5a00` · low `#e3f3ea`/`#23774a` · fault `#e9edf3`/`#56617a` ·
-radii card 14 / pill 999 / chip 6 · Open Sans 800/700/400.
-
-## Status — all 58 handoff screens
-Every frame of the handoff (D1–D8, E1–E7, F1–F6, G1–G6, H1–H15, W1–W6, M1–M10) is a route under `/focus`
-(see `/focus/screens` — the screen map). The top bar is the handoff's shared TopBar (7 words-only items:
-היום שלי · לקוחות ופרויקטים · שיווק ותוכן · מכירות · עבודה · תקשורת · דוחות; הגדרות appears when active), driven
-by `lib/focus/screens.ts`. Focus-mode screens and mobile previews hide it. Light + dark themes from the spec.
-
-Still to do: the 8 interactive flows (mandatory reason, consent before the red button, "processing" states,
-format selection, undo), cross-screen links, Mytiv Work as typed components on the handoff's props contract
-(the meeting point with `auto/work-pkg1`), and a theme toggle.
-
-## How the screens are produced
-The handoff `.dc.html` files render through a small runtime (templating), so the screens are taken from the
-**rendered** DOM:
-1. `python3 scripts/focus/frame-server.py <handoff-dir> <out-dir>` (127.0.0.1:8779) serves the handoff and accepts
-   `POST /save?file=<ID>.html`.
-2. Open each handoff file in a browser on that server and post every `div[id=<ID>]` frame's `outerHTML` to `/save`.
-3. `python3 scripts/focus/convert-handoff.py <dir-containing-frames/> <repo>` writes
-   `components/focus/screens/<ID>.tsx`, `lib/focus/screens.ts` and the route pages.
-The converter maps every colour to the theme variables (property-aware: status text on a status background vs on a
-surface), turns Lucide images into `<Icon>`, strips the canvas-only frame chrome, and records each screen's
-top-bar state. Generated files are ordinary React — edit them freely.
+## Routes
+- **Product screens** — every desktop frame (D1–D8, E1–E7, F1–F6, G1–G6, H1–H15, W1–W6) is a product route; the
+  registry is `lib/focus/screens.ts`, the map is `/focus/screens` (with demo controls: role, "next external action
+  fails", reset).
+- **Deliberate redirects** — `/focus/work/task` → the list with the drawer open (`?task=t-post45`);
+  `/focus/m/1…10` → the product route each phone frame shows (`MOBILE_TARGETS`). Mobile frames are the same product
+  screens at 390px; the screen map previews them in a phone frame.
+- **Visual reference** — `/focus/reference/<ID>` renders the raw handoff conversion (`components/focus/reference`).
+  No product route imports it.
 
 ## Run
-`npx next dev -p 3200` then open `/focus` or `/focus/screens` (dummy DB env is fine — nothing here touches a DB).
+```bash
+DATABASE_URL='postgresql://x:x@127.0.0.1:1/x' DATABASE_URL_UNPOOLED='postgresql://x:x@127.0.0.1:1/x' SECRETS_MASTER_KEY=0000000000000000000000000000000000000000000000000000000000000000 npx next dev -p 3200
+```
+The dummy env only satisfies the rest of the app at boot; nothing under `/focus` reads it. `next build` also needs
+dummy `QSTASH_CURRENT_SIGNING_KEY` / `QSTASH_NEXT_SIGNING_KEY` (an unrelated API route checks them at build time).
+
+## Tests and QA scripts
+- Unit (pure rules, no DOM): `node node_modules/vitest/vitest.mjs run --config tests/route-vitest.config.mjs tests/focus-*.vitest.ts`
+- Browser checks against the dev server (`scripts/focus/qa/`, Playwright via `PLAYWRIGHT_MODULE=<path to playwright>`):
+  - `routes.mjs` — every route at 1440/1280/1024/768/390: no console errors, no horizontal scroll, no `href="#"`,
+    no placeholder links, internal links resolve, no product route imports the reference;
+  - `axe.mjs` — axe-core serious/critical, light and dark, desktop and 390px;
+  - `keyboard.mjs` — tab walk on every route (skip link first, visible focus, accessible names), menus, palette, dialogs;
+  - `flows.mjs` — the stateful flows end to end (reason, confirmation, processing, failure keeps the draft, undo window,
+    focus queue, unsaved-change guards, Kanban keyboard, theme persistence, LTR content);
+  - `visual.mjs` — pixel diff of every product screen against its reference frame (light/dark, desktop/mobile),
+    `--json` for the QA table, `--out` to keep the screenshots.
+
+## Regenerating the visual reference
+The handoff `.dc.html` files render through a small runtime, so the reference is taken from the rendered DOM:
+`scripts/focus/frame-server.py` serves the handoff and accepts posted frames, then
+`scripts/focus/convert-handoff.py` writes `components/focus/reference/*` and `docs/focus/reference/screens.generated.json`
+only. It never writes product code.
