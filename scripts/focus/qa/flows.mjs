@@ -1,6 +1,7 @@
 // End-to-end flows in a real browser (demo store, no backend): mandatory reason, confirmation before the red action,
 // processing → success / failure (draft kept), format selection, undo window, focus queue one-by-one, unsaved-change
-// guards, theme light/dark/system persisted without a flash, keyboard shortcuts vs text fields, Mytiv Work rules.
+// guards, theme light/dark/system persisted without a flash, keyboard shortcuts vs text fields, Mytiv Work rules, LTR
+// content inside the RTL layout.
 // Usage: PLAYWRIGHT_MODULE=… node scripts/focus/qa/flows.mjs
 import { BASE, playwright, report, settle } from "./lib.mjs";
 
@@ -43,8 +44,8 @@ const go = async (page, r) => { await page.goto(BASE + r, { waitUntil: "domconte
     await go(page, "/focus/approvals/promo-1plus1");
     const next = page.locator(".f-decision--done a.f-btn--primary");
     const href = await next.getAttribute("href");
-    await next.click(); await settle(page);
-    return page.url().endsWith(href) && href !== "/focus/approvals/promo-1plus1" ? href : false;
+    await next.click(); await page.waitForURL((u) => u.pathname === href, { timeout: 15000 }); await settle(page);
+    return href !== "/focus/approvals/promo-1plus1" ? href : false;
   });
   await check("undo a decision (toast or result) returns it to the queue", async () => {
     await go(page, "/focus/approvals/promo-1plus1");
@@ -125,6 +126,7 @@ const go = async (page, r) => { await page.goto(BASE + r, { waitUntil: "domconte
   await check("AI directions are processing jobs: running → ready; cancel keeps the others", async () => {
     await page.click("text=✦ צור 3 כיוונים");
     await page.waitForURL("**/studio/new/directions");
+    await page.waitForSelector(".f-sdir__card--busy", { timeout: 5000 });
     const busy = await page.locator(".f-sdir__card--busy").count();
     await page.waitForSelector(".f-sdir__card:not(.f-sdir__card--busy) >> text=בחר וערוך", { timeout: 5000 });
     await page.click(".f-sdir__card--busy >> text=בטל כיוון זה");
@@ -176,9 +178,12 @@ const go = async (page, r) => { await page.goto(BASE + r, { waitUntil: "domconte
   await check("Kanban keyboard: Space picks, arrows move, Space drops; a refused move explains why", async () => {
     await go(page, "/focus/work/board");
     const h = page.locator(".f-kcard:has-text('לעצב פוסט 4:5') .f-kcard__handle");
-    await h.focus(); await page.keyboard.press("Space"); await page.keyboard.press("ArrowLeft"); await page.keyboard.press("Space");
-    await page.waitForTimeout(200);
-    return (await page.textContent(".f-board [aria-live]"))?.includes("לא ניתן") ? "refused with reason" : false;
+    const live = page.locator(".f-board [aria-live]");
+    await h.focus(); await page.keyboard.press("Space");
+    await page.waitForFunction(() => document.querySelector(".f-board [aria-live]")?.textContent?.trim(), null, { timeout: 5000 }); // picked (hydrated)
+    await page.keyboard.press("ArrowLeft"); await page.keyboard.press("Space");
+    await page.waitForFunction(() => document.querySelector(".f-board [aria-live]")?.textContent?.includes("לא ניתן"), null, { timeout: 5000 });
+    return (await live.textContent())?.includes("לא ניתן") ? "refused with reason" : false;
   });
   await ctx.close();
 }
@@ -205,6 +210,27 @@ const go = async (page, r) => { await page.goto(BASE + r, { waitUntil: "domconte
     await page.emulateMedia({ colorScheme: "light" });
     const light = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     return dark === "rgb(17, 20, 28)" && light === "rgb(243, 245, 249)";
+  });
+  await ctx.close();
+}
+// 8. LTR content inside the RTL layout: a typed English title keeps its trailing punctuation at the end
+{
+  const { ctx, page } = await fresh();
+  await check("LTR task title keeps its punctuation in order (input and card)", async () => {
+    await go(page, "/focus/work");
+    const title = "Fix menu PDF (v2) for UMINO.";
+    await page.fill(".f-qc__input", title);
+    await page.press(".f-qc__input", "Enter");
+    const link = page.locator(`.f-tcard__link >> text=${title}`).first();
+    await link.waitFor();
+    // visual order: in an LTR run the final "." sits to the right of the first "F"
+    const ok = await link.evaluate((el) => {
+      const n = el.firstChild; const r = document.createRange();
+      r.setStart(n, 0); r.setEnd(n, 1); const first = r.getBoundingClientRect().left;
+      r.setStart(n, n.length - 1); r.setEnd(n, n.length); const last = r.getBoundingClientRect().left;
+      return last > first;
+    });
+    return ok ? "period stays last" : false;
   });
   await ctx.close();
 }
