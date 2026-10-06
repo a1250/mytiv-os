@@ -1,8 +1,9 @@
 # Mytiv Work — UI ↔ backend contract
 
 The meeting point between the Focus UI (`auto/focus-redesign`, this branch) and the backend work in `auto/work-pkg1`.
-Today every Mytiv Work screen runs on typed fixtures through the demo store. **No backend is connected and nothing
-in this document has been merged.** `auto/work-pkg1` was read as a contract source only (head `6b6f537`, local and not
+Today every Mytiv Work screen runs on typed fixtures through the demo store, in the fixture demo scope only
+(`/_demo/focus/…`, development and Preview); a real business scope shows "not connected yet". **No backend is
+connected and nothing in this document has been merged.** `auto/work-pkg1` was read as a contract source only (head `6b6f537`, local and not
 pushed): nothing was merged or cherry-picked from it.
 
 - **UI types:** `lib/focus/contracts/work.ts`.
@@ -17,12 +18,14 @@ pushed): nothing was merged or cherry-picked from it.
 
 ## 1. Screens and routes
 
+Routes are relative to the tenant segment `/{businessSlug}` (examples run on `/_demo`).
+
 | Route | Screen | Handoff |
 |---|---|---|
 | `/focus/work` | My tasks: by time / list / Kanban over the same tasks, quick create, timer, drawer | W1, M9 |
 | `/focus/work/list` | Project list: parent rows expand to children, "חסום על ידי" row, filters | W2 |
 | `/focus/work/board` | Project Kanban: keyboard and mouse moves, refused moves explained | W3 |
-| `/focus/work/task` | Redirect to `/focus/work/list?task=t-post45` (the drawer opens over the list) | W4, M10 |
+| `/focus/work/task` | Demo scope only: redirect to `/focus/work/list?task=t-post45` (the drawer opens over the list) | W4, M10 |
 | `/focus/work/time` | Timer + hours report + logged entries | W5 |
 | `/focus/work/states` | Every system state, interactive | W6 |
 | `/focus/work/all-tasks` | All my tasks across projects: filters, grouping, source of truth, one quick action per row | F5, M6 |
@@ -39,9 +42,9 @@ All components are pure views. Actions leave them only through callbacks.
 | `QuickCreate` (`patterns/work/quick-create.tsx`) | `now`, `people: {id,name}[]`, `clients: string[]`, `autoFocus?`, `compact?` | `onCreate({title, dueDate, priority, assigneeId, client}, keepOpen)` |
 | `TaskCard` / `RichTaskCard` / `PlainTaskCard` / `BlockedTaskCard` / `WaitingTaskCard` (`patterns/work/task-card.tsx`) | `task`, `now`, `size: "sm"\|"md"`, `view?`, `timer?`, `compact?` | timer start/pause |
 | `TaskListView` (`patterns/work/task-list.tsx`) | `tasks`, `all`, `now`, `groupBy: "status"\|"none"`, `groupOrder?`, `expandedIds`, `columns?`, `selectedId?`, `canEdit?` | `onToggleExpand(id)`, `onToggleDone(task)`, `onOpen?(task)` |
-| `TaskBoard` (`patterns/work/task-board.tsx`) | `tasks`, `all`, `timerTaskId?`, `timerLabel?`, `canEdit?` | `onMove(taskId, to: BoardColumn) → {ok, reason?}` |
-| `TaskDrawerBody` + `TaskDrawerHead` (`patterns/work/task-drawer.tsx`) | `task`, `all`, `now`, `role: WorkRole`, `caps: Record<capability, "live"\|"planned">`, `baseVersion`, `viewerId`, `conflict`, `timer`, `entries: TimeEntry[]` | `onPatch(patch, expectedVersion)`, `onResolveConflict("mine"\|"theirs")`, `onLogTime(minutes)`, `onDuplicate()`, `onClose()`, `onDirtyChange(dirty)` |
-| `TaskDrawerHost` (`shell/task-drawer-host.tsx`) | `defaultTaskId?` | Connects the drawer to the store: version tracking, conflicts, unsaved-draft guard |
+| `TaskBoard` (`patterns/work/task-board.tsx`) | `tasks`, `all`, `timerTaskId?`, `timerLabel?`, `canEdit?` | `onMove(taskId, to: BoardColumn, expectedVersion) → {ok, reason?}` |
+| `TaskDrawerBody` + `TaskDrawerHead` (`patterns/work/task-drawer.tsx`) | `task`, `all`, `now`, `role: WorkRole`, `caps: CapabilityMap`, `allowPlanned` (demo scope), `baseVersion`, `viewerId`, `conflict`, `timer`, `entries: TimeEntry[]` | `onPatch(patch, expectedVersion)`, `onResolveConflict("mine"\|"theirs")`, `onLogTime(minutes)`, `onDuplicate()`, `onClose()`, `onDirtyChange(dirty)` |
+| `TaskDrawerHost` (`shell/task-drawer-host.tsx`) | `defaultTaskId?` | Connects the drawer to the store: the token the drawer loaded, adoption of the viewer's own writes only (write lineage), conflicts naming the writer, close confirmation, and the shared unsaved-changes guard |
 | `TimerBarView` / `TimerBar` (`shell/timer-bar.tsx`) | `activeTimer: ActiveTimer \| null`, `elapsedMs`, `variant: "fixed"\|"inline"`, `note?` | `onPause()`, `onResume()`, `onStop()` |
 | `TimeReport` (`patterns/work/time-report.tsx`) | `data: TimeReportData`, `groupBy`, `rows: TimeReportRow[]` | `onGroupBy(group)` |
 | `WorkStateView` (`patterns/work/work-states.tsx`) | `state: WorkViewState \| {kind:"ready"}` | `onRetry`, `onCreate`, `onRequestAccess`, `onKeepMine`, `onTakeTheirs` |
@@ -49,17 +52,22 @@ All components are pure views. Actions leave them only through callbacks.
 
 ## 3. Commands (what the store does today → what pkg1 must do)
 
-`WorkCommands` in `contracts/work.ts`. The demo store implements them in `demo-store.tsx`.
+`WorkCommands` in `contracts/work.ts`; the demo store implements it (`satisfies WorkCommands`). Every write returns a
+`WriteResult`: the new task with its new token, a conflict (nothing written), or a refusal with a reason.
 
 | Command | Demo behaviour | Rules (`state/work.ts`) |
 |---|---|---|
-| `patchTask(id, patch, expectedVersion)` | Applies the patch, `version + 1` | `applyPatch`: version must match, otherwise a conflict and nothing is written. `status: done` needs `canComplete`. `in_progress` needs `canStart`. Title is required. Start ≤ due. `addDependency` needs `canDepend` (same project, no cycle). |
-| `moveTask(id, column)` | Sets the column's status | `checkMove` → refusal with a reason (pkg1 plan: `409 move_blocked`) |
-| `createTask(draft)` | New task, `state: "live"`, `source: "mytiv"` | `parseQuickTask` for "מחר / גבוה / @שם / #לקוח"; an unknown `@` or `#` stays null and is never guessed |
-| `timerStart(id)` | One timer per person: a running one is stopped and logged first | `switchTimer` |
-| `timerPause` / `timerResume` / `timerStop` | Pause accumulates `elapsedMs`. Stop logs whole minutes (<30s logs nothing) and adds a `TimeEntry` | `pauseTimer`, `resumeTimer`, `minutesToLog` |
-| `logTime(id, minutes)` | Adds a manual `TimeEntry` | `parseDuration` accepts `1:30`, `90`, `1.5h`, `45m`, within 1..1440 minutes |
-| `restoreTask`, `removeTask`, `removeTimeEntry`, `restoreEntry` | Undo of the above (toast "בטל") | Undo is a compensating write, not a client-only rollback |
+| `patchTask(id, patch, expectedVersion)` | Applies the patch through `applyPatch`, mints the next opaque token, records the actor (`updatedBy`) | Token must match, otherwise a conflict and nothing is written. Status must be canonical (no stored "blocked"). `block: {reason}` needs a non-blank reason and sets `waiting`; `unblock` lifts it. `done` needs `canComplete`; reopening under a done parent is refused (`canReopen`). Title required; start ≤ due; `addDependency` needs `canDepend` (same project, no cycle); `logMinutes` is an increment (1..1440) and unknown time stays unknown. The stored-task invariant (`taskInvariant`) is checked on the result. |
+| `moveTask(id, column, expectedVersion)` | Sets the column's canonical status (`blockedOrWaiting` → `waiting`) | `checkMove` → refusal with a reason (pkg1 plan: `409 move_blocked`); a move that changes nothing is refused, never a fake success |
+| `undoTask(previous, expectedVersion)` | Compensating write back to `previous` | Refused when the task is no longer at the token the undone action produced, or when the rules forbid it now (`revertTask`) |
+| `createTask(draft)` | New task, `state: "live"`, `source: "mytiv"`; no due date unless the user gave one | `parseQuickTask` for "מחר / גבוה / @שם / #לקוח"; an unknown `@` or `#` stays null and is never guessed; a done parent is not kept |
+| `removeTask(id, expectedVersion?)` | The undo of a create | Refused when the task changed since it was created or has children |
+| `logTime(id, minutes)` | `patchTask(logMinutes)`; the `TimeEntry` exists only if that write went through | `parseDuration` accepts `1:30`, `90`, `1.5h`, `45m`, within 1..1440 minutes |
+| `timerStart(id)` / `timerPause` / `timerResume` / `timerStop` (store, not yet in `WorkCommands`) | One timer per person: a running one is stopped and logged first. Stop logs whole minutes (<30s logs nothing) through `logMinutes` | `switchTimer`, `pauseTimer`, `resumeTimer`, `minutesToLog` |
+
+Shared screen actions live in `shell/task-actions.ts`: `useTaskGate` (role + capability), `useTaskUndo` /
+`useCreateUndo` (versioned undo; a refused undo is explained and the toast does not say "בוטל"), `useRevertSync`
+(undo after a confirmed ClickUp sync starts a revert sync), `useToggleDone`, `useBoardMove`.
 
 ## 4. Data types — field mapping to `auto/work-pkg1`
 
@@ -88,12 +96,15 @@ All components are pure views. Actions leave them only through callbacks.
 | `dependsOn: TaskRef[]` | — (plan §6: `POST tasks/[id]/dependencies`, `kind:'blocks'`, same project) | Planned |
 | `links` | T `project_id`, `lead_id`; marketing `taskRef` / `clickupTaskId` | `proposalId` / `campaignId` missing |
 | `context` | WI `projectLabel`, `groupLabel` | Adapter resolves labels |
-| `nextAction`, `followUp`, `blockedReason` | — | Missing. In D3 they are saved with the blocked-task panel |
+| `nextAction`, `followUp` | — | Missing. In D3 they are saved with the blocked-task panel |
+| `blockedReason` | — | Missing. Only on a `waiting` task, never blank (invariant); written through `patch.block` |
 | `waitingFor` | T `waiting_on` (`client\|contractor\|internal`) + `labels.waitingOnLabel` | Free text in Focus. pkg1 has an enum, so the adapter maps it to a label |
 | `comments`, `evidence`, `activity` | — (audit log exists for ops actions) | Planned |
 | `source: "mytiv"\|"clickup"` | WI `ref.provider` | — |
 | `state: "live"\|"planned"` | — (UI-only flag) | — |
-| `version: number` | T `version` (int); WI `concurrencyToken` (opaque string; ClickUp `date_updated`) | **Required:** change Focus to `concurrencyToken: string`. The UI only compares tokens for equality |
+| `version: string` | T `version` (int, stringified); WI `concurrencyToken` (opaque string; ClickUp `date_updated`) | Done in Focus: an opaque string the UI only compares for equality and never computes |
+| `updatedBy` | audit actor of the last write | Used to name the writer in a conflict and to adopt the viewer's own writes |
+| `statusKey` | T `status_id` → `work_statuses.key` | A business key `blocked` under category `waiting` is a manual block (§5) |
 | `updatedAt` | WI `updatedAt` / T `updated_at` | — |
 
 ### Other types
@@ -101,7 +112,8 @@ All components are pure views. Actions leave them only through callbacks.
 - **`ActiveTimer`:** no pkg1 counterpart. Planned server timers, see §7.
 - **`TimeEntry`:** no pkg1 counterpart. pkg1 reads ClickUp time only in aggregate (`TimeByItem`).
 - **`TimeReportData`:** derivable from `timeByItem` for ClickUp. Mytiv-side time does not exist yet.
-- **`WorkCapabilities`:** = pkg1 `TaskSourceCapabilities` (same keys, minus `archive/trash`). The fixture `CAPABILITIES` is the truth table in §6.
+- **`WorkCapabilities`:** the keys of pkg1 `TaskSourceCapabilities` (minus `archive/trash`). Focus reads a
+  **`CapabilityMap`** — each key `live` or `planned` — per source; the fixture `CAPABILITIES` is the truth table in §6.
 - **`WorkRole`:** pkg1 membership role (text column; `owner`/`admin` checked by `assertWriter`).
 
 ## 5. Status mapping
@@ -112,7 +124,7 @@ All components are pure views. Actions leave them only through callbacks.
 | `active` | `in_progress` (בעבודה) | `in_progress` | — |
 | `review` | `review` (בבדיקה) | `in_progress` + `statusLabel: "בבדיקה"` | The handoff W3 note expects per-business stages ("ממתין", "בבדיקה") |
 | `waiting` | `waiting` (ממתין) | `waiting` | `waiting_on` supplies `waitingFor` |
-| — | — | `blocked` | **No pkg1 status.** Blocked = an open `blocks` dependency (derived: `isBlocked`), or a business status key `blocked` under category `waiting`. When integrated, the drawer's status select must offer only the business's own keys, and "חסום" is shown when derived. |
+| — | — | *(derived)* | **Not a status.** Canonical `WorkStatus` has no "blocked"; `displayStatus` derives it: an open `blocks` dependency, or a manual block = `waiting` + business key `blocked` and/or a written `blockedReason` (`isManuallyBlocked`). The text is `blockedWhy` / `manualBlockText` ("סומנה כחסומה במקור, בלי סיבה כתובה." when the source gave none). In the drawer "חסום…" is an action that requires a reason. Other domains (content cards, campaign rows) read it live with `blockedByTask`. |
 | `done` | `done` | `done` | Closing uses the source's authoritative check (pkg1 rule) |
 | `cancelled` | `cancelled` | `cancelled` | — |
 | `unknown` | Unmapped source status | `unknown` | Never counted as done or active, shown as "? לא ממופה", no action branches on it (implemented: `canComplete`/`canStart` refuse; buckets put it in `unmapped`) |
@@ -130,11 +142,11 @@ All components are pure views. Actions leave them only through callbacks.
 
 ## 7. Optimistic updates, concurrency, errors
 
-- **Optimistic flow:** the UI validates with the pure rules first, applies the change locally, and sends the write with the token it last saw.
+- **Write flow:** the UI validates with the pure rules first and sends the write with the token it last saw (the demo store applies it through the same rules).
   - **On success:** store the returned token. pkg1 plan: every write returns `requestId` and `version`.
   - **On `409 version`:** show `WorkStateView` `versionConflict` (mine vs theirs) and overwrite nothing. "שמור את שלי" re-sends with the new token; "קבל את של …" adopts the server copy. This is implemented in the drawer (`TaskDrawerHost`).
   - **On any other failure:** revert locally and keep the draft. In D3 a ClickUp sync failure keeps the change here, marked "טרם סונכרן", with retry.
-- **Undo:** a compensating write sent within the UI window (`UNDO_WINDOW_MS` = 10s, `lib/focus/state/undo.ts`). For a domain window (e.g. a scheduled post) the undo stays available until that time.
+- **Undo:** a versioned compensating write sent within the UI window (`UNDO_WINDOW_MS` = 10s, `lib/focus/state/undo.ts`), refused with the reason when the task moved on. For a domain window (e.g. a scheduled post) the undo stays available until that time.
 - **Expected errors → UI:**
 
   | pkg1 code | Status | UI |
@@ -150,19 +162,23 @@ All components are pure views. Actions leave them only through callbacks.
   | `operation_unavailable_check_audit_before_retry` | 503 | Same as 502 |
   | ClickUp read `rate_limited` / `failed` (`WorkSourceError`) | — | `unavailable` (never an empty list; counts hidden when `complete:false`) |
 
-## 8. Permissions
+## 8. Permissions and source capabilities
 
-UI matrix: `canDo(role, action, caps)` in `state/work.ts` (unit-tested).
+UI matrix: `canDo(role, action, caps?, allowPlanned)` in `state/work.ts` (unit-tested).
 - **owner / admin:** everything.
 - **member:** everything except delete.
 - **viewer:** read and comment only.
 
-A disabled capability (`caps[x] === false`) hides the action.
+With `caps` (the task source's `CapabilityMap`), an action whose capability is not `live` is refused — unless it is
+`planned` and `allowPlanned` is set, which is true only in the fixture demo scope. Every write site checks both:
+the drawer (`caps` + `allowPlanned`), and every quick action through `useTaskGate` (toggle done, Kanban move, assign
+to me, follow-up, D3 save, timer start/stop). A planned write's toast says it ran in the demo only.
 - **pkg1 today:**
   - ops commands (status/assign on ClickUp) and delete need owner/admin (`assertWriter`);
   - the legacy `/tasks` PATCH is open to any member of the business.
 - **Plan §8:** the matrix moves into `work_authorize` in the DB (decision 12).
-- **Gap:** pkg1 has no "viewer" role semantics and no per-project permission. Today the UI derives "צפייה בלבד" from a demo role switcher.
+- **Gap:** pkg1 has no "viewer" role semantics and no per-project permission. Today the UI derives "צפייה בלבד" from a
+  demo role switcher; a business scope's verified role is narrowed to `member` when unknown.
 
 ## 9. Timer lifecycle
 
@@ -229,7 +245,7 @@ A disabled capability (`caps[x] === false`) hides the action.
    - replace the fixture source behind `bucketsFor` / lists / board;
    - keep the demo store for writes.
 2. **Status and assignee writes** through the existing routes, with the conflict and error mapping from §7. Capabilities come from the source.
-3. **Create + due date** (Mytiv). Switch `version` → opaque `concurrencyToken`.
+3. **Create + due date** (Mytiv). The token is already opaque (`version: string`); map pkg1 `version` / `concurrencyToken` onto it.
 4. **Hierarchy** (`parent_id`) and **checklist** once their endpoints exist. Remove those "מתוכנן" tags.
 5. **Dependencies + move.**
 6. **Comments / activity.**

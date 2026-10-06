@@ -1,32 +1,42 @@
 # Focus — visual QA and verification
 
-Measured on 2026-10-05 against `auto/focus-redesign` at `4548020` (the QA docs commit sits on top), dev server on
-port 3200, Chromium (Playwright), `reducedMotion: reduce`. Every number below is reproducible with the scripts in
-`scripts/focus/qa/` (see [README.md](README.md)).
+Gates (§1) re-measured on 2026-10-06 against `auto/focus-redesign` after the self-review rounds (the final SHA is in
+[GPT_REVIEW_PACKET.md](GPT_REVIEW_PACKET.md)); dev server on port 3200, Chromium (Playwright), `reducedMotion: reduce`.
+Routes are relative to the tenant segment and measured on the fixture demo scope `/_demo` (a business scope renders
+"not connected yet"). The per-screen pixel tables (§2) were measured at `4548020`; the later commits change behaviour,
+copy and routing, not layout. Every number is reproducible with the scripts in `scripts/focus/qa/` (see
+[README.md](README.md)).
 
 ## 1. Gates
 
 | Gate | Result | How |
 |---|---|---|
 | Typecheck | ✓ 0 errors | `npx tsc --noEmit -p .` |
-| Lint (Focus code) | ✓ 0 errors, 0 warnings | `npx eslint app/focus components/focus lib/focus scripts/focus tests/focus-*.ts` |
-| Lint (whole repo) | 56 errors / 604 warnings, **all in files this branch never touched** (`app/(app)/…`, `lib/google/*`, `scripts/leak-audit.ts`, the gitignored handoff bundle) | `npx eslint` + `git diff e35a189..HEAD -- <file>` per file |
-| Focus unit tests | ✓ 45 / 45 (3 files) | `node node_modules/vitest/vitest.mjs run --config tests/route-vitest.config.mjs tests/focus-*.vitest.ts` |
-| Full existing suite | ✓ 219 / 219 (23 files) + `ops-security` node tests | `npm test` (dummy DB env) |
-| Production build | ✓ 125 pages, 49 `/focus` routes | `next build` (dummy DB env + dummy `QSTASH_*` signing keys) |
-| Routes · console · responsive | ✓ 52 / 52 — 50 routes × 1440/1280/1024/768/390: no console errors, no horizontal scroll, no `href="#"`, no placeholder links, 109 internal links resolve, no product route imports `components/focus/reference` | `routes.mjs` |
+| Lint (Focus code) | ✓ 0 errors, 0 warnings | `npx eslint "app/(focus)" components/focus lib/focus scripts/focus tests/focus-*.ts` |
+| Lint (whole repo) | pre-existing errors only, **all in files this branch never touched** (`app/(app)/…`, `lib/google/*`, `scripts/leak-audit.ts`, the gitignored handoff bundle) | `npx eslint` + `git diff e35a189..HEAD -- <file>` per file |
+| Focus unit tests | ✓ 99 / 99 (4 files: scope, work, flows, data states) | `node node_modules/vitest/vitest.mjs run --config tests/route-vitest.config.mjs tests/focus-*.vitest.ts` |
+| Mutation (unit level) | ✓ 26 / 26 mutants caught — tenant guard, session, prototype switch, fixtures for a business, notFound wiring, a page's scope guard, scoped links, block guard + invariant, canonical status, Kanban storing "blocked", mandatory reason, sent before confirmation, version conflict, unknown as 0, dependency cycle, parent with open child, undo window, retry / submit amount guard, proposal amount check, interrupted send as done, reload not marking unknown, drawer adopting another writer, planned capability outside the demo, Hebrew-layout shortcut | a script applies one mutation at a time to a copy and runs the Focus unit tests |
+| Full existing suite | ✓ 273 / 273 vitest (24 files) + 28 / 28 `ops-security` node tests | `npm test` (dummy DB env) |
+| Production build | ✓ 49 Focus routes under `/[businessSlug]/focus` | `next build` (dummy DB env + dummy `QSTASH_*` signing keys) |
+| Production isolation | ✓ 18 / 18 — demo scope and every prototype surface 404 with no fixture/prototype text; business routes, forged / unsigned cookies and scope-making query parameters → `/login`; old `/focus` not a product route | `prod-surfaces.mjs --expect production` against `next start` |
+| Preview QA surfaces | ✓ 6 / 6 — demo scope, screen map and reference render on `VERCEL_ENV=preview`; business routes still need a session | `prod-surfaces.mjs --expect preview` |
+| Routes · console · responsive | ✓ 53 / 53 — every route × 1440/1280/1024/768/390: no console errors, no horizontal scroll, no `href="#"`, no placeholder links, 111 internal links resolve and stay in the scope, no product route imports `components/focus/reference` | `routes.mjs` |
 | Accessibility (axe-core, serious + critical) | ✓ 150 / 150 — light + dark at 1440, light at 390 | `axe.mjs` |
 | Keyboard-only walkthrough | ✓ 54 / 54 — skip link first (or the deep-linked dialog), visible focus on every stop, accessible names, menus / palette / dialogs open with the keyboard, Esc closes, focus returns | `keyboard.mjs` |
-| Flows end to end | ✓ 20 / 20, three consecutive runs | `flows.mjs` |
-| Theme light / dark / system | ✓ persisted, attribute set before first paint (no flash), system follows `prefers-color-scheme` | `flows.mjs` §7 |
-| Reduced motion | ✓ one global rule removes every transition / animation under `.focus-app`; the only `requestAnimationFrame` calls move focus | code review |
-| RTL + LTR content | ✓ 169 mixed Hebrew/Latin text nodes on 45 routes are single LTR tokens (brand names, AI, PDF) — no reordering; e-mails / phones / numbers use `<bdi>` / `dir="ltr"`; typed LTR text keeps its order (`flows.mjs` §8, fixed in this round) | scan + `flows.mjs` |
+| Flows end to end | ✓ 30 / 30 — including the navigation guard (links, ⌘K, Back/Forward, drawer, D3), history without duplicate entries, a click queued while the guard entry is stepped off, listener counts stable, drafts kept by "save and leave", an interrupted send shown as unknown, a failed proposal send not retryable at a changed amount | `flows.mjs` |
+| Theme light / dark / system | ✓ persisted, attribute on `.focus-app` set before first paint (no flash, no hydration warning), system follows `prefers-color-scheme` | `flows.mjs` §7 |
+| Reduced motion | ✓ one global rule removes every transition / animation under `.focus-app`; `requestAnimationFrame` is used only to move focus and to order a queued navigation after the router's history step | code review |
+| RTL + LTR content | ✓ mixed Hebrew/Latin text nodes are single LTR tokens (brand names, AI, PDF) — no reordering; e-mails / phones / numbers use `<bdi>` / `dir="ltr"`, a business name `<bdi>` (auto); typed LTR text keeps its order | scan + `flows.mjs` §8 |
 
 Unit-test coverage map (the requested list): approval rules and mandatory reason · execution state machine (pre-execution
 summary: confirm → sending → sent / failed, retry) · undo window · processing jobs · My Tasks buckets · Kanban
 transitions · parent / sub-task rules · dependency blocking (same project, no cycles) · timer start / pause / resume /
 switch / sub-30s · unknown vs zero · unavailable vs empty vs error · theme preference parsing · permissions hiding actions
-· keyboard shortcuts never firing in text fields · optimistic patches with a version token (conflict overwrites nothing).
+· keyboard shortcuts never firing in text fields and matching the physical key on Hebrew / AZERTY layouts · versioned
+writes with an opaque token (conflict overwrites nothing) · derived "blocked" and the stored-task invariant · versioned
+undo · write lineage (adopt only own writes) · source capability gate · send / retry refused at a changed amount ·
+interrupted external jobs unknown · tenant scope decision, server redirect / notFound wiring and static route-tree
+guarantees.
 
 Fixed during this QA round (all committed): dark-mode contrast on marketing briefs / plan (panel tokens), task-drawer
 selects losing their label at 390px, drawer date fields' focus ring, D4 column alignment, E1 note outside its card,
@@ -147,8 +157,11 @@ both values and overwrite nothing until decided.
 
 **Dangerous actions.** The red action exists only in the pre-execution summary: confirmation box first, "sending"
 until the target confirms, "sent" only after it did, failure keeps everything. Medium / high risk decisions require a
-reason; undo is offered for 10s where the action is reversible; leaving an edit or approval with unsaved input asks
-first (dialog in-app, browser prompt on reload / close). On phones the decision bar is pinned so the consequential
+reason; undo is offered for 10s where the action is reversible and is refused — with the reason, never a false
+"בוטל" — when the item moved on; leaving an edit or approval with unsaved input asks first through one shared guard
+(dialog for links, search, J, exit buttons and Back/Forward; browser prompt on reload / close). A retry is checked
+like the first send (a proposal edited after approval cannot be sent or re-sent), and a send interrupted by a reload
+is "unknown — check the target first", never "sent" and never a one-click retry. On phones the decision bar is pinned so the consequential
 buttons are always reachable (M3, M8).
 
 ## 4. Open issues by severity
@@ -177,13 +190,20 @@ No critical or high issues are open in the Focus UI. Integration prerequisites a
   but not the 3px ink ring.
 - `next build` needs dummy `QSTASH_*` keys because an unrelated API route checks them at build time; the whole-repo lint
   has 56 pre-existing errors outside this branch.
-- The task drawer shows a dev-only "remote edit" demo control (`NODE_ENV !== "production"`; absent from the build).
+- The task drawer shows a "remote edit" demo control in the fixture demo scope only (absent for a business and in
+  production, where the demo scope does not exist).
 
 ## 5. Reproduce
 
 ```bash
 export PLAYWRIGHT_MODULE=/path/to/node_modules/playwright
 node scripts/focus/qa/routes.mjs && node scripts/focus/qa/axe.mjs && node scripts/focus/qa/keyboard.mjs && node scripts/focus/qa/flows.mjs
+```
+```bash
+BASE=http://localhost:3300 node scripts/focus/qa/prod-surfaces.mjs --expect production
+```
+```bash
+BASE=http://localhost:3301 node scripts/focus/qa/prod-surfaces.mjs --expect preview
 ```
 ```bash
 node scripts/focus/qa/visual.mjs --json visual.json --out shots/

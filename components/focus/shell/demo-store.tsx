@@ -384,8 +384,8 @@ function useStoreValue() {
   return useMemo(() => ({
     hydrated, now: DEMO_NOW, viewer: VIEWER, state: s,
     approval, decide, undoDecision, exec, ...stable,
-    ...({ patchTask, moveTask, undoTask, createTask, logTime } satisfies WorkCommands),
-    removeTask, simulateRemoteEdit,
+    ...({ patchTask, moveTask, undoTask, createTask, removeTask, logTime } satisfies WorkCommands),
+    simulateRemoteEdit,
     timerStart, timerPause, timerResume, timerStop, timerRestore, removeTimeEntry,
     startJob, cancelJob,
   }), [hydrated, s, stable, approval, decide, undoDecision, exec, patchTask, undoTask, moveTask, createTask, removeTask, simulateRemoteEdit, timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry, startJob, cancelJob]);

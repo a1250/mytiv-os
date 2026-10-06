@@ -163,6 +163,8 @@ export type WorkCommands = {
   /** undo = a compensating write back to `previous`, only if the task is still at the token the action produced */
   undoTask(previous: Task, expectedVersion: string): WriteResult;
   createTask(draft: Pick<Task, "title" | "dueDate" | "priority"> & Partial<Task>): Task;
+  /** the undo of a create: refused when the task changed since `expectedVersion` or has children (their work stays) */
+  removeTask(taskId: string, expectedVersion?: string): { ok: true } | { ok: false; refused: string };
   /** `entry` is null when the write was refused — no time entry exists without the task write */
   logTime(taskId: string, minutes: number): { entry: TimeEntry | null; result: WriteResult; previous?: Task };
 };
