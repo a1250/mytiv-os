@@ -8,6 +8,7 @@ import { Button } from "@/components/focus/ui/button";
 import { Banner } from "@/components/focus/ui/feedback";
 import { SelectField, TextField } from "@/components/focus/ui/field";
 import { SalesDialog } from "./sales-parts";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * Sales forms in dialogs (handoff F1 "+ ליד חדש", "ללא פעולה הבאה · הוסף"): visible labels, help text that an error
@@ -47,6 +48,7 @@ export function NextActionDialog({ lead, today, onClose, onSave }: { lead: Lead 
 function NextActionForm({ lead, today, onClose, onSave }: { lead: Lead; today: string; onClose: () => void; onSave: (lead: Lead, next: LeadNext) => void }) {
   const [text, setText] = useState("");
   const [due, setDue] = useState("");
+  useNavGuard({ dirty: !!(text.trim() || due), what: "הפעולה הבאה שהתחלת לכתוב עוד לא נשמרה." });
   const [error, setError] = useState<string | null>(null);
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -73,6 +75,7 @@ export function NewLeadDialog({ open, today, viewerId, onClose, onCreate }: {
 }) {
   const [confirm, setConfirm] = useState(false);
   const [dirty, setDirty] = useState(false);
+  useNavGuard({ dirty: open && dirty, what: "הליד החדש עוד לא נשמר. אם תצא עכשיו, מה שהוקלד יימחק." });
   const close = () => { setConfirm(false); setDirty(false); onClose(); };
   const requestClose = () => (dirty ? setConfirm(true) : close());
   return (

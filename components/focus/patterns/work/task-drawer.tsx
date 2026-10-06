@@ -155,7 +155,7 @@ export function TaskDrawerBody(p: DrawerProps) {
             <span className="f-td__fl">משתתפים</span>
             <span className="f-td__people">
               {t.participantIds.map((pid) => <span key={pid} className={cx("f-tl__av", `f-tl__av--${pid}`)} title={PEOPLE_BY_ID[pid]?.name} role="img" aria-label={PEOPLE_BY_ID[pid]?.name}>{PEOPLE_BY_ID[pid]?.initial}</span>)}
-              {edit && !t.participantIds.includes(p.viewerId) && (
+              {edit && can("assign") && !t.participantIds.includes(p.viewerId) && (
                 <button type="button" className="f-td__addp" aria-label="הצטרף כמשתתף" onClick={() => patch({ participantIds: [...t.participantIds, p.viewerId] })}>+</button>
               )}
             </span>
@@ -187,8 +187,8 @@ export function TaskDrawerBody(p: DrawerProps) {
 
         <div className="f-td__dates">
           <label className="f-td__date">
-            <span className="f-td__fl">התחלה</span>
-            {edit ? <input type="date" className="f-td__dateinput" value={t.startDate ?? ""} max={t.dueDate ?? undefined} onChange={(e) => patch({ startDate: e.target.value || null })} /> : <b>{t.startDate ? fmtDate(t.startDate) : "—"}</b>}
+            <span className="f-td__fl">התחלה {caps.setDueDate === "planned" && <PlannedTag />}</span>
+            {edit && can("setDueDate") ? <input type="date" className="f-td__dateinput" value={t.startDate ?? ""} max={t.dueDate ?? undefined} onChange={(e) => patch({ startDate: e.target.value || null })} /> : <b>{t.startDate ? fmtDate(t.startDate) : "—"}</b>}
           </label>
           <label className="f-td__date">
             <span className="f-td__fl">יעד {caps.setDueDate === "planned" && <PlannedTag />}</span>
@@ -198,9 +198,10 @@ export function TaskDrawerBody(p: DrawerProps) {
 
         <Section title="זמן" planned={caps.trackTime === "planned"} className="f-td__box" count={
           <span className="f-meta-sm f-mono" dir="ltr">
-            {t.spentMinutes == null ? "—" : `${Math.round((t.spentMinutes) / 6) / 10}h`} / {t.estimateMinutes != null ? `${Math.round(t.estimateMinutes / 6) / 10}h` : "—"} מתוכנן
+            {t.spentMinutes == null ? "—" : `${Math.round((t.spentMinutes) / 6) / 10}h`} / {t.estimateMinutes != null ? `${Math.round(t.estimateMinutes / 6) / 10}h` : "—"} הערכה
           </span>}>
-          <span className="f-td__bar" role="meter" aria-label="זמן מול הערכה" aria-valuemin={0} aria-valuemax={t.estimateMinutes ?? 0} aria-valuenow={t.spentMinutes ?? 0}>
+          {/* a meter only when both numbers are known — an unknown time is never exposed as 0 */}
+          <span className="f-td__bar" {...(t.spentMinutes != null && t.estimateMinutes ? { role: "meter", "aria-label": "זמן מול הערכה", "aria-valuemin": 0, "aria-valuemax": t.estimateMinutes, "aria-valuenow": t.spentMinutes } : { "aria-hidden": true })}>
             <span className="f-td__barfill" style={{ width: `${t.estimateMinutes && t.spentMinutes != null ? Math.max(4, Math.min(100, (t.spentMinutes / t.estimateMinutes) * 100)) : 4}%` }} />
           </span>
           {t.spentMinutes == null && <span className="f-meta-sm">המקור ({t.source === "clickup" ? "ClickUp" : "Mytiv"}) לא מדווח זמן — לא ידוע, לא 0.{loggedHere > 0 ? ` נרשמו כאן ${loggedHere} דק׳.` : ""}</span>}
@@ -283,7 +284,7 @@ export function TaskDrawerBody(p: DrawerProps) {
           )}
         </Section>
 
-        <Section title="Checklist · לפני שליחה" planned={caps.checklist === "planned"} count={<span className={cx("f-meta-sm f-num", checkedCount === t.checklist.length && t.checklist.length > 0 && "f-td__allok")}>{checkedCount}/{t.checklist.length}</span>}>
+        <Section title="רשימת בדיקה · לפני שליחה" planned={caps.checklist === "planned"} count={<span className={cx("f-meta-sm f-num", checkedCount === t.checklist.length && t.checklist.length > 0 && "f-td__allok")}>{checkedCount}/{t.checklist.length}</span>}>
           {t.checklist.map((c) => (
             <label key={c.id} className="f-td__check">
               <input type="checkbox" className="f-check__box f-check__box--sm" checked={c.checked} disabled={!edit || !can("checklist")} onChange={() => patch({ checklistItem: { id: c.id, checked: !c.checked } })} />
@@ -356,11 +357,13 @@ export function TaskDrawerBody(p: DrawerProps) {
       <div className="f-td__foot">
         {can("complete") && !done && (
           gate.ok ? <Button variant="primary" onClick={() => patch({ status: "done" })}>סמן כבוצע</Button>
-            : <span className="f-btn-wrap f-td__gate"><Button variant="primary" aria-disabled="true" onClick={() => setError(gate.reason)}>סמן כבוצע</Button><span className="f-btn-why">{gate.reason}</span></span>
+            // the reason is shown once, beside the button, and the button points at it (no second alert on click)
+            : <span className="f-btn-wrap f-td__gate"><Button variant="primary" aria-disabled="true" aria-describedby={`${id}-gate`} onClick={() => document.getElementById(`${id}-gate`)?.scrollIntoView({ block: "nearest" })}>סמן כבוצע</Button><span id={`${id}-gate`} className="f-btn-why">{gate.reason}</span></span>
         )}
         {can("create") && <Button variant="neutral" onClick={p.onDuplicate}>שכפל</Button>}
         <span className="f-grow" />
-        <span className="f-meta f-td__saved" role="status">עודכן {fmtAgo(t.updatedAt, now)} · נשמר אוטומטית</span>
+        {/* not a live region: every write already raises its own toast */}
+        <span className="f-meta f-td__saved">עודכן {fmtAgo(t.updatedAt, now)} · שינויי שדות נשמרים מיד</span>
       </div>
     </div>
   );

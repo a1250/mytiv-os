@@ -52,11 +52,13 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
     if (dirty && !force) { setConfirmClose(true); return; }
     setConfirmClose(false); setDirty(false); setBase(null); setConflict(null);
     const q = new URLSearchParams(params.toString()); q.delete("task");
-    router.replace(q.size ? `${path}?${q}` : path, { scroll: false });
+    const to = q.size ? `${path}?${q}` : path;
+    // a discarded draft does not stay behind as an extra history entry (Back would reopen it)
+    if (dirty) router.discardAndReplace(to, { scroll: false }); else router.replace(to, { scroll: false });
   };
 
   // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
-  useNavGuard({ dirty: dirty, what: "יש טקסט שלא נשמר במשימה (תגובה, תת־משימה או זמן)." });
+  useNavGuard({ dirty: dirty, what: "יש טקסט שלא נשמר במשימה (תגובה, תת־משימה, פריט ברשימה, זמן או סיבת חסימה)." });
 
   if (!task || !base) return null;
   const version = base.version;
@@ -92,7 +94,7 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
       {confirmClose && (
         // focus moves into the question (its first, safe answer); the text is its description
         <div className="f-td__confirm" role="alertdialog" aria-label="יש טיוטה שלא נשמרה" aria-describedby="td-confirm-text">
-          <b id="td-confirm-text">יש טקסט שלא נשמר (תגובה, תת־משימה או זמן).</b>
+          <b id="td-confirm-text">יש טקסט שלא נשמר (תגובה, תת־משימה, פריט ברשימה, זמן או סיבת חסימה).</b>
           <div className="f-td__confirmactions">
             <Button variant="neutral" size="sm" autoFocus onClick={() => { setConfirmClose(false); requestAnimationFrame(() => document.querySelector<HTMLElement>(".f-tdrawer .f-td__close")?.focus()); }}>חזור לעריכה</Button>
             <Button variant="secondary" size="sm" onClick={() => close(true)}>סגור בלי לשמור</Button>

@@ -9,7 +9,6 @@ export type PersonId = string;
 export type Person = { id: PersonId; name: string; initial: string; email?: string; role?: "owner" | "manager" | "member" | "viewer" };
 
 export type ClientRef = { id: string; name: string };
-export type ProjectRef = { id: string; name: string; clientId: string };
 
 /** Money in whole shekels (the handoff's agency works in ILS only). Rendered as "8,750 ₪". */
 export type Money = { amount: number; currency: "ILS" };

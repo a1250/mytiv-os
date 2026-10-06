@@ -27,7 +27,7 @@ import { useNavGuard } from "@/components/focus/shell/nav-guard";
 /**
  * Project › execution (handoff D3, prototype flow 2): tasks grouped by status with dependencies, and the selected task
  * in a side panel. Saving a ClickUp task is a sync job (success only after ClickUp confirms; failure keeps the change
- * here as "טרם סונכרן"). Switching task with unsaved edits asks first.
+ * here, and the panel says it is not in ClickUp yet). Switching task with unsaved edits asks first.
  */
 const GROUPS = [
   { key: "blocked", title: "■ חסום", statuses: ["blocked" as const] },
@@ -60,7 +60,9 @@ function Inner() {
     : { kind: "failed", message: js.state === "failed" && js.unknown ? "הסנכרון נקטע לפני ש־ClickUp ענה — לא ידוע אם נקלט. בדקו ב־ClickUp לפני ניסיון נוסף." : "ClickUp לא אישר את השינוי." };
   const onDirty = useCallback((d: boolean) => setDirty(d), []);
   const refreshJob = state.jobs.find((j) => j.id === "refresh-clickup");
-  const refreshing = refreshJob && !refreshJob.cancelledAt && jobStatus(refreshJob, state.clock).state === "running";
+  const refreshSt = refreshJob && !refreshJob.cancelledAt ? jobStatus(refreshJob, state.clock) : null;
+  const refreshing = refreshSt?.state === "running";
+  const refreshedAt = refreshSt?.state === "done" ? refreshSt.at : null;
 
   // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
   useNavGuard({ dirty: dirty, what: "האחראי, הצעד הבא והתאריך שבחרת לא יישמרו." });
@@ -105,11 +107,12 @@ function Inner() {
             <span className="f-grow" />
             {canDo(state.role, "create") && <Link href={R.workCreate(AUTUMN_PROJECT_ID)} className="f-btn f-btn--primary f-btn--sm">+ משימה</Link>}
           </div>
-          <div className="f-exec__sync" role="status">
+          <div className="f-exec__sync">
             <span className="f-source-dot f-source-dot--mytiv">Mytiv {project.filter((t) => t.source === "mytiv").length}</span>
             <span className="f-source-dot">ClickUp {project.filter((t) => t.source === "clickup").length} · בתקופת מעבר</span>
             <span className="f-grow" />
-            <span className="f-meta-sm">{refreshing ? "מרענן מ־ClickUp…" : `סונכרן ${refreshJob ? "עכשיו" : fmtAgo(HOURS_SYNC.at, now)}`}</span>
+            {/* only the refresh line is live, and it ages like every other time */}
+            <span className="f-meta-sm" role="status">{refreshing ? "מרענן מ־ClickUp…" : refreshedAt ? `רוענן מ־ClickUp ${fmtAgo(demoIso(refreshedAt), now)}` : `סונכרן ${fmtAgo(HOURS_SYNC.at, now)}`}</span>
             <Button variant="quiet" size="sm" disabled={!!refreshing} onClick={() => demo.startJob({ id: "refresh-clickup", kind: "refresh_sources", label: "מרענן מ־ClickUp", detail: "", durationMs: 1200, outcome: "success" })}>רענן</Button>
           </div>
           <TaskListView tasks={tasks} all={state.tasks} now={now} expandedIds={[]} onToggleExpand={() => {}} onToggleDone={toggleDone} selectedId={selected} canEdit={canDo(state.role, "complete")}
@@ -121,7 +124,11 @@ function Inner() {
           // discarded by a remount and a clean panel shows the new values
           <BlockedTaskPanel key={`${task.id}:${draftBase?.version ?? task.version}`} task={task} all={state.tasks} now={now} viewerId={demo.viewer.id} sync={sync}
             canEdit={canDo(state.role, "edit")} onSave={save} onDirtyChange={onDirty}
-            onRetry={() => demo.startJob({ id: syncJobId(task.id, task.version), kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "", durationMs: 1500, outcome: "success" })} />
+            onRetry={() => {
+              // the demo's "next action fails" control applies to a retry too
+              const fail = demo.getLatest().failNext; if (fail) demo.setFailNext(false);
+              demo.startJob({ id: syncJobId(task.id, task.version), kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "", durationMs: 1500, outcome: fail ? "failure" : "success" });
+            }} />
         )}
       </div>
       <Dialog open={!!pending} onClose={() => setPending(null)} label="שינויים שלא נשמרו">
@@ -130,7 +137,7 @@ function Inner() {
           <p className="f-meta">אם תעבור משימה, האחראי, הצעד הבא והתאריך שבחרת לא יישמרו.</p>
           <div className="f-confirm__actions">
             <Button variant="primary" onClick={() => setPending(null)}>המשך לערוך</Button>
-            <Button variant="neutral" onClick={() => { const id = pending!; setPending(null); setDirty(false); router.replace(`${R.projectExecution("umino")}?task=${id}`, { scroll: false }); }}>עבור בלי לשמור</Button>
+            <Button variant="neutral" onClick={() => { const id = pending!; setPending(null); setDirty(false); router.discardAndReplace(`${R.projectExecution("umino")}?task=${id}`, { scroll: false }); }}>עבור בלי לשמור</Button>
           </div>
         </div>
       </Dialog>

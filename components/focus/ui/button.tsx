@@ -1,5 +1,5 @@
 import Link from "@/components/focus/ui/link";
-import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from "react";
+import { useId, type ButtonHTMLAttributes, type ComponentProps, type ReactNode } from "react";
 import { Icon, type IconName } from "./icon";
 import { cx } from "./cx";
 
@@ -20,14 +20,18 @@ export function buttonClass({ variant = "primary", size = "md", block, className
 export function Button({
   variant, size, block, className, children, loading, loadingLabel, disabledReason, type = "button", ...rest
 }: Common & ButtonHTMLAttributes<HTMLButtonElement> & { loading?: boolean; loadingLabel?: string; disabledReason?: string }) {
-  const disabled = rest.disabled || loading;
+  const autoId = useId();
+  const whyId = `${rest.id ?? autoId}-why`; // the visible reason is always linked, with or without an id
+  // loading keeps the button focusable (a native `disabled` would drop focus to <body> mid-action): it is announced as
+  // busy + unavailable and ignores clicks until done
   const btn = (
     <button
-      type={type}
+      type={loading ? "button" : type}
       {...rest}
-      disabled={disabled}
+      onClick={loading ? undefined : rest.onClick}
+      aria-disabled={loading ? true : rest["aria-disabled"]}
       aria-busy={loading || undefined}
-      aria-describedby={disabledReason && rest.id ? `${rest.id}-why` : rest["aria-describedby"]}
+      aria-describedby={disabledReason && rest.disabled ? whyId : rest["aria-describedby"]}
       className={buttonClass({ variant, size, block, className })}
     >
       {loading && <span className="f-btn__spin" aria-hidden />}
@@ -38,7 +42,7 @@ export function Button({
   return (
     <span className="f-btn-wrap">
       {btn}
-      <span id={rest.id ? `${rest.id}-why` : undefined} className="f-btn-why" role="note">{disabledReason}</span>
+      <span id={whyId} className="f-btn-why" role="note">{disabledReason}</span>
     </span>
   );
 }

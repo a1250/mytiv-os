@@ -77,7 +77,7 @@ export default function ApprovalScreen({ id }: { id: string }) {
     if (r.ok && o === "defer") { const to = nextHref ?? R.approvals; if (attempt(to)) router.push(to); return r; }
     if (r.ok) {
       const what = o === "approve" ? "אושר" : o === "request_changes" ? "נשלח לתיקון" : "נדחה";
-      toast.push({ title: `${what}: ${a.title}`, detail: o === "approve" && reason ? "הנימוק נשמר במוח העסק." : "ההחלטה נרשמה ביומן הפעולות.", undo: a.impact.reversibility.kind !== "none" ? { onUndo: () => q.undo(id, r.decidedAt, true) } : undefined });
+      toast.push({ title: `${what}: ${a.title}`, detail: reason ? "ההחלטה והנימוק נרשמו עם הפריט." : "ההחלטה נרשמה עם הפריט.", undo: a.impact.reversibility.kind !== "none" ? { onUndo: () => q.undo(id, r.decidedAt, true) } : undefined });
     }
     return r;
   };
@@ -161,7 +161,7 @@ function AiNote({ text }: { text: string }) {
         <button type="button" className="f-chip-sm" aria-pressed={fb === "up"} onClick={() => setFb(fb === "up" ? null : "up")}>ההצעה מועילה</button>
         <button type="button" className="f-chip-sm" aria-pressed={fb === "down"} onClick={() => setFb(fb === "down" ? null : "down")}>לא מתאימה</button>
       </div>
-      {fb && <span className="f-meta" role="status">תודה. המשוב נשמר למנוע השיווק.</span>}
+      {fb && <span className="f-meta" role="status">תודה. המשוב נרשם כאן. העברתו למנוע השיווק עדיין מתוכננת.</span>}
     </section>
   );
 }
@@ -192,11 +192,11 @@ function SummaryLayout({ a, next, nextHref }: { a: Approval; next: QueueEntry[];
         <h2 className="f-qside__h">איך זה ייראה אחרי</h2>
         <div className="f-after f-after--ok">
           <b><span aria-hidden>✓</span> {a.execution!.successTitle}</b>
-          <span>{a.execution!.target.label} יאשר, ורק אז ההצעה תסומן כנשלחה. משימת מעקב תיווצר ל־4.10.</span>
+          <span>{a.execution!.target.label} יאשר, ורק אז ההצעה תסומן כנשלחה{a.execution!.followUpTask ? " ותיווצר משימת מעקב" : ""}.</span>
         </div>
         <div className="f-after">
           <b className="f-after__wait"><span aria-hidden>⧗</span> ממתין לאישור {a.execution!.target.label}</b>
-          <span className="f-meta">אם אין תשובה תוך דקה, ההצעה נשמרת כטיוטה בדואר ולא מסומנת כנשלחה.</span>
+          <span className="f-meta">עד שתגיע תשובה ההצעה לא מסומנת כנשלחה. אם השליחה נכשלת, דבר לא נשלח ואפשר לנסות שוב.</span>
         </div>
         <label className="f-demo-toggle">
           <input type="checkbox" checked={demo.state.failNext} onChange={(e) => demo.setFailNext(e.target.checked)} />

@@ -90,7 +90,7 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     await page.click(".f-pre__final");
     await page.waitForSelector(".f-banner--error", { timeout: 6000 });
     const txt = await page.textContent(".f-banner--error");
-    return txt.includes("טיוטה") && (await page.isVisible("text=נסה שוב לשלוח")) ? "draft kept, retry offered" : false;
+    return txt.includes("לא סומנה כנשלחה") && (await page.isVisible("text=נסה שוב לשלוח")) ? "nothing marked sent, retry offered" : false;
   });
   await ctx.close();
 }
@@ -359,6 +359,85 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     await page.waitForTimeout(300);
     const stillFailed = await page.isVisible("text=נסה שוב לשלוח") && !(await page.isVisible(".f-pre__final"));
     return disabled && reason && stillFailed ? "retry refused, reason shown" : false;
+  });
+  await ctx.close();
+}
+
+// 5c. regressions found by the round-3 reviews (each was reproduced before its fix)
+{
+  const { ctx, page } = await fresh();
+  const native = [];
+  page.removeAllListeners("dialog");
+  page.on("dialog", (d) => { native.push(d.type()); d.accept().catch(() => {}); });
+  const leaveDialog = "dialog[open] #nav-leave-title";
+  await check("mail: undoing an earlier 'save draft' after the reply was sent is refused — no second send", async () => {
+    await go(page, "/focus/comms");
+    await page.evaluate(() => sessionStorage.clear());
+    await go(page, "/focus/comms");
+    const box = page.locator(".f-cm-draft__input");
+    await box.fill((await box.inputValue()) + " — נשמר");
+    await page.click("button:has-text('שמור טיוטה')");
+    const saveToast = page.locator(".f-toast", { hasText: "הטיוטה נשמרה" });
+    await page.click("button:has-text('בדוק ושלח')");
+    await page.click("dialog[open] .f-check__box");
+    await page.click("dialog[open] .f-btn--danger");
+    await page.waitForSelector("#cm-sent-h", { timeout: 5000 });
+    await saveToast.locator(".f-toast__btn >> text=בטל").click();
+    await page.waitForTimeout(200);
+    const refused = await page.isVisible(".f-toast >> text=התשובה נשלחה מאז");
+    return refused && (await page.isVisible("#cm-sent-h")) ? "refused, still sent once" : false;
+  });
+  await check("proposal: an undo toast cannot change a proposal that was sent", async () => {
+    await page.evaluate(() => sessionStorage.clear());
+    await go(page, "/focus/sales/proposals/corporate-hosting");
+    const qty = page.locator(".f-sl-numin").first();
+    await qty.fill("7"); await qty.blur();
+    await page.click("button:has-text('חזור לגרסה 1')");
+    // in-app navigation keeps the toast (and its undo) alive while the proposal is sent
+    await page.click("a:has-text('המשך לשליחה')");
+    await page.waitForURL("**/approvals/proposal-noa");
+    await page.click(".f-pre__confirm .f-check__box");
+    await page.click(".f-pre__final");
+    await page.waitForSelector(".f-pre__result .f-banner--done", { timeout: 6000 });
+    const t = page.locator(".f-toast", { hasText: "חזרה לגרסה 1" });
+    if (!(await t.count())) return false; // the undo must still be offered here, or this check proves nothing
+    await t.locator(".f-toast__btn >> text=בטל").click();
+    await page.waitForTimeout(200);
+    return await page.isVisible(".f-toast >> text=ההצעה כבר בשליחה או נשלחה") ? "refused" : false;
+  });
+  await check("closing the task drawer returns focus to the task link that opened it", async () => {
+    await go(page, "/focus/work/list");
+    const link = page.locator(".f-tl__title, .f-tcard__link").first();
+    await link.focus(); await page.keyboard.press("Enter");
+    await page.waitForSelector("dialog[open].f-tdrawer", { timeout: 5000 });
+    await page.keyboard.press("Escape");
+    await page.waitForSelector("dialog[open].f-tdrawer", { state: "detached", timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(150);
+    const tag = await page.evaluate(() => document.activeElement?.tagName + "." + (document.activeElement?.className ?? ""));
+    return tag.startsWith("A.") || tag.startsWith("BUTTON.") ? tag.slice(0, 40) : false;
+  });
+  await check("a multi-step jump back while dirty is not pushed onto the other page (no stray dialog, forward intact)", async () => {
+    await go(page, "/focus/work");
+    await page.click("a[href$='/focus/studio'] >> nth=0"); await page.waitForURL((u) => u.pathname.endsWith("/focus/studio"));
+    await go(page, "/focus/studio/new");
+    await page.getByLabel("טקסט משני").fill("טיוטה לקפיצה");
+    await page.waitForTimeout(150);
+    await page.evaluate(() => history.go(-2));
+    await page.waitForTimeout(800);
+    return !(await page.isVisible(leaveDialog)) ? new URL(page.url()).pathname.split("/focus")[1] || "/" : false;
+  });
+  await check("Back → 'leave without saving' does not raise the browser's own prompt as well", async () => {
+    native.length = 0;
+    await go(page, "/focus/approvals");
+    await page.click("a[href$='/approvals/plan-october'] >> nth=0"); await page.waitForURL("**/approvals/plan-october");
+    await page.fill(".f-decision__input", "טיוטה");
+    await page.waitForTimeout(150);
+    await page.goBack();
+    await page.waitForSelector(leaveDialog, { timeout: 3000 });
+    await page.click("dialog[open] >> text=צא בלי לשמור");
+    await page.waitForURL((u) => u.pathname.endsWith("/focus/approvals"), { timeout: 5000 });
+    await page.waitForTimeout(300);
+    return native.length === 0 ? "one question only" : `native: ${native.join(",")}` && false;
   });
   await ctx.close();
 }

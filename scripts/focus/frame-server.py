@@ -4,7 +4,16 @@ ROOT, OUT = sys.argv[1], sys.argv[2]
 class H(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **k): super().__init__(*a, directory=ROOT, **k)
     def log_message(self, *a): pass
+    # DNS rebinding: a foreign host name pointed at 127.0.0.1 must not read the folder either
+    def host_ok(self): return self.headers.get('Host', '') in ('127.0.0.1:8779', 'localhost:8779')
+    def do_GET(self):
+        if not self.host_ok(): self.send_response(403); self.end_headers(); return
+        super().do_GET()
+    def do_HEAD(self):
+        if not self.host_ok(): self.send_response(403); self.end_headers(); return
+        super().do_HEAD()
     def do_POST(self):
+        if not self.host_ok(): self.send_response(403); self.end_headers(); return
         # only the page this server itself serves may post frames (another site open in the browser cannot)
         origin = self.headers.get('Origin', '')
         if origin not in ('http://127.0.0.1:8779', 'http://localhost:8779'): self.send_response(403); self.end_headers(); return

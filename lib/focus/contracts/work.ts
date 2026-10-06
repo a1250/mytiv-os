@@ -1,5 +1,4 @@
 import type { IsoDate, IsoDateTime, PersonId } from "./common";
-import type { Loadable } from "./loadable";
 import type { Priority, WorkStatus } from "./status";
 
 /**
@@ -169,4 +168,3 @@ export type WorkCommands = {
   logTime(taskId: string, minutes: number): { entry: TimeEntry | null; result: WriteResult; previous?: Task };
 };
 
-export type MyTasksData = { buckets: Loadable<MyTasksBuckets>; activeTimer: ActiveTimer | null };

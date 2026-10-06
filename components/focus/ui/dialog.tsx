@@ -28,6 +28,16 @@ export function Dialog({
       d.close();
     }
   }, [open, initialFocus]);
+  // removed while still open (e.g. the task drawer host returns null when ?task goes away): no `close` event fires,
+  // so focus is returned here — to the opener, when it is still on the page
+  useEffect(() => {
+    const d = ref.current;
+    return () => {
+      if (!d?.open) return;
+      const o = opener.current as HTMLElement | null;
+      requestAnimationFrame(() => { if (o?.isConnected) o.focus(); });
+    };
+  }, []);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;

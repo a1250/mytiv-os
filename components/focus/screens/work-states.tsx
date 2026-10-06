@@ -36,7 +36,7 @@ export default function WorkStatesScreen() {
       <PageHeader eyebrow="עבודה · מצבי מערכת" title="מצבי מערכת" size="page" status="כל תצוגה ב־Mytiv Work עוברת במצבים האלה. תקלה אף פעם לא מוצגת כרשימה ריקה, ו״לא ידוע״ אף פעם לא 0." />
       <div className="f-wstates__grid">
         <section className="f-panel f-wstates__card" aria-label="מצב ריק"><WorkStateView state={{ kind: "empty", title: "אין משימות להיום", hint: "הכל מטופל. אפשר למשוך משימה מ\"בקרוב\" או ליצור חדשה." }} onCreate={() => document.querySelector<HTMLInputElement>(".f-wstates .f-qc__input")?.focus()} /><span className="f-wstates__label">מצב ריק</span></section>
-        <section className="f-panel f-wstates__card" aria-label="טעינה"><WorkStateView state={{ kind: "loading" }} /><span className="f-wstates__label">טעינה · Skeleton</span></section>
+        <section className="f-panel f-wstates__card" aria-label="טעינה"><WorkStateView state={{ kind: "loading" }} /><span className="f-wstates__label">טעינה · שלד</span></section>
         <section className="f-panel f-wstates__card" aria-label="תקלה">
           {errState === "ready" ? <Banner kind="done" title="המשימות נטענו" detail={`${demo.state.tasks.length} משימות · מסונכרן עכשיו`} /> : <WorkStateView state={errState === "loading" ? { kind: "loading" } : { kind: "error", message: "לא הצלחנו לטעון משימות" }} onRetry={retry} />}
           <span className="f-wstates__label">תקלה {failRetry && errState === "error" ? "· הניסיון הבא ייכשל שוב" : ""}</span>
@@ -59,8 +59,8 @@ export default function WorkStatesScreen() {
             onCreate={(d) => { const t = demo.createTask({ title: d.title, dueDate: d.dueDate, priority: d.priority, assigneeId: d.assigneeId ?? demo.viewer.id }); toast.push({ title: "נוצרה משימה", detail: t.title, undo: { onUndo: undoCreate(t) } }); }} />
         </section>
         <section className="f-panel f-wstates__card f-wstates__card--wide" aria-label="מתוכנן">
-          <h2 className="f-wstates__h">יכולת בהמתנה ל־backend <PlannedTag /></h2>
-          <p className="f-meta">יכולות שעוד אין להן שרת (טיימר מתמשך, תלויות, דוח שעות, תגובות, checklist) מוצגות במצב &quot;מתוכנן&quot; עם נתוני fixture. הרכיב מרונדר מלא כדי לשמור חוזה ברור — החיבור מזרים נתונים אמיתיים בלי לשנות את ה־UI.</p>
+          <h2 className="f-wstates__h">יכולת שממתינה לשרת <PlannedTag /></h2>
+          <p className="f-meta">יכולות שעוד אין להן שרת (טיימר מתמשך, תלויות, דוח שעות, תגובות, רשימת בדיקה) מוצגות במצב &quot;מתוכנן&quot; עם נתוני דוגמה. הרכיב מרונדר מלא כדי לשמור חוזה ברור — החיבור מזרים נתונים אמיתיים בלי לשנות את ה־UI.</p>
           <code className="f-wstates__code f-mono" dir="ltr">TaskTimer · source: &quot;planned&quot; — fixture now → POST /api/[slug]/work/timers</code>
         </section>
       </div>

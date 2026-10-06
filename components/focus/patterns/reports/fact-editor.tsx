@@ -8,6 +8,7 @@ import { Dialog } from "@/components/focus/ui/dialog";
 import { Banner } from "@/components/focus/ui/feedback";
 import { TextAreaField, TextField } from "@/components/focus/ui/field";
 import { DrawerHead } from "./report-parts";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * Business-brain fact editor (G5): a drawer form with visible labels, help text, an error that replaces the help,
@@ -43,6 +44,8 @@ export function FactEditor({
   const [confirmClose, setConfirmClose] = useState(false);
   const initial = draftOf(fact);
   const dirty = (Object.keys(d) as (keyof FactDraft)[]).some((k) => d[k].trim() !== initial[k].trim());
+  // Back, reload and closing the tab ask too (the dialog itself already holds in-app links)
+  useNavGuard({ dirty: open && dirty, what: "העריכה של הפריט במוח העסק עוד לא נשמרה. אם תצא עכשיו, היא תימחק." });
   const valueChanged = fact != null && d.value.trim() !== (fact.value ?? "").trim();
 
   const set = (k: keyof FactDraft, v: string) => {

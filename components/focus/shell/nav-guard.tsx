@@ -31,6 +31,8 @@ type Ctx = {
   consumeGuardEntry: () => boolean;
   /** used by useFocusRouter: run a navigation after a pending removal of the guard entry (never racing it) */
   whenSettled: (fn: () => void) => void;
+  /** used by useFocusRouter.discardAndReplace: the draft is being thrown away — step off the guard entry now */
+  discard: () => void;
 };
 
 const NavCtx = createContext<Ctx | null>(null);
@@ -53,8 +55,10 @@ export function NavGuardProvider({ children }: { children: ReactNode }) {
   const pendingBack = useRef(false);
   const queued = useRef<(() => void) | null>(null);
   const dirtyRef = useRef(false);
+  /** the user chose "leave" — the browser's own unload prompt must not ask a second time */
+  const leaving = useRef(false);
 
-  /** the most recently registered dirty guard (its text and save action are snapshotted when navigation is held) */
+  /** the last dirty guard in mount order (its text and save action are snapshotted when navigation is held) */
   const held = useCallback((): Held | null => {
     let last: Guard | null = null;
     for (const g of guards.current.values()) if (g.dirty) last = g;
@@ -117,6 +121,9 @@ export function NavGuardProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onPop = () => {
       if (ignoreNextPop.current) { ignoreNextPop.current = false; flush(); return; }
+      // a jump of several entries (Back's long-press menu, history.go(-n)) lands past the page: the router already
+      // left it and history cannot be held there — never push a guard entry onto the other page or ask after the fact
+      if (entryOnTop.current && window.location.href !== entryUrl.current) { entryOnTop.current = false; return; }
       const h = entryOnTop.current ? held() : null;
       if (!h) return;
       // Back/Forward left the guard entry: put it back (the page and draft stay) and ask
@@ -153,10 +160,17 @@ export function NavGuardProvider({ children }: { children: ReactNode }) {
   // closing / reloading the tab while dirty
   useEffect(() => {
     if (!anyDirty) return;
-    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { if (!leaving.current) e.preventDefault(); };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [anyDirty]);
+
+  /** the screen discards its draft and navigates in place (close / switch without saving): step off the guard entry
+   * first, so the discarded state does not stay behind as an extra history entry */
+  const discard = useCallback(() => {
+    // only when the discarding screen is the one dirty guard (another dirty one keeps the page protected)
+    if ([...guards.current.values()].filter((g) => g.dirty).length <= 1) stepOff();
+  }, [stepOff]);
 
   const consumeGuardEntry = useCallback(() => {
     if (!entryOnTop.current) return false;
@@ -176,13 +190,18 @@ export function NavGuardProvider({ children }: { children: ReactNode }) {
     setTarget(null);
     if (!t) return;
     const hadEntry = consumeGuardEntry();
+    leaving.current = true;
+    setTimeout(() => { leaving.current = false; }, 1500); // still here (in-app navigation, or nowhere to go back to)
     if (t.kind === "back") {
       ignoreNextPop.current = true;
       window.history.go(hadEntry ? -2 : -1);
-      // nothing before this page (opened in a new tab): no popstate comes — undo the bookkeeping so the guard entry
-      // (still on top) keeps working and the next real Back is not swallowed
+      // nothing before this page (opened in a new tab): no popstate comes — leave to the Focus home instead of doing
+      // nothing (the guard entry on top is replaced by it), and the next real Back is not swallowed
       const onPop = () => { clearTimeout(fallback); };
-      const fallback = setTimeout(() => { window.removeEventListener("popstate", onPop); if (ignoreNextPop.current) { ignoreNextPop.current = false; entryOnTop.current = hadEntry; } }, 400);
+      const fallback = setTimeout(() => {
+        window.removeEventListener("popstate", onPop);
+        if (ignoreNextPop.current) { ignoreNextPop.current = false; router.replace(base); }
+      }, 400);
       window.addEventListener("popstate", onPop, { once: true });
       return;
     }
@@ -191,7 +210,7 @@ export function NavGuardProvider({ children }: { children: ReactNode }) {
   };
   const saveAndLeave = target?.save ? () => { if (target.save!() === false) { setTarget(null); return; } leave(); } : undefined;
 
-  const value = useMemo(() => ({ register, unregister, attempt, consumeGuardEntry, whenSettled }), [register, unregister, attempt, consumeGuardEntry, whenSettled]);
+  const value = useMemo(() => ({ register, unregister, attempt, consumeGuardEntry, whenSettled, discard }), [register, unregister, attempt, consumeGuardEntry, whenSettled, discard]);
   return (
     <NavCtx.Provider value={value}>
       {children}
@@ -206,9 +225,10 @@ export function useNavGuard({ dirty, what, onSaveAndLeave }: Guard) {
   const id = useId();
   const save = useRef(onSaveAndLeave);
   useEffect(() => { save.current = onSaveAndLeave; });
+  const canSave = !!onSaveAndLeave; // re-register on what changes, not on a new inline callback every render
   useEffect(() => {
-    ctx?.register(id, { dirty, what, onSaveAndLeave: onSaveAndLeave ? () => save.current?.() : undefined });
-  }, [ctx, id, dirty, what, onSaveAndLeave]);
+    ctx?.register(id, { dirty, what, onSaveAndLeave: canSave ? () => save.current?.() : undefined });
+  }, [ctx, id, dirty, what, canSave]);
   useEffect(() => () => ctx?.unregister(id), [ctx, id]);
 }
 
@@ -221,7 +241,7 @@ export function useNavGuardAttempt() {
 /** Internal: lets useFocusRouter replace the guard entry instead of stacking a duplicate, and wait for its removal. */
 export function useNavGuardEntry() {
   const ctx = useContext(NavCtx);
-  return useMemo(() => (ctx ? { consume: ctx.consumeGuardEntry, whenSettled: ctx.whenSettled } : null), [ctx]);
+  return useMemo(() => (ctx ? { consume: ctx.consumeGuardEntry, whenSettled: ctx.whenSettled, discard: ctx.discard } : null), [ctx]);
 }
 
 export function LeaveDialog({ open, what, onStay, onLeave, onSaveAndLeave }: {

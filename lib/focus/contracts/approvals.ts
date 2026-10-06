@@ -32,6 +32,8 @@ export type ExternalAction = {
   successDetail: string;
   failureTitle: string;
   failureDetail: string;
+  /** a follow-up task created when (and only when) the target confirmed */
+  followUpTask?: { title: string; dueDate: string; assigneeId: string };
 };
 
 export type Approval = {

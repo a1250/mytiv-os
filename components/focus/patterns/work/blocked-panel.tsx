@@ -15,7 +15,8 @@ import { PRIORITY } from "./task-card";
 /**
  * Blocked-task panel (handoff D3, prototype flow 2): reason, impact, assignee ("הקצה לי"), next step, follow-up date
  * shortcuts and a note — saved together with "שמור וסנכרן". When the source of truth is ClickUp the save is a sync
- * that can fail: the change is then kept here and marked "טרם סונכרן". Unsaved edits are guarded by the caller.
+ * that can fail: the change is then kept here and the panel says it is not in ClickUp yet, with retry. Unsaved edits
+ * are guarded by the caller.
  */
 export type BlockedDraft = { assigneeId: string | null; nextAction: string; followUp: string | null; note: string };
 export type SyncState = { kind: "idle" } | { kind: "syncing" } | { kind: "synced"; at: string } | { kind: "failed"; message: string };
@@ -74,7 +75,7 @@ export function BlockedTaskPanel({
               ))}
               <label className="f-bpanel__date"><span className="f-sr">בחר תאריך</span><input type="date" className="f-input f-input--sm" min={day(0)} value={d.followUp ?? ""} onChange={(e) => set({ followUp: e.target.value || null })} /></label>
             </div>
-            {d.followUp && <span className="f-field__help">תזכורת תופיע בהיום שלי ב־{fmtDayMonth(d.followUp)}.</span>}
+            {d.followUp && <span className="f-field__help">מועד המעקב יישמר במשימה: {fmtDayMonth(d.followUp)}.</span>}
           </fieldset>
           <div className="f-bpanel__row">
             <label htmlFor={`${id}-c`} className="f-field__label">הערה <PlannedTag /></label>
@@ -83,8 +84,8 @@ export function BlockedTaskPanel({
           <ol className="f-bpanel__hist">
             {task.activity.map((a) => <li key={a.id} className="f-meta-sm">{fmtDayMonth(a.at)} · {a.text}</li>)}
           </ol>
-          {sync.kind === "failed" && <Banner kind="error" title="הסנכרון ל־ClickUp נכשל" detail={`${sync.message} השינוי נשמר כאן ומסומן "טרם סונכרן".`} action={<Button variant="neutral" size="sm" onClick={onRetry}>נסה שוב</Button>} />}
-          {sync.kind === "synced" && <Banner kind="done" title="סונכרן ל־ClickUp" detail={`ClickUp אישר ב־${sync.at}. תזכורת תופיע בהיום שלי.`} />}
+          {sync.kind === "failed" && <Banner kind="error" title="הסנכרון ל־ClickUp נכשל" detail={`${sync.message} השינוי נשמר כאן, אבל עדיין לא ב־ClickUp.`} action={<Button variant="neutral" size="sm" onClick={onRetry}>נסה שוב</Button>} />}
+          {sync.kind === "synced" && <Banner kind="done" title="סונכרן ל־ClickUp" detail={`ClickUp אישר ב־${sync.at}.`} />}
           <div className="f-bpanel__actions">
             <Button type="submit" variant="primary" loading={sync.kind === "syncing"} loadingLabel="מסנכרן ל־ClickUp…" disabled={!dirty && sync.kind !== "syncing"} disabledReason={!dirty && sync.kind !== "syncing" ? "אין שינויים לשמור" : undefined}>
               {task.source === "clickup" ? "שמור וסנכרן" : "שמור"}

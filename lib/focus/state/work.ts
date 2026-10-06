@@ -49,10 +49,10 @@ export function displayStatus(t: Task, all: Task[]): WorkDisplayStatus {
   if (!OPEN(t) || t.status === "unknown") return t.status;
   return isBlocked(t, all) || isManuallyBlocked(t) ? "blocked" : t.status;
 }
-/** Why a task shows as blocked, in words: the manual reason, else the open dependency; null when it is not blocked. */
 /** The text of a manual block: its reason, or — for a source status mapped to blocked without one — say so. */
 export const manualBlockText = (t: Task): string => t.blockedReason?.trim() || "סומנה כחסומה במקור, בלי סיבה כתובה.";
 
+/** Why a task shows as blocked, in words: the manual reason, else the open dependency; null when it is not blocked. */
 export function blockedWhy(t: Task, all: Task[]): string | null {
   if (isManuallyBlocked(t)) return manualBlockText(t);
   const b = openBlockers(t, all);
@@ -256,14 +256,14 @@ export function revertTask(current: Task, previous: Task, expectedVersion: strin
 // ---------- permissions ----------
 export type WorkAction = "edit" | "assign" | "changeStatus" | "complete" | "delete" | "comment" | "trackTime" | "create" | "setDueDate" | "depend" | "checklist" | "nest";
 
+/** Which source capability an action needs (actions without one — edit, delete, priority — are gated by role only). */
+export const CAPABILITY_FOR: Partial<Record<WorkAction, keyof WorkCapabilities>> = { assign: "assign", changeStatus: "changeStatus", complete: "changeStatus", comment: "comment", trackTime: "trackTime", create: "create", setDueDate: "setDueDate", depend: "depend", checklist: "checklist", nest: "nest" };
+
 /**
  * Matrix (pkg1 plan §8): owner/admin all; member edits work but cannot delete; viewer reads and comments only.
  * With `caps` (the task source's capability map), an action whose capability is not `live` is refused — unless
  * `allowPlanned` (the fixture demo, where planned capabilities run on fixtures, labelled "מתוכנן").
  */
-/** Which source capability an action needs (actions without one are gated by role only). */
-export const CAPABILITY_FOR: Partial<Record<WorkAction, keyof WorkCapabilities>> = { assign: "assign", changeStatus: "changeStatus", complete: "changeStatus", comment: "comment", trackTime: "trackTime", create: "create", setDueDate: "setDueDate", depend: "depend", checklist: "checklist", nest: "nest" };
-
 export function canDo(role: WorkRole, action: WorkAction, caps?: Partial<CapabilityMap>, allowPlanned = false): boolean {
   const cap = CAPABILITY_FOR[action];
   if (caps && cap && caps[cap] !== undefined && caps[cap] !== "live" && !(caps[cap] === "planned" && allowPlanned)) return false;

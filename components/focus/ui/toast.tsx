@@ -6,7 +6,7 @@ import { cx } from "./cx";
 import { Icon } from "./icon";
 
 /**
- * Toasts (§6.11). Plain toasts leave after 6s; errors and toasts with "בטל" stay until closed. "Success" is only
+ * Toasts (§6.11). Plain toasts leave after 6s; errors stay until closed; a toast with "בטל" leaves 6s after its undo window ends. "Success" is only
  * raised by callers after the target system confirmed. Polite live region; errors are assertive.
  */
 export type ToastInput = {
@@ -57,6 +57,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 function Toast({ t, onClose, onUndone }: { t: ToastItem; onClose: () => void; onUndone: (text: string) => void }) {
   const [now, setNow] = useState(() => Date.now());
+  const closeRef = useRef<HTMLButtonElement>(null);
   const open = canUndo(t.window, now) && !t.undone;
   useEffect(() => {
     if (!t.window || t.undone) return;
@@ -69,7 +70,8 @@ function Toast({ t, onClose, onUndone }: { t: ToastItem; onClose: () => void; on
   }, [open, t.window, t.undone, onClose]);
   const glyph = t.kind === "error" ? "!" : t.undone ? "↺" : "✓";
   return (
-    <div className={cx("f-toast", t.kind === "error" && "f-toast--error")} role={t.kind === "error" ? "alert" : "status"}>
+    // announced once, by its container's live region (a role here too would announce it twice)
+    <div className={cx("f-toast", t.kind === "error" && "f-toast--error")}>
       <span className="f-toast__glyph" aria-hidden>{glyph}</span>
       <span className="f-toast__body">
         <span className="f-toast__title">{t.undone ?? t.title}</span>
@@ -78,12 +80,18 @@ function Toast({ t, onClose, onUndone }: { t: ToastItem; onClose: () => void; on
       <span className="f-toast__actions">
         {open && t.undo && (
           // the countdown is visual only: its text changes every 250ms and would be re-announced by the live region
-          <button type="button" className="f-toast__btn f-hit" aria-label={t.undo.label ?? "בטל"} onClick={() => { const r = t.undo!.onUndo(); if (r === false) onClose(); else onUndone(typeof r === "string" ? r : "בוטל."); }}>
+          <button type="button" className="f-toast__btn f-hit" aria-label={t.undo.label ?? "בטל"} onClick={(e) => {
+            const hadFocus = document.activeElement === e.currentTarget;
+            const r = t.undo!.onUndo();
+            if (r === false) onClose(); else onUndone(typeof r === "string" ? r : "בוטל.");
+            // the undo button goes away: keep keyboard focus in a sensible place (this toast's close, or the page)
+            if (hadFocus) requestAnimationFrame(() => (r === false ? document.getElementById("main") : closeRef.current)?.focus());
+          }}>
             {t.undo.label ?? "בטל"} <span className="f-num" aria-hidden>{fmtRemaining(remainingMs(t.window!, now))}</span>
           </button>
         )}
         {t.action && <button type="button" className="f-toast__btn f-hit" onClick={t.action.onClick}>{t.action.label}</button>}
-        <button type="button" className="f-toast__btn f-toast__btn--x f-hit" aria-label="סגור הודעה" onClick={onClose}><Icon name="x" size={14} /></button>
+        <button ref={closeRef} type="button" className="f-toast__btn f-toast__btn--x f-hit" aria-label="סגור הודעה" onClick={onClose}><Icon name="x" size={14} /></button>
       </span>
     </div>
   );

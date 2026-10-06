@@ -27,7 +27,6 @@ type State = {
   executions: Record<string, ExecState>;
   tasks: Task[];
   timer: ActiveTimer | null;
-  timerLog: { taskId: string; minutes: number; at: number }[];
   timeEntries: TimeEntry[];
   /** demo role switcher (owner by default) — drives permission-based hiding of actions */
   role: WorkRole;
@@ -46,7 +45,7 @@ type State = {
 };
 
 const initial: State = {
-  decisions: {}, approvals: {}, executions: {}, tasks: TASKS, timer: ACTIVE_TIMER, timerLog: [], timeEntries: TIME_ENTRIES, role: "owner", jobs: [],
+  decisions: {}, approvals: {}, executions: {}, tasks: TASKS, timer: ACTIVE_TIMER, timeEntries: TIME_ENTRIES, role: "owner", jobs: [],
   formats: {}, drafts: {}, notifications: [], failNext: false, clock: 0, hydrated: false, writes: {},
 };
 
@@ -59,7 +58,7 @@ type Action =
   | { type: "replaceTask"; task: Task }
   | { type: "addTask"; task: Task }
   | { type: "removeTask"; id: string }
-  | { type: "timer"; timer: ActiveTimer | null; log?: { taskId: string; minutes: number; at: number } }
+  | { type: "timer"; timer: ActiveTimer | null }
   | { type: "timeEntry"; entry: TimeEntry }
   | { type: "removeTimeEntry"; id: string }
   | { type: "role"; role: WorkRole }
@@ -97,7 +96,7 @@ function reducer(s: State, a: Action): State {
     }
     case "addTask": return { ...s, tasks: [a.task, ...s.tasks] };
     case "removeTask": return { ...s, tasks: s.tasks.filter((t) => t.id !== a.id) };
-    case "timer": return { ...s, timer: a.timer, timerLog: a.log ? [...s.timerLog, a.log] : s.timerLog };
+    case "timer": return { ...s, timer: a.timer };
     case "timeEntry": return { ...s, timeEntries: [...s.timeEntries, a.entry] };
     case "removeTimeEntry": return { ...s, timeEntries: s.timeEntries.filter((e) => e.id !== a.id) };
     case "role": return { ...s, role: a.role };
@@ -134,6 +133,8 @@ function useStoreValue() {
   useEffect(() => { latestTasks.current = s.tasks; }, [s.tasks]);
   // the latest committed state, for actions that run later (toast undo) and must not act on a stale render
   const latestState = useRef(s);
+  /** createTask for callbacks that run later (a confirmed send creates its follow-up task) */
+  const createRef = useRef<((draft: Pick<Task, "title" | "dueDate" | "priority"> & Partial<Task>) => Task) | null>(null);
   useEffect(() => { latestState.current = s; }, [s]);
 
   // hydrate after mount (server render = fixtures, so no hydration mismatch)
@@ -225,6 +226,9 @@ function useStoreValue() {
           dispatch({ type: "exec", id, event: { type: "targetConfirmed", now: Date.now() } });
           // the decision behind an external action is the explicit confirmation itself — recorded as its reason
           dispatch({ type: "decide", decision: { approvalId: id, outcome: "approve", reason: `אישור מפורש לפני ביצוע: ${a.execution?.confirmText ?? ""}`.trim(), decidedAt: demoIso(), decidedBy: VIEWER.id }, status: "approved" });
+          // the follow-up the summary promised exists only now, after the target confirmed
+          const f = a.execution?.followUpTask;
+          if (f && !latestTasks.current.some((t) => t.id === `t-followup-${id}`)) createRef.current?.({ id: `t-followup-${id}`, title: f.title, dueDate: f.dueDate, priority: "medium", assigneeId: f.assigneeId });
         }
       }, a.simulate.latencyMs);
     }
@@ -287,6 +291,7 @@ function useStoreValue() {
     latestTasks.current = [t, ...latestTasks.current];
     return t;
   }, [s.tasks]);
+  useEffect(() => { createRef.current = createTask; }, [createTask]);
   /**
    * Remove a task — the undo of a create. With `expectedVersion` it is versioned like every other undo: refused when
    * the task was changed since it was created (someone worked on it), so the undo never deletes their work.
@@ -325,7 +330,7 @@ function useStoreValue() {
       addEntry(r.logged.taskId, r.logged.minutes, "timer");
       addSpent(prevTask, r.logged.minutes);
     }
-    dispatch({ type: "timer", timer: r.next, log: r.logged ? { ...r.logged, at: Date.now() } : undefined });
+    dispatch({ type: "timer", timer: r.next });
     return r;
   }, [s.tasks, s.timer, addSpent]);
   const timerPause = useCallback(() => { if (s.timer) dispatch({ type: "timer", timer: pauseTimer(s.timer, Date.now()) }); }, [s.timer]);
@@ -341,7 +346,7 @@ function useStoreValue() {
     const write = minutes > 0 ? addSpent(task, minutes) : null;
     // the entry exists only when the logged time was written to the task
     const entry = write?.ok ? addEntry(stopped.taskId, minutes, "timer") : null;
-    dispatch({ type: "timer", timer: null, log: { taskId: stopped.taskId, minutes, at: stoppedAt } });
+    dispatch({ type: "timer", timer: null });
     return { stopped, elapsedMs, minutes, task, entry, write, orphan: !task };
   }, [s.timer, s.tasks, addSpent]);
   /** Undo a stop: the timer resumes paused at the time it had when stopped (the gap is not counted), the entry goes. */

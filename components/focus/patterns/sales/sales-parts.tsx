@@ -59,7 +59,6 @@ export function ConfidencePill({ level }: { level: Confidence }) {
     </span>
   );
 }
-export const confidenceWord = (c: Confidence) => CONF[c].word;
 
 /** A value with its certainty: "≈ 9,000 ₪" estimated · "6,200 ₪ ידוע" · "—" unknown (with the reason for AT). */
 export function LeadValue({ reading, showKnown = true }: { reading: Reading; showKnown?: boolean }) {

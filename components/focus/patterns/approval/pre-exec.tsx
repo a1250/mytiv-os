@@ -101,8 +101,9 @@ export function PreExecSummary({
 
       <div className="f-pre__foot" ref={resultRef} tabIndex={-1}>
         {state.step === "sent" ? (
-          <div className="f-pre__result" role="status">
-            <Banner kind="done" title={`${action.successTitle}`} detail={action.successDetail} />
+          // focus moves to this result (it is read once from there — no live region on top of it)
+          <div className="f-pre__result">
+            <Banner kind="done" live={false} title={`${action.successTitle}`} detail={action.successDetail} />
             <div className="f-pre__actions">
               {nextHref && <Link href={nextHref} className="f-btn f-btn--primary f-btn--lg">לאישור הבא ←</Link>}
               <Link href={activityHref} className="f-btn f-btn--neutral">פתח ביומן הפעולות</Link>
@@ -110,7 +111,7 @@ export function PreExecSummary({
           </div>
         ) : state.step === "failed" ? (
           <div className="f-pre__result">
-            <Banner kind="error" title={action.failureTitle} detail={state.message} />
+            <Banner kind="error" live={false} title={action.failureTitle} detail={state.message} />
             <div className="f-pre__actions">
               <Button variant="danger" aria-disabled={blockedReason ? true : undefined} aria-describedby={blockedReason ? "pre-blocked" : undefined}
                 onClick={() => { if (!blockedReason) onRetry(); }}>נסה שוב לשלוח</Button>
@@ -133,7 +134,7 @@ export function PreExecSummary({
             {!sending && <Link href={backHref} className="f-btn f-btn--neutral f-pre__back">חזור לבדיקה</Link>}
             <span className="f-grow" />
             <span className="f-pre__note" role={sending ? "status" : undefined}>
-              {state.step === "summary" && !state.confirmed ? "יש לסמן את תיבת האישור. " : ""}{sending ? `ממתין לאישור מ־${action.target.label}. דבר עדיין לא סומן כנשלח.` : action.pendingNote}
+              {state.step === "summary" && !state.confirmed && !state.attempted ? "יש לסמן את תיבת האישור. " : ""}{sending ? `ממתין לאישור מ־${action.target.label}. דבר עדיין לא סומן כנשלח.` : action.pendingNote}
             </span>
           </div>
         )}

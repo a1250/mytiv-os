@@ -1,8 +1,5 @@
-import type { IsoDateTime, Metric, SourceRef } from "./common";
-import type { Loadable } from "./loadable";
-import type { ProjectSummary } from "./projects";
+import type { IsoDateTime, SourceRef } from "./common";
 import type { RiskLevel } from "./status";
-import type { MyTasksBuckets } from "./work";
 
 /** Time columns (handoff: "עכשיו" until 12:00 or due today, "עד סוף היום", "השבוע"). Derived from `dueAt`, never set by hand. */
 export type TimeColumn = "now" | "today" | "week";
@@ -37,15 +34,3 @@ export type AgendaEvent = {
 export type DayAgenda = { source: SourceRef; syncedAt: IsoDateTime; events: AgendaEvent[]; slots: string[] };
 
 export type ResumeItem = { id: string; label: string; at: IsoDateTime; href: string };
-
-export type TodayData = {
-  viewer: { name: string };
-  now: IsoDateTime;
-  queue: Loadable<ActionItem[]>;
-  stuck: Loadable<StuckItem[]>;
-  agenda: Loadable<DayAgenda>;
-  resume: ResumeItem[];
-  work: Loadable<MyTasksBuckets>;
-  projects: Loadable<ProjectSummary[]>;
-  metrics: Loadable<Metric[]>;
-};

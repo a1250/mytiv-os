@@ -46,6 +46,8 @@ export function useFocusRouter() {
       // a replace over the guard entry turns it into the destination: it must not be "removed" again by stepping back
       // (in-page replaces happen only on clean screens or where the draft is kept per item — mail threads)
       replace: (href: string, options?: Parameters<typeof router.replace>[1]) => settled(() => { guard?.consume(); router.replace(scopedHref(base, href), options); }),
+      /** close / switch without saving: the discarded state does not stay behind as a history entry */
+      discardAndReplace: (href: string, options?: Parameters<typeof router.replace>[1]) => { guard?.discard(); settled(() => router.replace(scopedHref(base, href), options)); },
       prefetch: (href: string, options?: Parameters<typeof router.prefetch>[1]) => router.prefetch(scopedHref(base, href), options),
     };
   }, [router, base, guard]);
