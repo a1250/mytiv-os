@@ -9,9 +9,9 @@ import { cx } from "./cx";
  * bottom sheet under 768px (handoff M4/M10).
  */
 export function Dialog({
-  open, onClose, label, labelledBy, variant = "center", className, children, initialFocus,
+  open, onClose, label, labelledBy, describedBy, variant = "center", className, children, initialFocus,
 }: {
-  open: boolean; onClose: () => void; label?: string; labelledBy?: string; variant?: "center" | "drawer";
+  open: boolean; onClose: () => void; label?: string; labelledBy?: string; describedBy?: string; variant?: "center" | "drawer";
   className?: string; children: ReactNode; initialFocus?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -42,6 +42,7 @@ export function Dialog({
       ref={ref}
       aria-label={label}
       aria-labelledby={labelledBy}
+      aria-describedby={describedBy}
       className={cx("f-dialog", `f-dialog--${variant}`, className)}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >

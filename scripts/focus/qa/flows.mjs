@@ -34,7 +34,11 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     if (await page.isVisible(".f-decision--done")) return false;
     await page.fill(".f-decision__input", "בתוקף עד 31.10");
     await page.click(".f-decision__approve");
-    return (await page.textContent(".f-decision__result"))?.includes("אושר") ? "approved with reason" : false;
+    const ok = (await page.textContent(".f-decision__result"))?.includes("אושר");
+    // the screen just turned clean: its guard history entry is being stepped off (a few ms) — a full-page goto fired
+    // inside that step would be aborted by it, which no person can do; in-app navigation is queued (checked below)
+    await settle(page);
+    return ok ? "approved with reason" : false;
   });
   await check("A shortcut does not fire while typing in the reason field", async () => {
     await go(page, "/focus/approvals/plan-october");
@@ -201,6 +205,144 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     await page.fill(".f-bpanel input.f-input", "לתאם עם צלם אחר");
     await page.click(".f-tl__titlebtn >> nth=1");
     return await page.isVisible("dialog[open] .f-confirm");
+  });
+  await ctx.close();
+}
+
+// 5b. history and drafts (self-review round 2): no duplicate entries, Back/Forward after leaving, a click made while the
+// guard entry is being stepped off is queued (not lost or bounced back), listeners do not pile up, drafts survive
+// "save and leave", an interrupted external send is unknown, a failed proposal send cannot be retried at a new amount
+{
+  const { ctx, page } = await fresh();
+  const leaveDialog = "dialog[open] #nav-leave-title";
+  const path = () => new URL(page.url()).pathname;
+  await check("dirty → clean leaves no extra history entry: one Back returns to the previous page", async () => {
+    await go(page, "/focus/approvals");
+    await page.click("a[href$='/approvals/plan-october'] >> nth=0");
+    await page.waitForURL("**/approvals/plan-october");
+    await page.fill(".f-decision__input", "טיוטה");
+    await page.waitForTimeout(150);
+    await page.fill(".f-decision__input", "");
+    await settle(page);
+    await page.goBack();
+    await page.waitForURL((u) => u.pathname.endsWith("/focus/approvals"), { timeout: 5000 });
+    return !(await page.isVisible(leaveDialog)) ? path() : false;
+  });
+  await check("leave from the dialog replaces the guard entry: Back → the page once, Forward → the destination", async () => {
+    await go(page, "/focus/approvals");
+    await page.click("a[href$='/approvals/plan-october'] >> nth=0");
+    await page.waitForURL("**/approvals/plan-october");
+    await page.fill(".f-decision__input", "טיוטה שתימחק");
+    await page.click(".f-focusbar__exit");
+    await page.click("dialog[open] >> text=צא בלי לשמור");
+    await page.waitForURL((u) => u.pathname.endsWith("/focus/approvals"), { timeout: 5000 });
+    await settle(page);
+    await page.goBack();
+    await page.waitForURL("**/approvals/plan-october", { timeout: 5000 });
+    await settle(page);
+    const clean = (await page.inputValue(".f-decision__input")) === "" && !(await page.isVisible(leaveDialog));
+    await page.goForward();
+    await page.waitForURL((u) => u.pathname.endsWith("/focus/approvals"), { timeout: 5000 });
+    await settle(page);
+    await page.goBack(); await page.waitForURL("**/approvals/plan-october", { timeout: 5000 }); await settle(page);
+    await page.goBack(); await page.waitForURL((u) => u.pathname.endsWith("/focus/approvals"), { timeout: 5000 });
+    return clean ? "Back, Forward, Back, Back — no duplicate of the page" : false;
+  });
+  await check("a link clicked while the screen turns clean is queued, lands, and Back returns to the screen once", async () => {
+    await go(page, "/focus/studio");
+    await go(page, "/focus/studio/new");
+    const field = page.getByLabel("טקסט משני");
+    const orig = await field.inputValue();
+    await field.fill(orig + " שינוי");
+    await page.waitForTimeout(150);
+    // revert the edit (screen turns clean → the guard entry is stepped off) and click a link in the same task
+    await field.evaluate((el, v) => {
+      const set = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value").set;
+      set.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true }));
+      setTimeout(() => document.querySelector(".f-snew__foot a").click(), 0);
+    }, orig);
+    await page.waitForURL((u) => !u.pathname.endsWith("/studio/new"), { timeout: 5000 });
+    await page.waitForTimeout(600);
+    const landed = path();
+    if (landed.endsWith("/studio/new") || (await page.isVisible(leaveDialog))) return false;
+    await page.goBack();
+    await page.waitForURL("**/studio/new", { timeout: 5000 });
+    await settle(page);
+    await page.goBack();
+    await page.waitForURL((u) => u.pathname.endsWith("/focus/studio"), { timeout: 5000 });
+    return `landed on ${landed.split("/focus")[1]}, Back → brief → studio`;
+  });
+  await check("listeners do not pile up across dirty/clean cycles and navigations", async () => {
+    const cdp = await ctx.newCDPSession(page);
+    const count = async () => {
+      const out = {};
+      for (const [expr, types] of [["window", ["popstate", "beforeunload"]], ["document", ["click"]]]) {
+        const { result } = await cdp.send("Runtime.evaluate", { expression: expr });
+        const { listeners } = await cdp.send("DOMDebugger.getEventListeners", { objectId: result.objectId });
+        for (const t of types) out[`${expr}.${t}`] = listeners.filter((l) => l.type === t).length;
+      }
+      return out;
+    };
+    await go(page, "/focus/approvals/plan-october");
+    const before = await count();
+    for (let i = 0; i < 4; i++) {
+      await page.fill(".f-decision__input", `סבב ${i}`); await page.waitForTimeout(80);
+      await page.fill(".f-decision__input", ""); await page.waitForTimeout(80);
+    }
+    await page.click(".f-focusbar__exit"); await page.waitForURL((u) => u.pathname.endsWith("/focus/approvals")); await settle(page);
+    await page.click("a[href$='/approvals/plan-october'] >> nth=0"); await page.waitForURL("**/approvals/plan-october"); await settle(page);
+    const after = await count();
+    const same = Object.keys(before).every((k) => after[k] === before[k]);
+    return same && before["window.beforeunload"] === 0 ? JSON.stringify(after) : `before ${JSON.stringify(before)} after ${JSON.stringify(after)}` && false;
+  });
+  await check("mail: an unsaved reply survives 'save and leave' and is there when you come back", async () => {
+    await go(page, "/focus/comms");
+    await page.waitForSelector(".f-cm-draft__input");
+    const box = page.locator(".f-cm-draft__input");
+    const typed = (await box.inputValue()) + " — נוסף לפני יציאה";
+    await box.fill(typed);
+    await page.click("a[href$='/focus/work'] >> nth=0");
+    await page.waitForSelector(leaveDialog, { timeout: 3000 });
+    await page.click("dialog[open] >> text=שמור וצא");
+    await page.waitForURL((u) => u.pathname.endsWith("/focus/work"), { timeout: 5000 });
+    await settle(page);
+    await page.goBack();
+    await page.waitForURL((u) => u.pathname.endsWith("/focus/comms"), { timeout: 5000 });
+    await page.waitForSelector(".f-cm-draft__input");
+    return (await box.inputValue()) === typed ? "draft kept" : false;
+  });
+  await check("mail: a send interrupted by a reload is shown as unknown — never 'sent', never a plain failure", async () => {
+    await go(page, "/focus/comms");
+    await page.click("text=בדוק ושלח");
+    await page.click("dialog[open] .f-check__box");
+    await page.click("dialog[open] .f-btn--danger");
+    await page.waitForSelector(".f-cm-reply__state >> text=שולח דרך", { timeout: 3000 });
+    await page.reload({ waitUntil: "domcontentloaded" }); await settle(page);
+    await page.waitForTimeout(2200); // past the simulated send time: it must still not turn into "sent"
+    const unknown = await page.isVisible("text=לא ידוע אם התשובה נשלחה");
+    const sent = await page.isVisible("#cm-sent-h");
+    return unknown && !sent ? "unknown, re-send needs a check" : false;
+  });
+  await check("proposal: a failed send cannot be retried once the amount changed (same guard as the first send)", async () => {
+    await page.evaluate(() => sessionStorage.clear());
+    await go(page, "/focus/screens");
+    await page.check(".f-smap__ctl--check input");
+    await go(page, "/focus/approvals/proposal-noa");
+    await page.click(".f-pre__confirm .f-check__box");
+    await page.click(".f-pre__final");
+    await page.waitForSelector("text=נסה שוב לשלוח", { timeout: 6000 });
+    await go(page, "/focus/sales/proposals/corporate-hosting");
+    const qty = page.locator(".f-sl-numin").first();
+    await qty.fill(String(Number(await qty.inputValue()) + 1));
+    await qty.blur(); await settle(page);
+    await go(page, "/focus/approvals/proposal-noa");
+    const retry = page.locator("button:has-text('נסה שוב לשלוח')");
+    const disabled = (await retry.getAttribute("aria-disabled")) === "true" && (await retry.getAttribute("aria-describedby")) === "pre-blocked";
+    const reason = await page.isVisible("#pre-blocked");
+    await retry.evaluate((b) => b.click()); // aria-disabled stays focusable/clickable: the click must do nothing
+    await page.waitForTimeout(300);
+    const stillFailed = await page.isVisible("text=נסה שוב לשלוח") && !(await page.isVisible(".f-pre__final"));
+    return disabled && reason && stillFailed ? "retry refused, reason shown" : false;
   });
   await ctx.close();
 }

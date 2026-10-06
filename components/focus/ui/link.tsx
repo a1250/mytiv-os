@@ -37,12 +37,16 @@ export default function Link({ href, ...rest }: ComponentProps<typeof NextLink>)
 export function useFocusRouter() {
   const router = useRouter();
   const { base } = useFocusScope();
-  const consumeGuardEntry = useNavGuardEntry();
-  return useMemo(() => ({
-    ...router,
-    push: (href: string, options?: Parameters<typeof router.push>[1]) => (consumeGuardEntry?.() ? router.replace : router.push)(scopedHref(base, href), options),
-    // a replace over the guard entry turns it into the destination: it must not be "removed" again by stepping back
-    replace: (href: string, options?: Parameters<typeof router.replace>[1]) => { consumeGuardEntry?.(); router.replace(scopedHref(base, href), options); },
-    prefetch: (href: string, options?: Parameters<typeof router.prefetch>[1]) => router.prefetch(scopedHref(base, href), options),
-  }), [router, base, consumeGuardEntry]);
+  const guard = useNavGuardEntry();
+  return useMemo(() => {
+    const settled = (fn: () => void) => (guard ? guard.whenSettled(fn) : fn());
+    return {
+      ...router,
+      push: (href: string, options?: Parameters<typeof router.push>[1]) => settled(() => (guard?.consume() ? router.replace : router.push)(scopedHref(base, href), options)),
+      // a replace over the guard entry turns it into the destination: it must not be "removed" again by stepping back
+      // (in-page replaces happen only on clean screens or where the draft is kept per item — mail threads)
+      replace: (href: string, options?: Parameters<typeof router.replace>[1]) => settled(() => { guard?.consume(); router.replace(scopedHref(base, href), options); }),
+      prefetch: (href: string, options?: Parameters<typeof router.prefetch>[1]) => router.prefetch(scopedHref(base, href), options),
+    };
+  }, [router, base, guard]);
 }

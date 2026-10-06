@@ -9,10 +9,9 @@ import { jobStatus } from "@/lib/focus/state/jobs";
 import { FlowTrail, FormatSelector, TagList } from "@/components/focus/patterns/studio/new-parts";
 import { useDemo } from "@/components/focus/shell/demo-store";
 import { Button } from "@/components/focus/ui/button";
-import { Dialog } from "@/components/focus/ui/dialog";
 import { SelectField, TextField } from "@/components/focus/ui/field";
 import { useToast } from "@/components/focus/ui/toast";
-import { useNavGuard } from "@/components/focus/shell/nav-guard";
+import { useNavGuard, useNavGuardAttempt } from "@/components/focus/shell/nav-guard";
 
 /**
  * New content · brief (handoff E3, prototype flow 4). Goal and formats come from the campaign and can be changed
@@ -30,7 +29,6 @@ export default function StudioNewScreen() {
   const [b, setB] = useState<Brief>(stored ?? BRIEF_THURSDAY);
   const [editFormats, setEditFormats] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<"message" | "cta" | "formats", string>>>({});
-  const [confirmClose, setConfirmClose] = useState(false);
   const dirty = JSON.stringify(b) !== JSON.stringify(stored ?? BRIEF_THURSDAY);
   const aiJob = demo.state.jobs.find((j) => j.id === "ai-brief-draft");
   const aiRunning = aiJob && !aiJob.cancelledAt && jobStatus(aiJob, demo.state.clock).state === "running";
@@ -43,7 +41,9 @@ export default function StudioNewScreen() {
   }
 
   // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
-  useNavGuard({ dirty: dirty, what: "השינויים בבריף שעוד לא נשמרו יאבדו." });
+  // "save and leave" keeps the brief as a draft the studio offers to continue
+  useNavGuard({ dirty, what: "השינויים בבריף שעוד לא נשמרו יאבדו. אפשר לשמור טיוטה ולחזור אליה מהסטודיו.", onSaveAndLeave: () => { demo.setDraft(BRIEF_KEY, b); } });
+  const attempt = useNavGuardAttempt();
 
   const set = (p: Partial<Brief>) => { setB((x) => ({ ...x, ...p })); setErrors({}); };
   const save = () => { demo.setDraft(BRIEF_KEY, b); toast.push({ title: "הבריף נשמר", detail: "אפשר לחזור אליו מהסטודיו." }); };
@@ -69,7 +69,7 @@ export default function StudioNewScreen() {
   return (
     <div className="f-focusmode f-snew">
       <div className="f-focusbar f-snew__bar" role="banner">
-        <button type="button" className="f-focusbar__exit" onClick={() => (dirty ? setConfirmClose(true) : router.push(R.studio))}><span aria-hidden>✕</span>&nbsp;סגור</button>
+        <button type="button" className="f-focusbar__exit" onClick={() => { if (attempt(R.studio)) router.push(R.studio); }}><span aria-hidden>✕</span>&nbsp;סגור</button>
         <h1 className="f-snew__title">תוכן חדש</h1>
         <FlowTrail steps={STEPS} current={2} label="שלבי יצירת התוכן" />
         <span className="f-grow" />
@@ -152,17 +152,6 @@ export default function StudioNewScreen() {
         <Button variant="primary" size="lg" onClick={createDirections}>✦ צור 3 כיוונים</Button>
       </div>
 
-      <Dialog open={confirmClose} onClose={() => setConfirmClose(false)} label="יש שינויים שלא נשמרו">
-        <div className="f-confirm">
-          <h2 className="f-confirm__h">יש שינויים שלא נשמרו בבריף</h2>
-          <p className="f-meta">אפשר לשמור טיוטה ולחזור אליה מהסטודיו.</p>
-          <div className="f-confirm__actions">
-            <Button variant="primary" onClick={() => { demo.setDraft(BRIEF_KEY, b); router.push(R.studio); }}>שמור וצא</Button>
-            <Button variant="neutral" onClick={() => router.push(R.studio)}>צא בלי לשמור</Button>
-            <Button variant="quiet" onClick={() => setConfirmClose(false)}>המשך לערוך</Button>
-          </div>
-        </div>
-      </Dialog>
     </div>
   );
 }
