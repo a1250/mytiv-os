@@ -3,7 +3,7 @@ import { sendRefusalText, sendStatus, type MailAttempt } from '../lib/focus/adap
 
 // Business mail: the thread's persisted attempts (newest first) decide what the person is told — "sent" only on a
 // Gmail-confirmed attempt, and UNKNOWN carries the attempt id the target check must name.
-const a = (state: MailAttempt['state'], id = state): MailAttempt => ({ id, state, error: null, providerRef: null, createdAt: '2026-10-06T10:00:00.000Z', settledAt: state === 'in_flight' ? null : '2026-10-06T10:00:02.000Z' });
+const a = (state: MailAttempt['state'], id: string = state): MailAttempt => ({ id, state, error: null, providerRef: null, createdAt: '2026-10-06T10:00:00.000Z', settledAt: state === 'in_flight' ? null : '2026-10-06T10:00:02.000Z' });
 
 describe('sendStatus', () => {
   test('nothing sent yet', () => expect(sendStatus([])).toEqual({ kind: 'none' }));
