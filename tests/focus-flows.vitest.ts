@@ -133,6 +133,16 @@ describe("keyboard shortcuts never fire while typing", () => {
     expect(plainShortcut({ key: "ב", code: "KeyB", target: body }, ["a"])).toBe(false);
     expect(plainShortcut({ key: "/", code: "Slash", target: body }, ["/"])).toBe(true);
   });
+  it("other Latin layouts keep their own letters; '/' follows the character, not a letter key", () => {
+    // AZERTY: the key labelled "q" sits where QWERTY has A (code KeyA) — it must not approve
+    expect(plainShortcut({ key: "q", code: "KeyA", target: body }, ["a", "A"])).toBe(false);
+    expect(plainShortcut({ key: "a", code: "KeyQ", target: body }, ["a", "A"])).toBe(true);
+    // Hebrew: "/" is produced by the Q key (not search); the Slash key produces "." (search)
+    expect(plainShortcut({ key: "/", code: "KeyQ", target: body }, ["/"])).toBe(false);
+    expect(plainShortcut({ key: ".", code: "Slash", target: body }, ["/"])).toBe(true);
+    // AZERTY "/" (shift+":" on the Period key) still opens search
+    expect(plainShortcut({ key: "/", code: "Period", target: body }, ["/"])).toBe(true);
+  });
 });
 
 describe("a saved proposal is sent only at the approved amount", () => {

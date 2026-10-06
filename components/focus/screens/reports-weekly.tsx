@@ -1,7 +1,7 @@
 "use client";
 
-import Link, { useFocusRouter } from "@/components/focus/ui/link";
-import { useId, useState, type MouseEvent } from "react";
+import Link from "@/components/focus/ui/link";
+import { useId, useState } from "react";
 import type { ReviewItem, ReviewItemKind, ReviewSection } from "@/lib/focus/contracts/reports";
 import { WEEKLY_REVIEW } from "@/lib/focus/fixtures/reports";
 import { personName } from "@/lib/focus/fixtures/people";
@@ -11,7 +11,6 @@ import { PlannedAction, StateTag, fmtWhen } from "@/components/focus/patterns/re
 import { useDemo } from "@/components/focus/shell/demo-store";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
-import { Dialog } from "@/components/focus/ui/dialog";
 import { TextAreaField } from "@/components/focus/ui/field";
 import { ApprovalPill, OriginTag, SYSTEM, VerificationTag, WORK } from "@/components/focus/ui/status";
 import { useToast } from "@/components/focus/ui/toast";
@@ -41,10 +40,8 @@ function Item({ it, numbered }: { it: ReviewItem; numbered?: number }) {
 export default function ReportsWeeklyScreen() {
   const demo = useDemo();
   const toast = useToast();
-  const router = useFocusRouter();
   const rv = WEEKLY_REVIEW;
   const titleId = useId();
-  const leaveId = useId();
   const [summary, setSummary] = useState(rv.summary.text);
   const [editedBy, setEditedBy] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -52,17 +49,10 @@ export default function ReportsWeeklyScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [leaveTo, setLeaveTo] = useState<string | null>(null);
   const dirty = editing && draft.trim() !== summary;
 
   // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
-  useNavGuard({ dirty: dirty, what: "העריכה של התקציר המנהלי לא תישמר." });
-
-  const guard = (href: string) => (e: MouseEvent<HTMLAnchorElement>) => {
-    if (!dirty) return;
-    e.preventDefault();
-    setLeaveTo(href);
-  };
+  useNavGuard({ dirty, what: "השינויים בתקציר המנהלים עוד לא נשמרו. אם תצא עכשיו, הם יימחקו." });
 
   const validate = (text: string) => {
     const t = text.trim();
@@ -129,7 +119,7 @@ export default function ReportsWeeklyScreen() {
   return (
     <div className="f-focusmode f-rp-wk">
       <header className="f-rp-wkbar">
-        <Link href={R.reports} onClick={guard(R.reports)} className="f-btn f-btn--neutral f-rp-wkbar__back"><span aria-hidden>→</span> דוחות</Link>
+        <Link href={R.reports} className="f-btn f-btn--neutral f-rp-wkbar__back"><span aria-hidden>→</span> דוחות</Link>
         <h1 id={titleId} className="f-rp-wkbar__title">סקירה שבועית · שבוע {rv.week} · <span className="f-num">{fmtDayMonth(rv.range.from)}–{fmtDayMonth(rv.range.to)}</span></h1>
         {saved
           ? <StateTag status="done">נשמרה ע״י {demo.viewer.name}</StateTag>
@@ -196,17 +186,6 @@ export default function ReportsWeeklyScreen() {
           </section>
         </aside>
       </div>
-
-      <Dialog open={leaveTo != null} onClose={() => setLeaveTo(null)} labelledBy={leaveId} className="f-rp-confirm">
-        <div className="f-rp-confirm__body">
-          <h2 id={leaveId} className="f-rp-confirm__title">לצאת בלי לשמור את התקציר?</h2>
-          <p>השינויים בתקציר המנהלים עוד לא נשמרו. אם תצא עכשיו, הם יימחקו.</p>
-        </div>
-        <div className="f-rp-confirm__foot">
-          <Button variant="primary" onClick={() => setLeaveTo(null)}>המשך לערוך</Button>
-          <Button variant="neutral" onClick={() => { const to = leaveTo; setEditing(false); setLeaveTo(null); if (to) router.push(to); }}>צא בלי לשמור</Button>
-        </div>
-      </Dialog>
     </div>
   );
 }

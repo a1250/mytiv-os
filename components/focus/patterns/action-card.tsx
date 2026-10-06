@@ -29,7 +29,7 @@ export function ActionCard({
 }) {
   const H = headingLevel === 2 ? "h2" : "h3";
   const onKey = (e: KeyboardEvent<HTMLElement>) => {
-    if (onQuickApprove && phase.kind === "default" && plainShortcut(e, ["a", "A", "ש"])) {
+    if (onQuickApprove && phase.kind === "default" && plainShortcut(e, ["a", "A"])) {
       e.preventDefault();
       onQuickApprove();
     }
