@@ -6,7 +6,12 @@ import type { ActiveTimer, BoardColumn, Task, TaskPatch, TimeEntry, WorkCommands
 import { APPROVALS } from "@/lib/focus/fixtures/approvals";
 import { DEMO_NOW, demoIso } from "@/lib/focus/fixtures/clock";
 import { VIEWER } from "@/lib/focus/fixtures/people";
-import { ACTIVE_TIMER, TASKS, TIME_ENTRIES } from "@/lib/focus/fixtures/work";
+import { ACTIVE_TIMER, AUTUMN_PROJECT_ID, CAPABILITIES, TASKS, TIME_ENTRIES } from "@/lib/focus/fixtures/work";
+import { PEOPLE } from "@/lib/focus/fixtures/people";
+import type { Person } from "@/lib/focus/contracts/common";
+import type { CapabilityMap, TaskSource } from "@/lib/focus/contracts/work";
+import { undoPatch, writesForPatch, type WorkProjectRow } from "@/lib/focus/adapters/work";
+import { WorkRemote, type RemoteNotice } from "./work-remote";
 import { checkDecision } from "@/lib/focus/state/approvals";
 import { getSales, proposalSendBlock } from "@/components/focus/patterns/sales/sales-store";
 import { execReducer, initialExec, type ExecEvent, type ExecState } from "@/lib/focus/state/execution";
@@ -56,6 +61,8 @@ type Action =
   | { type: "exec"; id: string; event: ExecEvent }
   | { type: "resetExec"; id: string }
   | { type: "replaceTask"; task: Task }
+  | { type: "setTasks"; tasks: Task[] }
+  | { type: "swapTask"; tempId: string; task: Task }
   | { type: "addTask"; task: Task }
   | { type: "removeTask"; id: string }
   | { type: "timer"; timer: ActiveTimer | null }
@@ -95,6 +102,8 @@ function reducer(s: State, a: Action): State {
       return { ...s, tasks: s.tasks.map((t) => (t.id === a.task.id ? a.task : t)), writes };
     }
     case "addTask": return { ...s, tasks: [a.task, ...s.tasks] };
+    case "setTasks": return { ...s, tasks: a.tasks };
+    case "swapTask": return { ...s, tasks: s.tasks.some((t) => t.id === a.tempId) ? s.tasks.map((t) => (t.id === a.tempId ? a.task : t)) : [a.task, ...s.tasks.filter((t) => t.id !== a.task.id)] };
     case "removeTask": return { ...s, tasks: s.tasks.filter((t) => t.id !== a.id) };
     case "timer": return { ...s, timer: a.timer };
     case "timeEntry": return { ...s, timeEntries: [...s.timeEntries, a.entry] };
@@ -125,8 +134,59 @@ function writeJson(storage: () => Storage, key: string, v: unknown) {
 type Store = ReturnType<typeof useStoreValue>;
 const Ctx = createContext<Store | null>(null);
 
-function useStoreValue() {
-  const [s, dispatch] = useReducer(reducer, initial);
+/**
+ * Business scope (`remote`): the same store and the same commands, but Mytiv Work is the server's — tasks, people and
+ * projects come from the Work read model, every write is checked locally with the same rules and then sent to
+ * `/api/[slug]/work` (WorkRemote); the server's answer replaces the optimistic copy. Nothing is kept in browser
+ * storage, the clock is the real one, the actor is the signed-in member. Areas with no backend yet stay empty here
+ * (the business shell does not mount their screens).
+ */
+export type RemoteWork = { slug: string; viewer: Person; role: WorkRole; tasks: Task[]; people: Person[]; projects: WorkProjectRow[]; capabilities: Record<TaskSource, CapabilityMap> };
+export type Directory = { people: Person[]; peopleById: Record<string, Person>; projects: { id: string; name: string; client: string | null }[]; capabilities: Record<TaskSource, CapabilityMap> };
+const DEMO_DIRECTORY: Directory = {
+  people: Object.values(PEOPLE) as Person[],
+  peopleById: Object.fromEntries((Object.values(PEOPLE) as Person[]).map((p) => [p.id, p])),
+  projects: [{ id: AUTUMN_PROJECT_ID, name: "השקת תפריט סתיו", client: "UMINO" }],
+  capabilities: CAPABILITIES,
+};
+const directoryOf = (people: Person[], projects: WorkProjectRow[], capabilities: Record<TaskSource, CapabilityMap>): Directory =>
+  ({ people, peopleById: Object.fromEntries(people.map((p) => [p.id, p])), projects: projects.map((p) => ({ id: p.id, name: p.name, client: p.client })), capabilities });
+
+function useStoreValue(remote?: RemoteWork) {
+  const [s, dispatch] = useReducer(reducer, remote, (r) => (r ? { ...initial, tasks: r.tasks, timer: null, timeEntries: [], role: r.role, hydrated: true } : initial));
+  const viewer = remote?.viewer ?? VIEWER;
+  const actor = viewer.id;
+  /** the clock: the demo's fixed one, or the real one in a business scope */
+  const nowIso = useCallback(() => (remote ? new Date().toISOString() : demoIso()), [remote]);
+  const [realNow, setRealNow] = useState(() => (remote ? new Date().toISOString() : DEMO_NOW));
+  useEffect(() => {
+    if (!remote) return;
+    const iv = setInterval(() => setRealNow(new Date().toISOString()), 60_000);
+    return () => clearInterval(iv);
+  }, [remote]);
+  const [directory, setDirectory] = useState<Directory>(() => (remote ? directoryOf(remote.people, remote.projects, remote.capabilities) : DEMO_DIRECTORY));
+  const [notices, setNotices] = useState<RemoteNotice[]>([]);
+  const remoteRef = useRef<WorkRemote | null>(null);
+  const capabilitiesRef = useRef(remote?.capabilities);
+  useEffect(() => {
+    if (!remote) return;
+    const r = new WorkRemote(remote.slug, {
+      task: (task) => dispatch({ type: "replaceTask", task }),
+      created: (tempId, task) => { if (tempId.startsWith("sub:")) void r.refresh(); else dispatch({ type: "swapTask", tempId, task }); },
+      dropped: (tempId) => dispatch({ type: "removeTask", id: tempId }),
+      all: (data) => {
+        dispatch({ type: "setTasks", tasks: data.tasks });
+        setDirectory(directoryOf(data.people.map((p) => ({ id: p.id, name: p.name, initial: Array.from(p.name.trim())[0] ?? "?", role: p.role === "owner" ? "owner" : p.role === "admin" ? "manager" : "member" })), data.projects, capabilitiesRef.current!));
+      },
+      notice: (n) => setNotices((xs) => [...xs, n]),
+    }, remote.tasks);
+    remoteRef.current = r;
+    // others' changes: re-read when the tab comes back and every 30s
+    const onVisible = () => { if (document.visibilityState === "visible") void r.refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    const iv = setInterval(() => { if (document.visibilityState === "visible") void r.refresh(); }, 30_000);
+    return () => { document.removeEventListener("visibilitychange", onVisible); clearInterval(iv); remoteRef.current = null; };
+  }, [remote]);
   const hydrated = s.hydrated;
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const latestTasks = useRef(s.tasks);
@@ -137,8 +197,10 @@ function useStoreValue() {
   const createRef = useRef<((draft: Pick<Task, "title" | "dueDate" | "priority"> & Partial<Task>) => Task) | null>(null);
   useEffect(() => { latestState.current = s; }, [s]);
 
-  // hydrate after mount (server render = fixtures, so no hydration mismatch)
+  // hydrate after mount (server render = fixtures, so no hydration mismatch) — the demo only; a business scope starts
+  // from the server's read model and keeps nothing in browser storage
   useEffect(() => {
+    if (remote) return;
     const session = readJson<Partial<State>>(() => sessionStorage, SESSION_KEY) ?? {};
     const timer = readJson<ActiveTimer | null | "none">(() => localStorage, TIMER_KEY);
     const t = timer === "none" ? null : timer ?? { ...ACTIVE_TIMER, startedAt: new Date().toISOString() };
@@ -152,15 +214,15 @@ function useStoreValue() {
     // the same for external jobs (mail send, Meta schedule) still running when the page closed: outcome unknown
     const jobs = rest.jobs ? interruptExternal(rest.jobs, Date.now()) : rest.jobs;
     dispatch({ type: "hydrate", state: { ...rest, ...(jobs ? { jobs } : {}), executions, timer: t, clock: Date.now() } });
-  }, []);
+  }, [remote]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || remote) return;
     const { timer, hydrated: _h, clock: _c, ...session } = s;
     void _h; void _c;
     writeJson(() => sessionStorage, SESSION_KEY, session);
     writeJson(() => localStorage, TIMER_KEY, timer ?? "none");
-  }, [s, hydrated]);
+  }, [s, hydrated, remote]);
 
   // processing jobs: notify when they settle (also when the user left the screen)
   const jobsRef = useRef(s.jobs);
@@ -239,10 +301,18 @@ function useStoreValue() {
   const patchTask = useCallback((id: string, patch: TaskPatch, expectedVersion: string): PatchResult & { previous?: Task } => {
     const cur = s.tasks.find((t) => t.id === id);
     if (!cur) return { ok: false, refused: "המשימה לא נמצאה." };
-    const r = applyPatch(cur, patch, expectedVersion, demoIso(), s.tasks, VIEWER.id);
-    if (r.ok) dispatch({ type: "replaceTask", task: r.task });
+    const plan = remoteRef.current ? writesForPatch(cur, patch) : null;
+    if (plan?.unsupported.length) return { ok: false, refused: "הפעולה הזו עדיין לא מחוברת לשרת המשימות." };
+    const r = applyPatch(cur, patch, expectedVersion, nowIso(), s.tasks, actor);
+    if (r.ok) {
+      dispatch({ type: "replaceTask", task: r.task });
+      for (const w of plan?.writes ?? []) {
+        if (w.kind === "update") void remoteRef.current!.update(w.taskId, w.patch);
+        else void remoteRef.current!.create(`sub:${crypto.randomUUID()}`, w.fields);
+      }
+    }
     return { ...r, previous: cur };
-  }, [s.tasks]);
+  }, [s.tasks, nowIso, actor]);
 
   /**
    * Undo = compensating write: refused if the task moved on since the undone action, or if the rules forbid it now.
@@ -252,10 +322,16 @@ function useStoreValue() {
     const tasks = latestTasks.current;
     const cur = tasks.find((t) => t.id === previous.id);
     if (!cur) return { ok: false, refused: "המשימה לא נמצאה." };
-    const r = revertTask(cur, previous, expectedVersion, demoIso(), tasks, VIEWER.id);
-    if (r.ok) { dispatch({ type: "replaceTask", task: r.task }); latestTasks.current = tasks.map((t) => (t.id === r.task.id ? r.task : t)); }
+    const undo = remoteRef.current ? writesForPatch(cur, undoPatch(cur, previous)) : null;
+    if (undo?.unsupported.length) return { ok: false, refused: "הביטול הזה עדיין לא מחובר לשרת המשימות." };
+    const r = revertTask(cur, previous, expectedVersion, nowIso(), tasks, actor);
+    if (r.ok) {
+      dispatch({ type: "replaceTask", task: r.task }); latestTasks.current = tasks.map((t) => (t.id === r.task.id ? r.task : t));
+      // a business-scope undo is a compensating write on the server, checked there like any other
+      for (const w of undo?.writes ?? []) if (w.kind === "update") void remoteRef.current!.update(w.taskId, w.patch);
+    }
     return r;
-  }, []);
+  }, [nowIso, actor]);
 
   /** Demo: another person edits the task meanwhile (new token, named writer) — exercises the version-conflict state. */
   const simulateRemoteEdit = useCallback((id: string, patch: Partial<Task>, by: Task["updatedBy"] = "u-dana") => {
@@ -270,17 +346,20 @@ function useStoreValue() {
     if (cur.version !== expectedVersion) return { ok: false, conflict: cur };
     const gate = checkMove(cur, to, s.tasks);
     if (!gate.ok) return { ok: false, refused: gate.reason };
-    const r = applyPatch(cur, { status: statusForColumn(to) }, expectedVersion, demoIso(), s.tasks, VIEWER.id);
-    if (r.ok) dispatch({ type: "replaceTask", task: r.task });
+    const r = applyPatch(cur, { status: statusForColumn(to) }, expectedVersion, nowIso(), s.tasks, actor);
+    if (r.ok) {
+      dispatch({ type: "replaceTask", task: r.task });
+      if (remoteRef.current) for (const w of writesForPatch(cur, { status: statusForColumn(to) }).writes) if (w.kind === "update") void remoteRef.current.update(w.taskId, w.patch);
+    }
     return { ...r, previous: cur };
-  }, [s.tasks]);
+  }, [s.tasks, nowIso, actor]);
 
   const createTask = useCallback((draft: Pick<Task, "title" | "dueDate" | "priority"> & Partial<Task>) => {
     const t: Task = {
-      id: `t-new-${Date.now()}`, notes: "", status: "todo", assigneeId: VIEWER.id, participantIds: [], startDate: null,
-      estimateMinutes: null, spentMinutes: 0, subtasks: [], checklist: [], dependsOn: [], links: {}, context: {}, comments: [],
-      evidence: [], activity: [{ id: "a0", at: demoIso(), actorId: VIEWER.id, text: "נוצרה ביצירה מהירה", tone: "done" }],
-      source: "mytiv", state: "live", parentId: null, ...draft, version: "v1", updatedAt: demoIso(), updatedBy: VIEWER.id,
+      id: `t-new-${Date.now()}`, notes: "", status: "todo", assigneeId: actor, participantIds: [], startDate: null,
+      estimateMinutes: null, spentMinutes: remoteRef.current ? null : 0, subtasks: [], checklist: [], dependsOn: [], links: {}, context: {}, comments: [],
+      evidence: [], activity: [{ id: "a0", at: nowIso(), actorId: actor, text: "נוצרה ביצירה מהירה", tone: "done" }],
+      source: "mytiv", state: "live", parentId: null, ...draft, version: "v1", updatedAt: nowIso(), updatedBy: actor,
     };
     // the same stored-task invariant as every write: canonical status, no block reason off a waiting task,
     // and no open child under a done parent
@@ -290,14 +369,19 @@ function useStoreValue() {
     if (!inv.ok) throw new Error(`createTask: ${inv.reason}`);
     dispatch({ type: "addTask", task: t });
     latestTasks.current = [t, ...latestTasks.current];
+    // business scope: created on the server (work_create_task); the optimistic copy is swapped for the server's
+    remoteRef.current?.create(t.id, { title: t.title, notes: t.notes, statusKey: t.status === "unknown" ? "todo" : t.status, priority: t.priority,
+      ownerUserId: t.assigneeId, projectId: t.links.projectId ?? null, parentId: t.parentId, dueOn: t.dueDate, startOn: t.startDate, nextAction: t.nextAction ?? null });
     return t;
-  }, [s.tasks]);
+  }, [s.tasks, nowIso, actor]);
   useEffect(() => { createRef.current = createTask; }, [createTask]);
   /**
    * Remove a task — the undo of a create. With `expectedVersion` it is versioned like every other undo: refused when
    * the task was changed since it was created (someone worked on it), so the undo never deletes their work.
    */
   const removeTask = useCallback((id: string, expectedVersion?: string): { ok: true } | { ok: false; refused: string } => {
+    // the server has no delete yet (trash comes with a later migration): refused, never faked
+    if (remoteRef.current) return { ok: false, refused: "ביטול יצירה עדיין לא מחובר לשרת. אפשר לסמן את המשימה כבוטלה." };
     const cur = latestTasks.current.find((t) => t.id === id);
     if (!cur) return { ok: false, refused: "המשימה כבר לא קיימת." };
     if (expectedVersion && cur.version !== expectedVersion) return { ok: false, refused: "המשימה עודכנה מאז שנוצרה, ולכן לא נמחקה." };
@@ -407,17 +491,18 @@ function useStoreValue() {
   }), []);
 
   return useMemo(() => ({
-    hydrated, now: DEMO_NOW, viewer: VIEWER, state: s,
+    hydrated, now: remote ? realNow : DEMO_NOW, viewer, state: s, directory, remote: !!remote,
+    notices, consumeNotices: () => setNotices([]), refresh: () => remoteRef.current?.refresh(),
     approval, decide, undoDecision, exec, ...stable,
     ...({ patchTask, moveTask, undoTask, createTask, removeTask, logTime } satisfies WorkCommands),
     simulateRemoteEdit,
     timerStart, timerPause, timerResume, timerStop, timerRestore, removeTimeEntry,
     startJob, startExternal, cancelJob,
-  }), [hydrated, s, stable, approval, decide, undoDecision, exec, patchTask, undoTask, moveTask, createTask, removeTask, simulateRemoteEdit, timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry, startJob, startExternal, cancelJob]);
+  }), [hydrated, remote, realNow, viewer, directory, notices, s, stable, approval, decide, undoDecision, exec, patchTask, undoTask, moveTask, createTask, removeTask, simulateRemoteEdit, timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry, startJob, startExternal, cancelJob]);
 }
 
-export function DemoStoreProvider({ children }: { children: ReactNode }) {
-  const value = useStoreValue();
+export function DemoStoreProvider({ children, remote }: { children: ReactNode; remote?: RemoteWork }) {
+  const value = useStoreValue(remote);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

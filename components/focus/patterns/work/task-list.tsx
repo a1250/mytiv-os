@@ -5,7 +5,7 @@ import { Fragment } from "react";
 import type { Task } from "@/lib/focus/contracts/work";
 import type { WorkDisplayStatus } from "@/lib/focus/contracts/status";
 import { daysBetween, fmtDayMonth, fmtDays } from "@/lib/focus/format";
-import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
+import { useDirectory } from "@/components/focus/shell/directory";
 import { R } from "@/lib/focus/routes";
 import { blocking, childrenOf, displayStatus, openBlockers } from "@/lib/focus/state/work";
 import { cx } from "@/components/focus/ui/cx";
@@ -26,8 +26,9 @@ export function hoursText(t: Task) {
 }
 
 function Assignee({ id }: { id: string | null }) {
+  const peopleById = useDirectory().peopleById;
   if (!id) return <span className="f-tl__who f-tl__who--none"><span className="f-tl__av f-tl__av--none" aria-hidden>?</span>ללא אחראי</span>;
-  const p = PEOPLE_BY_ID[id];
+  const p = peopleById[id];
   return <span className="f-tl__who"><span className={cx("f-tl__av", `f-tl__av--${id}`)} aria-hidden>{p?.initial ?? "?"}</span>{p?.name ?? "—"}</span>;
 }
 

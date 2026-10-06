@@ -38,7 +38,8 @@ export function QuickCreate({
         autoFocus={autoFocus}
         aria-describedby={error ? `${id}-e` : `${id}-h`}
         aria-invalid={error ? true : undefined}
-        placeholder={"משימה חדשה… כתוב \"מחר\", \"גבוה\", \"@דנה\", \"#UMINO\" והשדות יתמלאו"}
+        // the example names come from this business's own people and clients (never another business's or the demo's)
+        placeholder={`משימה חדשה… כתוב "מחר", "גבוה", "@${people[0]?.name.split(" ")[0] ?? "שם"}"${clients[0] ? `, "#${clients[0]}"` : ""} והשדות יתמלאו`}
         onChange={(e) => { setText(e.target.value); setError(null); }}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(true); } }}
       />

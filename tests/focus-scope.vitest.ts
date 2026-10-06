@@ -149,7 +149,7 @@ describe("static guarantees over the Focus route tree", () => {
     expect(pages.length).toBeGreaterThan(40);
   });
   it("every Focus page is scope-guarded (fixture pages render nothing for a business)", () => {
-    const unguarded = pages.filter((f) => !/rendersFixtures\(|requireDemoScope\(|getFocusScope\(/.test(code(f)));
+    const unguarded = pages.filter((f) => !/rendersFixtures\(|rendersWork\(|requireDemoScope\(|getFocusScope\(/.test(code(f)));
     expect(unguarded.map(rel)).toEqual([]);
   });
   it("page metadata is scope-gated too (Next resolves metadata even when the layout 404s)", () => {
@@ -166,7 +166,7 @@ describe("static guarantees over the Focus route tree", () => {
   it("Focus components link through the scoped Link (no direct next/link outside the shell exit)", () => {
     const comps = walk(join(ROOT, "components/focus")).filter((f) => /\.tsx?$/.test(f) && !f.includes("/reference/"));
     const direct = comps.filter((f) => /from "next\/link"/.test(readFileSync(f, "utf8"))).map(rel).sort();
-    expect(direct).toEqual(["components/focus/shell/not-connected.tsx", "components/focus/ui/link.tsx"]);
+    expect(direct).toEqual(["components/focus/shell/area-not-connected.tsx", "components/focus/shell/not-connected.tsx", "components/focus/ui/link.tsx"]);
   });
   it("prototype controls are gated by the demo scope, not by NODE_ENV", () => {
     const comps = walk(join(ROOT, "components/focus")).filter((f) => /\.tsx?$/.test(f) && !f.includes("/reference/"));

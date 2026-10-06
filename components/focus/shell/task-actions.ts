@@ -1,7 +1,6 @@
 "use client";
 
 import type { ActiveTimer, BoardColumn, Task, TimeEntry, WriteResult } from "@/lib/focus/contracts/work";
-import { CAPABILITIES } from "@/lib/focus/fixtures/work";
 import { CAPABILITY_FOR, canComplete, canDo, type WorkAction } from "@/lib/focus/state/work";
 import { jobStatus, syncJobId } from "@/lib/focus/state/jobs";
 import { useToast } from "@/components/focus/ui/toast";
@@ -21,10 +20,10 @@ const why = (r: WriteResult) => ("refused" in r ? r.refused : "המשימה עו
  * action uses it, like the drawer does.
  */
 export function useTaskGate() {
-  const { state } = useDemo();
+  const { state, directory } = useDemo();
   const isDemo = useIsDemo();
   return (t: Task, action: WorkAction): { ok: boolean; planned?: string; refused?: string } => {
-    const caps = CAPABILITIES[t.source];
+    const caps = directory.capabilities[t.source];
     if (!canDo(state.role, action, caps, isDemo)) return { ok: false, refused: "אין הרשאה או שהפעולה לא זמינה למשימה הזו במקור שלה." };
     const cap = CAPABILITY_FOR[action];
     return { ok: true, planned: cap && caps[cap] === "planned" ? "יכולת מתוכננת — בהדגמה בלבד, לא במקור." : undefined };

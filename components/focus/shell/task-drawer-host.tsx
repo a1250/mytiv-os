@@ -4,8 +4,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useFocusRouter } from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { Task, TaskPatch } from "@/lib/focus/contracts/work";
-import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
-import { CAPABILITIES } from "@/lib/focus/fixtures/work";
 import { WORK } from "@/components/focus/ui/status";
 import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
@@ -65,7 +63,8 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
   if (!task || !base) return null;
   const version = base.version;
 
-  const caps = CAPABILITIES[task.source];
+  const caps = demo.directory.capabilities[task.source];
+  const PEOPLE_BY_ID = demo.directory.peopleById;
   const writer = (t: Task) => (t.updatedBy && t.updatedBy !== "system" ? PEOPLE_BY_ID[t.updatedBy]?.name : undefined) ?? "משתמש אחר";
   const onPatch = (patch: TaskPatch, expected: string) => {
     const r = demo.patchTask(task.id, patch, expected);
