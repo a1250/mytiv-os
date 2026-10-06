@@ -1,7 +1,7 @@
 # Focus redesign — independent review packet
 
-Prepared 2026-10-06 for the second independent review of the Focus (Direction C) frontend, after the first review's
-findings, three self-review rounds and two verification rounds. Draft PR only: **no merge, no deploy, no backend integration.**
+Prepared 2026-10-06 for the final independent re-check of the Focus (Direction C) frontend, after the first review's
+findings, three self-review rounds, two verification rounds and the final review's one P2 family (§3, last table). Draft PR only: **no merge, no deploy, no backend integration.**
 
 | | |
 |---|---|
@@ -10,9 +10,9 @@ findings, three self-review rounds and two verification rounds. Draft PR only: *
 | Base branch | `auto/preview-mvp-app` (draft a1250/mytiv-os#8, stacked on #7 → `main`) |
 | Base SHA | `e35a189f7cbb545bdf1c7dd0a70c860bf3ea5031` — unchanged since the branch forked |
 | Head reviewed the first time | `62fbb6e` |
-| Final implementation SHA | `d93d1a4042c7e6c74e8ba69dada7607c0c3c17a6` — every number below was measured here |
-| Packet commit | this file is committed on top of `d93d1a4` (docs only; it changes no code) |
-| Diff vs base | 298 files changed, 43174 insertions(+) — purely additive outside `.gitignore` |
+| Final implementation SHA | `a1d02fd7cadddc05519c8634223f92aff7cafa45` — every number below was measured here |
+| Packet commit | this file is committed on top of `a1d02fd` (docs only; it changes no code) |
+| Diff vs base | 298 files changed, 43248 insertions(+) — purely additive outside `.gitignore` |
 
 ## 1. The first independent review — findings and fixes
 
@@ -112,7 +112,14 @@ Three independent review rounds over the whole Focus diff (security/scope/naviga
 | P2 | After reopening the proposal editor, an earlier visit's undo changed the stored proposal but not the page | The editor follows a stored change made outside it | sales-proposal.tsx |
 | P3 | D3 save still dropped focus (loading/disabled save button); a refused undo inside a modal sent focus to the inert page | Focus to the panel heading; stays inside the modal | project-execution.tsx, blocked-panel.tsx, ui/toast.tsx |
 
-## 4. Commits since the first review (`62fbb6e..d93d1a4`, oldest first)
+### Final independent review (d93d1a4) — one P2 family
+
+| Sev | Finding | Fix | Files |
+|---|---|---|---|
+| P2 | Gmail: after an UNKNOWN send outcome the generic 'בדוק ושלח' (and its dialog) could start another send without a verified Gmail check | UNKNOWN is a gated state in the store: startExternal → admitExternal/externalGate per target; the send dialog requires 'בדקתי בתיקיית נשלח ב־Gmail וההודעה הקודמת לא נשלחה' for that attempt; spent by the one send it unlocks | lib/focus/state/jobs.ts, demo-store.tsx, comms-mail.tsx, patterns/comms/mail.tsx |
+| P2 | Meta: an UNKNOWN schedule outcome was retried as an ordinary failure ('נסה שוב לתזמן', Today card retry) | Same gate (meta:<approval>) for quick approve, the Today card (link to the check screen, no direct retry) and the publish summary, which requires 'בדקתי ב־Meta Business Suite והתזמון הקודם לא קיים'; no in-dialog retry of an unknown attempt | use-queue.ts, action-card.tsx, marketing-publish.tsx, patterns/marketing/publish.tsx |
+
+## 4. Commits since the first review (`62fbb6e..a1d02fd`, oldest first)
 
 | SHA | Subject |
 |---|---|
@@ -135,8 +142,11 @@ Three independent review rounds over the whole Focus diff (security/scope/naviga
 | `a911f9c` | docs(focus): docs match the code after round 3 — drawer routes, conflict UI, sync per write, capability map per control, side stores, announcement policy, guard behaviour incl. its limits, open issues by severity |
 | `934f2bd` | fix(focus): round-4 verification findings — proposal undo checks the stored proposal (also across a reopened editor), undo toasts reachable while a modal is open, focus falls back to the page when the opener is gone, D3 save keeps focus, the confirmed send's follow-up task is the viewer's and system-created, no 'saved to the brain' claims, unknown ClickUp sync says so, Meta cancel/approve wording + no re-schedule racing a cancel, timer switch/stop never logs without the task write, load-time failures are not alerts, Back-leave with no history decided up front |
 | `d93d1a4` | fix(focus): round-5 convergence — failures announce assertively without role=alert (never read on load), the proposal editor follows a stored change made by an earlier visit's undo, D3 save keeps focus in the panel, a refused undo inside a modal keeps focus there |
+| `ab691f0` | docs(focus): review packet at the final SHA — first-review findings and fixes, five self-review rounds with every finding and its fix, commits, files, boundary, gates, mutation, visual, remaining issues, owner gates |
+| `9104117` | fix(focus): UNKNOWN external outcome is a gated state — a Gmail send or Meta schedule after an interrupted attempt starts only with the explicit target-system statement for that attempt, from every entry point (store gate admitExternal/externalGate), consumed by the one attempt it unlocks; a confirmed failure keeps the normal retry, a confirmed success is never repeated (final review P2) |
+| `a1d02fd` | docs(focus): the UNKNOWN-outcome gate in architecture and QA gates (unit 111, mutation 31, suite 285, flows 43) |
 
-<details><summary>All 49 commits since the base</summary>
+<details><summary>All 52 commits since the base</summary>
 
 | SHA | Subject |
 |---|---|
@@ -189,6 +199,9 @@ Three independent review rounds over the whole Focus diff (security/scope/naviga
 | `a911f9c` | docs(focus): docs match the code after round 3 — drawer routes, conflict UI, sync per write, capability map per control, side stores, announcement policy, guard behaviour incl. its limits, open issues by severity |
 | `934f2bd` | fix(focus): round-4 verification findings — proposal undo checks the stored proposal (also across a reopened editor), undo toasts reachable while a modal is open, focus falls back to the page when the opener is gone, D3 save keeps focus, the confirmed send's follow-up task is the viewer's and system-created, no 'saved to the brain' claims, unknown ClickUp sync says so, Meta cancel/approve wording + no re-schedule racing a cancel, timer switch/stop never logs without the task write, load-time failures are not alerts, Back-leave with no history decided up front |
 | `d93d1a4` | fix(focus): round-5 convergence — failures announce assertively without role=alert (never read on load), the proposal editor follows a stored change made by an earlier visit's undo, D3 save keeps focus in the panel, a refused undo inside a modal keeps focus there |
+| `ab691f0` | docs(focus): review packet at the final SHA — first-review findings and fixes, five self-review rounds with every finding and its fix, commits, files, boundary, gates, mutation, visual, remaining issues, owner gates |
+| `9104117` | fix(focus): UNKNOWN external outcome is a gated state — a Gmail send or Meta schedule after an interrupted attempt starts only with the explicit target-system statement for that attempt, from every entry point (store gate admitExternal/externalGate), consumed by the one attempt it unlocks; a confirmed failure keeps the normal retry, a confirmed success is never repeated (final review P2) |
+| `a1d02fd` | docs(focus): the UNKNOWN-outcome gate in architecture and QA gates (unit 111, mutation 31, suite 285, flows 43) |
 
 </details>
 
@@ -218,29 +231,29 @@ Three independent review rounds over the whole Focus diff (security/scope/naviga
 ## 6. Boundary confirmation — backend, API, DB, migrations, pkg1 untouched
 
 - Everything outside the Focus folders: `1 file changed, 3 insertions(+)` (`.gitignore` only).
-- `git diff --name-only e35a189..d93d1a4 -- lib/db app/api drizzle db migrations` → empty. No API route, schema, migration, seed or production configuration changed.
+- `git diff --name-only e35a189..a1d02fd -- lib/db app/api drizzle db migrations` → empty. No API route, schema, migration, seed or production configuration changed.
 - `auto/work-pkg1` was read only, as a contract source; nothing was merged or cherry-picked from it.
 - Nothing under Focus makes network calls; external actions (Gmail, Meta, ClickUp, AI) are simulated by the demo store, in the demo scope only.
 
-## 7. Test evidence (measured at `d93d1a4`)
+## 7. Test evidence (measured at `a1d02fd`)
 
 | Check | Result | Command |
 |---|---|---|
 | Typecheck | ✓ 0 errors | `npx tsc --noEmit -p .` |
 | Focus lint | ✓ 0 errors / 0 warnings | `npx eslint "app/(focus)" components/focus lib/focus scripts/focus tests/focus-*.ts` |
-| Focus unit tests | ✓ 99 / 99 (4 files) | `node node_modules/vitest/vitest.mjs run --config tests/route-vitest.config.mjs tests/focus-*.vitest.ts` |
-| Full existing suite | ✓ 273 / 273 vitest (24 files) + 28 / 28 `ops-security` node tests | `npm test` (dummy DB env) |
+| Focus unit tests | ✓ 111 / 111 (4 files) | `node node_modules/vitest/vitest.mjs run --config tests/route-vitest.config.mjs tests/focus-*.vitest.ts` |
+| Full existing suite | ✓ 285 / 285 vitest (24 files) + 28 / 28 `ops-security` node tests | `npm test` (dummy DB env) |
 | Production build | ✓ 49 Focus routes under `/[businessSlug]/focus` | `next build` (dummy DB env + dummy `QSTASH_*`) |
 | Production isolation | ✓ 18 / 18 | `prod-surfaces.mjs --expect production` against `next start` |
 | Preview QA surfaces | ✓ 6 / 6 | `prod-surfaces.mjs --expect preview` (`VERCEL_ENV=preview next start`) |
 | Routes · console · responsive | ✓ 53 / 53 (111 internal links, all inside the scope) | `routes.mjs` |
 | Accessibility (axe, serious + critical) | ✓ 150 / 150 — light + dark at 1440, light at 390 | `axe.mjs` |
 | Keyboard-only walkthrough | ✓ 54 / 54 | `keyboard.mjs` |
-| Flows end to end | ✓ 36 / 36 (incl. guard, Back/Forward, history, listeners, drafts, send guard, unknown outcomes, review regressions) | `flows.mjs` |
-| Mutation | ✓ 26 / 26 caught | scratch script, one mutation at a time on a copy |
+| Flows end to end | ✓ 43 / 43 (incl. Gmail + Meta UNKNOWN-outcome gate: interrupt, reload, no generic CTA / ordinary retry bypass, one attempt per explicit target check, confirmed failure retries normally, confirmed success never repeated) | `flows.mjs` |
+| Mutation | ✓ 31 / 31 caught (unit) + browser mutant removing the gate (UI + store) fails the Gmail and Meta flows | scratch script, one mutation at a time on a copy |
 
 **Mutation testing.** One mutation at a time applied to a copy of the tree, Focus unit tests run against it:
-26 / 26 mutants caught — tenant guard removed, no-session not redirected, prototype surfaces on in production, fixtures for a business, notFound ignored, a page losing its scope guard, scoped links not scoped, block guard removed, block guard + invariant removed, non-canonical status accepted, Kanban storing "blocked", mandatory reason bypassed, "sent" before target confirmation, version conflict ignored, unknown rendered as 0, dependency cycle allowed, parent completing with an open child, undo after the window, retry / first submit skipping the approved-amount guard, proposal amount check never blocking, interrupted send counted as done, reload not marking external jobs unknown, drawer adopting another writer's write, planned capability allowed outside the demo, Hebrew-layout shortcut.
+31 / 31 mutants caught. The five new ones target the UNKNOWN-outcome gate: retry without the target check, a statement not tied to the unknown attempt (never consumed), a confirmed success repeated, an in-flight attempt not blocking, the store admitting without the gate. Browser level: removing the gate in both the UI and the store fails 4 of the Gmail/Meta flows; removing only the Gmail dialog gate fails 2 (the store still refuses); removing only the Meta summary check is equivalent (the store refuses, the screen says why). Earlier mutants: tenant guard removed, no-session not redirected, prototype surfaces on in production, fixtures for a business, notFound ignored, a page losing its scope guard, scoped links not scoped, block guard removed, block guard + invariant removed, non-canonical status accepted, Kanban storing "blocked", mandatory reason bypassed, "sent" before target confirmation, version conflict ignored, unknown rendered as 0, dependency cycle allowed, parent completing with an open child, undo after the window, retry / first submit skipping the approved-amount guard, proposal amount check never blocking, interrupted send counted as done, reload not marking external jobs unknown, drawer adopting another writer's write, planned capability allowed outside the demo, Hebrew-layout shortcut.
 
 ## 8. Visual QA summary
 
