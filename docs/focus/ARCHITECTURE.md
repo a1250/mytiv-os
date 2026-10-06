@@ -54,6 +54,12 @@ wizard-created projects (`patterns/clients/session-projects.ts`); the proposal s
   same function the summary screen shows), from the latest state. A send or schedule still running when the page
   reloads has an unknown outcome (`interruptExternal`; a reloaded pre-execution summary asks for re-confirmation);
   it is never shown as sent or as a plain failure inviting a blind retry.
+- **Unknown outcome is a gated state.** Every Gmail send and Meta schedule starts through the store's
+  `startExternal` → `admitExternal` / `externalGate` (`lib/focus/state/jobs.ts`), per target (`gmail:<thread>`,
+  `meta:<approval>`): refused while an attempt is in flight or after one the target confirmed; after an UNKNOWN
+  outcome, refused until the user ticks the target-system statement (`TARGET_CHECK`) for that attempt — whichever
+  button started it (the generic "בדוק ושלח", a retry, quick approve, the Today card, the publish summary). The
+  statement unlocks one attempt and is spent by it. A confirmed failure keeps the ordinary retry.
 - Jobs still running at reload are rescheduled for their remaining time; drafts are updated functionally
   (`updateDraft`).
 
