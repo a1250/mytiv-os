@@ -5,8 +5,11 @@
  * sendDraft is only reachable from an explicit confirm step in the UI.
  */
 import { googleApi } from "./oauth";
+import { localApiBase } from "@/lib/db/local-endpoint";
 
-const BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
+// Local integration tests only: a localhost Gmail stand-in (scripts/focus/int/gmail-mock.mjs). Ignored unless the
+// override itself is a localhost http URL AND the database is local — a deployed environment always talks to Google.
+const BASE = localApiBase(process.env.DATABASE_URL, process.env.GMAIL_API_BASE_LOCAL) ?? "https://gmail.googleapis.com/gmail/v1/users/me";
 
 const b64urlDecode = (s: string) => Buffer.from(String(s || "").replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
 const b64urlEncode = (buf: Buffer) => buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -104,7 +107,7 @@ export async function createDraft(
   businessId: string,
   data: { to: string; cc?: string; subject: string; body: string; fromEmail: string; googleThreadId?: string }
 ) {
-  const payload: any = { message: { raw: buildRaw(data) } };
+  const payload: { message: { raw: string; threadId?: string } } = { message: { raw: buildRaw(data) } };
   if (data.googleThreadId) payload.message.threadId = data.googleThreadId;
   const res = await googleApi(businessId, "POST", `${BASE}/drafts`, payload);
   return { googleDraftId: res.id, googleMessageId: res.message?.id || "", googleThreadId: res.message?.threadId || data.googleThreadId || "" };
@@ -115,7 +118,7 @@ export async function updateDraft(
   googleDraftId: string,
   data: { to: string; cc?: string; subject: string; body: string; fromEmail: string; googleThreadId?: string }
 ) {
-  const payload: any = { message: { raw: buildRaw(data) } };
+  const payload: { message: { raw: string; threadId?: string } } = { message: { raw: buildRaw(data) } };
   if (data.googleThreadId) payload.message.threadId = data.googleThreadId;
   const res = await googleApi(businessId, "PUT", `${BASE}/drafts/${googleDraftId}`, payload);
   return { googleDraftId: res.id, googleMessageId: res.message?.id || "" };

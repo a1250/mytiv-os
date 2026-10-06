@@ -12,3 +12,8 @@ export function localSqlEndpoint(databaseUrl: string | undefined, endpoint: stri
   if (!/^http:\/\//.test(endpoint) || !LOCAL.has(hostOf(endpoint, /^http:/))) return null;
   return endpoint;
 }
+
+/** The same rule for a provider API stand-in (e.g. a local Gmail mock): only with a local database and a localhost URL. */
+export function localApiBase(databaseUrl: string | undefined, base: string | undefined): string | null {
+  return localSqlEndpoint(databaseUrl, base);
+}

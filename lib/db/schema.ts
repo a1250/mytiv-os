@@ -1326,3 +1326,37 @@ export const marketingImportFences = pgTable('marketing_import_fences', {
   fencedBy: uuid('fenced_by').notNull().references(() => users.id),
   fencedAt: timestamp('fenced_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.businessId, t.requestId] })]);
+
+/**
+ * External actions performed for a business (a Gmail send, a Meta schedule) — one row per attempt, written by the
+ * server before it calls the provider and settled with the provider's answer. The gate in external_attempt_admit
+ * (0014) is the only way in: per target, an attempt in flight or confirmed blocks a new one, and after an UNKNOWN
+ * outcome a new attempt needs the user's explicit check of the target for that attempt (attested_unknown_attempt_id).
+ * Rows only move forward (in_flight → confirmed | failed | unknown); nothing else changes.
+ */
+export const externalAttempts = pgTable(
+  "external_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    target: text("target").notNull(),
+    requestId: uuid("request_id").notNull(),
+    actorId: uuid("actor_id").notNull(),
+    payloadHash: text("payload_hash").notNull(),
+    payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+    state: text("state").notNull().default("in_flight"),
+    attestedUnknownAttemptId: uuid("attested_unknown_attempt_id"),
+    providerRef: text("provider_ref"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("external_attempts_request_uq").on(t.businessId, t.requestId),
+    index("external_attempts_target_idx").on(t.businessId, t.target, t.createdAt),
+    foreignKey({ name: "external_attempts_actor_fk", columns: [t.businessId, t.actorId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+    check("external_attempts_kind_ck", sql`${t.kind} in ('gmail_send','meta_schedule')`),
+    check("external_attempts_state_ck", sql`${t.state} in ('in_flight','confirmed','failed','unknown')`),
+  ]
+);
