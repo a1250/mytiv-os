@@ -210,6 +210,7 @@ describe("blocked is derived, never stored (Work contract §5)", () => {
     for (const reason of ["", "   ", "\n\t"]) {
       const r = applyPatch(waiting, { block: { reason } }, 1, NOW, all);
       expect(r.ok, JSON.stringify(reason)).toBe(false);
+      expect("refused" in r && r.refused).toContain("דורשת סיבה כתובה"); // the first layer, not only the invariant
     }
     const ok = applyPatch(base({ id: "t" }), { block: { reason: "  אין צלם  " } }, 1, NOW, all);
     expect(ok.ok && ok.task.status).toBe("waiting");
