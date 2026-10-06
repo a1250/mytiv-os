@@ -31,8 +31,14 @@ export type JobStatus =
   | { state: "failed"; at: number; unknown?: true }
   | { state: "cancelled"; at: number };
 
-/** Jobs whose effect happens outside Mytiv (a mail sent, a post scheduled at Meta) — an interruption leaves them unknown. */
-export const EXTERNAL_JOB_KINDS: readonly JobKind[] = ["send_mail", "schedule_meta"];
+/** Jobs whose effect happens outside Mytiv (a mail sent, a post scheduled at Meta, a ClickUp sync) — an interruption leaves them unknown. */
+export const EXTERNAL_JOB_KINDS: readonly JobKind[] = ["send_mail", "schedule_meta", "sync_clickup"];
+
+/**
+ * A sync job belongs to one write: `sync-<taskId>@<the version that write produced>`. A task shows a sync state only
+ * for its current version — a later write that started no sync never inherits an earlier "synced".
+ */
+export const syncJobId = (taskId: string, version: string) => `sync-${taskId}@${version}`;
 
 export function jobStatus(j: Job, now: number): JobStatus {
   if (j.cancelledAt) return { state: "cancelled", at: j.cancelledAt };

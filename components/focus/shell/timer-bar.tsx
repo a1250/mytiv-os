@@ -8,7 +8,7 @@ import { Icon } from "@/components/focus/ui/icon";
 import { useToast } from "@/components/focus/ui/toast";
 import { cx } from "@/components/focus/ui/cx";
 import { useDemo, useTicker } from "./demo-store";
-import { useTaskUndo } from "./task-actions";
+import { useTimerStopUndo } from "./task-actions";
 import { useIsDemo } from "./scope";
 
 /**
@@ -45,9 +45,9 @@ export function TimerBarView({
 }
 
 export function TimerBar({ variant = "fixed", note }: { variant?: "fixed" | "inline"; note?: string }) {
-  const { state, hydrated, timerPause, timerResume, timerStop, timerRestore } = useDemo();
+  const { state, hydrated, timerPause, timerResume, timerStop } = useDemo();
   const toast = useToast();
-  const undo = useTaskUndo();
+  const stopUndo = useTimerStopUndo();
   const isDemo = useIsDemo();
   const t = state.timer;
   // stopping logs time on the timer's task: role + that task's source capability (planned = demo only)
@@ -68,10 +68,10 @@ export function TimerBar({ variant = "fixed", note }: { variant?: "fixed" | "inl
         const r = timerStop();
         if (!r) return;
         if (r.orphan) { toast.push({ kind: "error", title: "הטיימר נעצר בלי לרשום זמן", detail: "המשימה שלו כבר לא קיימת." }); return; }
+        if (r.minutes > 0 && !r.write?.ok) { toast.push({ kind: "error", title: "הטיימר נעצר, אבל הזמן לא נרשם", detail: r.write && "refused" in r.write ? r.write.refused : "המשימה עודכנה בינתיים." }); return; }
         // undo: the logged minutes come off through the versioned undo; the timer resumes paused at its stop time
-        const restore = () => timerRestore(r.stopped, r.elapsedMs, r.entry?.id);
-        const onUndo = r.write?.ok && r.task ? undo(r.task, r.write.task.version, restore) : restore;
-        toast.push({ title: r.minutes > 0 ? `נרשמו ${r.minutes} דק׳ על "${r.stopped.title}"` : "הטיימר נעצר", detail: r.minutes > 0 ? "נוסף לדוח השעות." : "פחות מחצי דקה — לא נרשם זמן.", undo: { onUndo } });
+        const planned = timerTask && CAPABILITIES[timerTask.source].trackTime === "planned" ? " · יכולת מתוכננת — בהדגמה בלבד" : "";
+        toast.push({ title: r.minutes > 0 ? `נרשמו ${r.minutes} דק׳ על "${r.stopped.title}"` : "הטיימר נעצר", detail: r.minutes > 0 ? `נוסף לדוח השעות${planned}.` : "פחות מחצי דקה — לא נרשם זמן.", undo: { onUndo: stopUndo(r) } });
       } : undefined}
     />
   );

@@ -296,6 +296,7 @@ function useStoreValue() {
     if (!cur) return { ok: false, refused: "המשימה כבר לא קיימת." };
     if (expectedVersion && cur.version !== expectedVersion) return { ok: false, refused: "המשימה עודכנה מאז שנוצרה, ולכן לא נמחקה." };
     if (latestTasks.current.some((t) => t.parentId === id)) return { ok: false, refused: "נוספו לה תתי־משימות, ולכן לא נמחקה." };
+    if (latestState.current.timer?.taskId === id) return { ok: false, refused: "טיימר רשום עליה. עצרו אותו קודם." };
     dispatch({ type: "removeTask", id });
     latestTasks.current = latestTasks.current.filter((t) => t.id !== id);
     return { ok: true };
@@ -337,8 +338,9 @@ function useStoreValue() {
     const task = s.tasks.find((t) => t.id === stopped.taskId);
     // a timer that outlived its task (e.g. one created in a closed tab) logs nothing — no orphan time entries
     const minutes = task ? minutesToLog(stopped, stoppedAt) : 0;
-    const entry = minutes > 0 ? addEntry(stopped.taskId, minutes, "timer") : null;
     const write = minutes > 0 ? addSpent(task, minutes) : null;
+    // the entry exists only when the logged time was written to the task
+    const entry = write?.ok ? addEntry(stopped.taskId, minutes, "timer") : null;
     dispatch({ type: "timer", timer: null, log: { taskId: stopped.taskId, minutes, at: stoppedAt } });
     return { stopped, elapsedMs, minutes, task, entry, write, orphan: !task };
   }, [s.timer, s.tasks, addSpent]);
@@ -378,7 +380,8 @@ function useStoreValue() {
     updateDraft: <T,>(key: string, fn: (prev: T | undefined) => T | undefined) => dispatch({ type: "draftUpdate", key, fn: fn as (prev: unknown) => unknown }),
     readNotifications: () => dispatch({ type: "readNotifications" }),
     setFailNext: (value: boolean) => dispatch({ type: "failNext", value }),
-    reset: () => dispatch({ type: "reset" }),
+    // a reset also stops every pending simulated answer (a send, a job notice) — nothing settles into the fresh state
+    reset: () => { Object.values(timers.current).forEach(clearTimeout); timers.current = {}; dispatch({ type: "reset" }); },
   }), []);
 
   return useMemo(() => ({

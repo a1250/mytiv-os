@@ -98,7 +98,23 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
 // 3. undo window on a quick approval + processing (Meta)
 {
   const { ctx, page } = await fresh();
+  await check("quick approve (A) of a post whose photo is still a placeholder: approved, never scheduled at Meta", async () => {
+    await go(page, "/focus");
+    const card = page.locator("article.f-acard", { hasText: "סטורי" }).first();
+    await card.locator("a.f-btn").focus();
+    await page.keyboard.press("a");
+    await page.waitForSelector(".f-acard--done", { timeout: 5000 });
+    const waits = await page.isVisible(".f-toast >> text=התזמון ב־Meta ימתין");
+    const scheduling = await page.isVisible(".f-acard--working");
+    await page.click(".f-acard--done .f-btn--neutral"); // undo, back to the queue
+    await page.waitForTimeout(200);
+    return waits && !scheduling && (await page.locator(".f-acard--done").count()) === 0 ? "approved, Meta waits for the photo" : false;
+  });
   await check("quick approve (A, low risk) → processing → scheduled, with undo in the toast window", async () => {
+    // the real photo exists once the photo task is done (the publish rule): close it from the task drawer
+    await go(page, "/focus/work/list?task=t-photo-shoot");
+    await page.locator(".f-td__pill").first().selectOption("done");
+    await page.waitForTimeout(200);
     await go(page, "/focus");
     const card = page.locator("article.f-acard", { hasText: "סטורי" }).first();
     await card.locator("a.f-btn").focus();

@@ -64,7 +64,9 @@ export default function MarketingPublishScreen() {
   const initial: Form = { channel: plan.channels[0].value, date: isoDate(plan.defaultAt), time: isoTime(plan.defaultAt) };
   const [form, setForm] = useState<Form>(initial);
   const [errors, setErrors] = useState<Errors>({});
-  const [photoReady, setPhotoReady] = useState(false);
+  const [photoMarked, setPhotoMarked] = useState(false); // demo control: "the real photo was added"
+  // the same rule as quick approve: ready once the photo task is done (or marked in the demo)
+  const photoReady = photoMarked || photoTask?.status === "done";
   const [open, setOpen] = useState(false);
   const dateRef = useRef<HTMLDivElement>(null);
   const dirty = form.channel !== initial.channel || form.date !== initial.date || form.time !== initial.time;
@@ -183,6 +185,8 @@ export default function MarketingPublishScreen() {
                   <SelectField label="שעה" required value={form.time} error={errors.time} help="שעון ישראל · 24 שעות" options={TIME_SLOTS}
                     onChange={(e) => { setForm({ ...form, time: e.target.value }); setErrors({ ...errors, time: undefined }); }} />
                 </div>
+                {/* the reason the button is off is said once, here; the button points at it */}
+                <div id="mk-blocker">
                 {!approved && (
                   <Banner kind="warning" title="התוכן עדיין לא אושר" detail={<>אפשר לתזמן רק גרסה שאושרה. <Link href={R.approval(plan.approvalId)} className="f-link">פתח את האישור</Link></>} />
                 )}
@@ -192,8 +196,9 @@ export default function MarketingPublishScreen() {
                     <span>{plan.placeholder.detail}{photoTask?.dueDate ? <> הצילום מתוכנן ל־{fmtDayMonth(photoTask.dueDate)}. <Link href={R.task(photoTask.id)} className="f-link">למשימת הצילום</Link></> : null}</span>
                   </div>
                 )}
+                </div>
                 <div className="f-mk-pub__actions">
-                  <Button variant="primary" size="lg" id="mk-schedule" disabled={!!blocker} disabledReason={blocker ?? undefined} onClick={proceed}>
+                  <Button variant="primary" size="lg" id="mk-schedule" disabled={!!blocker} aria-describedby={blocker ? "mk-blocker" : undefined} onClick={proceed}>
                     {js?.state === "failed" ? "נסה שוב לתזמן" : "המשך לתזמון"}
                   </Button>
                   <span className="f-meta">התזמון יעבור דרך מסך סיכום לפני ביצוע</span>
@@ -201,7 +206,7 @@ export default function MarketingPublishScreen() {
                 <div className="f-mk-pub__demo">
                   {plan.placeholder && (
                     <label className="f-demo-toggle">
-                      <input type="checkbox" checked={photoReady} onChange={(e) => setPhotoReady(e.target.checked)} />
+                      <input type="checkbox" checked={photoReady} disabled={photoTask?.status === "done"} onChange={(e) => setPhotoMarked(e.target.checked)} />
                       <span>דמו: הצילום האמיתי התקבל והוחלף במקום השמור</span>
                     </label>
                   )}

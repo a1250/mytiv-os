@@ -119,7 +119,16 @@ function Inner() {
     const prev = drafts[thread.id];
     const next = { ...committed(), savedText: text, savedAt: now };
     setDrafts((xs) => ({ ...xs, [thread.id]: next }));
-    toast.push({ title: "הטיוטה נשמרה", detail: "נשמרה ב־Mytiv בלבד. לא נשלחה לאף אחד.", undo: { onUndo: () => setDrafts((xs) => { const c = { ...xs }; if (prev) c[thread.id] = prev; else delete c[thread.id]; return c; }) } });
+    // undo puts the previous draft back only while this save is still the latest state of the reply: never after
+    // a send (that would drop the send and allow a second one), never over a later edit
+    const onUndo = () => {
+      const cur = (demo.getLatest().drafts[MAIL_DRAFTS] as Record<string, DraftLocal> | undefined)?.[thread.id];
+      if (cur?.send?.jobId !== prev?.send?.jobId) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "התשובה נשלחה מאז, ולכן הטיוטה לא חוזרת לגרסה הקודמת." }); return false; }
+      if (cur?.savedAt !== next.savedAt || cur?.text !== next.text) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "הטיוטה נערכה מאז, והביטול היה מוחק את העריכות האחרונות." }); return false; }
+      setDrafts((xs) => { const c = { ...xs }; if (prev) c[thread.id] = prev; else delete c[thread.id]; return c; });
+      return true;
+    };
+    toast.push({ title: "הטיוטה נשמרה", detail: "נשמרה ב־Mytiv בלבד. לא נשלחה לאף אחד.", undo: { onUndo } });
   };
   // unsaved changes: every way out asks first, with "save and leave" — see NavGuardProvider
   useNavGuard({ dirty, what: "שינויים בטיוטת התשובה לא יישמרו.", onSaveAndLeave: () => { saveDraft(); } });
@@ -140,9 +149,10 @@ function Inner() {
     setSendOpen(false);
     // never a second send of the same reply: refused while one is in flight or after Gmail confirmed
     // the latest committed jobs, not this render's (a double click / a toast-time call must see the first send)
-    const latestJob = d.send?.jobId ? demo.getLatest().jobs.find((x) => x.id === d.send!.jobId && !x.cancelledAt) : undefined;
-    const latest = latestJob ? jobStatus(latestJob, Date.now()) : null;
-    const inFlight = sending || latest?.state === "running", done = sent || latest?.state === "done";
+    // — every send job of this thread counts, not only the one the draft points at (a draft can be restored)
+    const now0 = Date.now();
+    const sends = demo.getLatest().jobs.filter((x) => x.kind === "send_mail" && x.id.startsWith(`mail-send-${thread.id}-`) && !x.cancelledAt).map((x) => jobStatus(x, now0));
+    const inFlight = sending || sends.some((x) => x.state === "running"), done = sent || sends.some((x) => x.state === "done");
     if (inFlight || done) { toast.push({ kind: "error", title: done ? "התשובה כבר נשלחה" : "התשובה כבר בשליחה", detail: "לא נשלח שוב." }); return; }
     const fail = state.failNext;
     if (fail) demo.setFailNext(false);

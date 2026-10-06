@@ -254,7 +254,7 @@ export function revertTask(current: Task, previous: Task, expectedVersion: strin
 }
 
 // ---------- permissions ----------
-export type WorkAction = "edit" | "assign" | "changeStatus" | "complete" | "delete" | "comment" | "trackTime" | "create";
+export type WorkAction = "edit" | "assign" | "changeStatus" | "complete" | "delete" | "comment" | "trackTime" | "create" | "setDueDate" | "depend" | "checklist" | "nest";
 
 /**
  * Matrix (pkg1 plan §8): owner/admin all; member edits work but cannot delete; viewer reads and comments only.
@@ -262,7 +262,7 @@ export type WorkAction = "edit" | "assign" | "changeStatus" | "complete" | "dele
  * `allowPlanned` (the fixture demo, where planned capabilities run on fixtures, labelled "מתוכנן").
  */
 /** Which source capability an action needs (actions without one are gated by role only). */
-export const CAPABILITY_FOR: Partial<Record<WorkAction, keyof WorkCapabilities>> = { assign: "assign", changeStatus: "changeStatus", complete: "changeStatus", comment: "comment", trackTime: "trackTime", create: "create" };
+export const CAPABILITY_FOR: Partial<Record<WorkAction, keyof WorkCapabilities>> = { assign: "assign", changeStatus: "changeStatus", complete: "changeStatus", comment: "comment", trackTime: "trackTime", create: "create", setDueDate: "setDueDate", depend: "depend", checklist: "checklist", nest: "nest" };
 
 export function canDo(role: WorkRole, action: WorkAction, caps?: Partial<CapabilityMap>, allowPlanned = false): boolean {
   const cap = CAPABILITY_FOR[action];

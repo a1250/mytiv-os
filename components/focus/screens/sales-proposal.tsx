@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PROPOSAL_CORPORATE, PROPOSAL_TEMPLATES, VALIDITY_OPTIONS } from "@/lib/focus/fixtures/sales";
 import { fmtAgo, fmtDate, fmtMoney, fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
@@ -48,6 +48,9 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
   const toast = useToast();
   const { now, state } = demo;
   const [form, setForm] = useState<Form>(() => (saved ? { ...saved, lines: toDraft(saved.lines) } : fixtureForm()));
+  // undo toasts run later: they read the form that is current then, not the render that made them
+  const formNow = useRef(form);
+  useEffect(() => { formNow.current = form; }, [form]);
   const [touched, setTouched] = useState<Set<string>>(() => new Set());
   const [focusId, setFocusId] = useState<string | null>(null);
   const [planned, setPlanned] = useState<null | "pdf" | "ai">(null);
@@ -83,18 +86,30 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
   useNavGuard({ dirty: !allValid, what: "יש שדה לא תקין, ולכן השינויים האחרונים לא נשמרו. אם תצא עכשיו, ההצעה תישאר כפי שנשמרה לאחרונה." });
 
 
+  /**
+   * Undo of a whole-form change: only while that change is still the latest (a later edit is never thrown away) and
+   * never once the proposal is being sent or was sent (what was sent must stay what the page shows).
+   */
+  const undoTo = (prev: Form, made: Form) => (): boolean => {
+    const ex = demo.getLatest().executions[d.approvalId];
+    if (ex?.step === "sending" || ex?.step === "sent") { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "ההצעה כבר בשליחה או נשלחה, ולכן היא לא משתנה." }); return false; }
+    if (formNow.current !== made) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "ההצעה נערכה מאז, והביטול היה מוחק את העריכות האחרונות." }); return false; }
+    commit(prev);
+    return true;
+  };
+
   const changeTemplate = (id: string) => {
     const t = PROPOSAL_TEMPLATES.find((x) => x.id === id);
     if (!t || id === form.templateId) return;
-    const prev = form;
-    commit({ ...form, templateId: id, lines: toDraft(t.lines), notes: t.notes });
-    toast.push({ title: `התבנית הוחלפה: ${t.label}`, detail: "השירותים והתנאים הוחלפו לפי התבנית.", undo: { onUndo: () => commit(prev) } });
+    const prev = form, made = { ...form, templateId: id, lines: toDraft(t.lines), notes: t.notes };
+    commit(made);
+    toast.push({ title: `התבנית הוחלפה: ${t.label}`, detail: "השירותים והתנאים הוחלפו לפי התבנית.", undo: { onUndo: undoTo(prev, made) } });
   };
   const removeLine = (id: string) => {
-    const prev = form;
+    const prev = form, made = { ...form, lines: form.lines.filter((l) => l.id !== id) };
     const line = form.lines.find((l) => l.id === id);
-    commit({ ...form, lines: form.lines.filter((l) => l.id !== id) });
-    toast.push({ title: `הוסר: ${line?.name.trim() || "שירות"}`, detail: "הסכומים חושבו מחדש.", undo: { onUndo: () => commit(prev) } });
+    commit(made);
+    toast.push({ title: `הוסר: ${line?.name.trim() || "שירות"}`, detail: "הסכומים חושבו מחדש.", undo: { onUndo: undoTo(prev, made) } });
   };
   const addLine = () => {
     const id = `ln-new-${Date.now()}`;
@@ -102,10 +117,10 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
     setFocusId(id);
   };
   const revert = () => {
-    const prev = form;
-    commit(fixtureForm());
+    const prev = form, made = fixtureForm();
+    commit(made);
     setTouched(new Set());
-    toast.push({ title: "חזרה לגרסה 1", detail: `הסכום חזר ל־${fmtMoney(approvedAmount ?? 0)}.`, undo: { onUndo: () => commit(prev) } });
+    toast.push({ title: "חזרה לגרסה 1", detail: `הסכום חזר ל־${fmtMoney(approvedAmount ?? 0)}.`, undo: { onUndo: undoTo(prev, made) } });
   };
 
   const primary = locked

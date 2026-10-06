@@ -11,13 +11,14 @@ import { PEOPLE_BY_ID, personName } from "@/lib/focus/fixtures/people";
 import { STUCK } from "@/lib/focus/fixtures/today";
 import { daysBetween, fmtAgo, fmtLongDate, fmtShortLongDate, fmtTime, fmtWaiting } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
-import { jobStatus, type JobStatus } from "@/lib/focus/state/jobs";
+import { type JobStatus, jobStatus, syncJobId } from "@/lib/focus/state/jobs";
 import { ManagerCard } from "@/components/focus/patterns/comms/manager";
 import { MetricGrid } from "@/components/focus/patterns/metrics";
 import { Page, PageHeader, ViewOnlyStrip } from "@/components/focus/patterns/page";
 import { StuckPanel } from "@/components/focus/patterns/stuck-panel";
 import { TimeBoard } from "@/components/focus/patterns/time-board";
 import { useDemo } from "@/components/focus/shell/demo-store";
+import { displayStatus } from "@/lib/focus/state/work";
 import { useRevertSync, useTaskGate, useTaskUndo } from "@/components/focus/shell/task-actions";
 import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
@@ -68,7 +69,7 @@ export default function CommsTodayManagerScreen() {
     if (fail) demo.setFailNext(false);
     const n = loads + 1;
     setLoads(n);
-    demo.startJob({ id: `mgr-full-${n}`, kind: "sync_clickup", label: "טוען את כל המשימות מ־ClickUp", detail: "", durationMs: M.partial?.retryMs ?? SYNC_MS, outcome: fail ? "failure" : "success", href: R.todayManager });
+    demo.startJob({ id: `mgr-full-${n}`, kind: "refresh_sources", label: "טוען את כל המשימות מ־ClickUp", detail: "", durationMs: M.partial?.retryMs ?? SYNC_MS, outcome: fail ? "failure" : "success", href: R.todayManager });
   };
 
   // ---- actions ----
@@ -79,8 +80,8 @@ export default function CommsTodayManagerScreen() {
     if (!g.ok) { toast.push({ kind: "error", title: "לא הוקצה", detail: g.refused }); return; }
     const r = demo.patchTask(t.id, { assigneeId: me.id }, t.version);
     if (!r.ok) { toast.push({ kind: "error", title: "לא הוקצה", detail: "refused" in r ? r.refused : "המשימה עודכנה במקביל. רענן ונסה שוב." }); return; }
-    if (t.source === "clickup") demo.startJob({ id: `sync-${t.id}`, kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "", durationMs: SYNC_MS, outcome: "success", href: R.todayManager });
-    toast.push({ title: `"${t.title}" הוקצתה לך`, detail: g.planned ?? (t.source === "clickup" ? "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר." : undefined), undo: { onUndo: undo(r.previous!, r.task.version, () => revertSync(t.id, R.todayManager)) } });
+    if (t.source === "clickup") demo.startJob({ id: syncJobId(t.id, r.task.version), kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "", durationMs: SYNC_MS, outcome: "success", href: R.todayManager });
+    toast.push({ title: `"${t.title}" הוקצתה לך`, detail: g.planned ?? (t.source === "clickup" ? "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר." : undefined), undo: { onUndo: undo(r.previous!, r.task.version, revertSync(t.id, r.task.version, R.todayManager)) } });
   };
   const sendRemind = (it: ManagerItem) => {
     setConfirmRemind(null);
@@ -100,11 +101,12 @@ export default function CommsTodayManagerScreen() {
     if (a.kind === "assign_me") {
       const t = state.tasks.find((x) => x.id === it.taskId);
       if (t?.assigneeId === me.id) {
-        const sync = status(`sync-${t.id}`);
+        const sync = status(syncJobId(t.id, t.version));
         return (
           <div className="f-acard__result" role="status">
             <b className="f-acard__state f-acard__state--done"><span aria-hidden>✓</span> הוקצתה לך</b>
             {t.source === "clickup" && (sync?.state === "running" ? <SystemLine status="processing">מסנכרן ל־ClickUp…</SystemLine>
+              : sync?.state === "failed" && sync.unknown ? <SystemLine status="stale">לא ידוע אם ClickUp קיבל את ההקצאה — בדקו שם.</SystemLine>
               : sync?.state === "failed" ? <SystemLine status="failed">ClickUp לא אישר. ההקצאה נשמרה ב־Mytiv.</SystemLine>
               : sync?.state === "done" ? <SystemLine status="done">סונכרן ל־ClickUp</SystemLine>
               // no confirmed sync job (e.g. assigned elsewhere, or the job was cancelled): never claim "synced"
@@ -138,7 +140,9 @@ export default function CommsTodayManagerScreen() {
           {list.map((it) => {
             const t = it.taskId ? state.tasks.find((x) => x.id === it.taskId) : undefined;
             const ctx = it.action.kind === "assign_me" && t ? `${it.context} · ${t.assigneeId ? personName(t.assigneeId) : "ללא אחראי"}` : it.context;
-            return <ManagerCard key={it.id} tag={it.tag} waiting={waitingLabel(it.waitingSince)} title={it.title} context={ctx} note={it.note} footer={footer(it)} />;
+            // a task's state is read live: a "חסום" never outlives the block, and a finished task says so
+            const tag = !t ? it.tag : it.tag.family === "work" || t.status === "done" || t.status === "cancelled" ? { family: "work" as const, status: displayStatus(t, state.tasks) } : it.tag;
+            return <ManagerCard key={it.id} tag={tag} waiting={waitingLabel(it.waitingSince)} title={it.title} context={ctx} note={it.note} footer={footer(it)} />;
           })}
           {c.key === "others" && full && <StuckPanel stuck={STUCK} />}
         </div>

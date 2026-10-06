@@ -12,7 +12,7 @@ import { Dialog } from "@/components/focus/ui/dialog";
 import { useToast } from "@/components/focus/ui/toast";
 import { elapsedOf, onlyOwnWrites } from "@/lib/focus/state/work";
 import { useIsDemo } from "./scope";
-import { useCreateUndo, useTaskUndo } from "./task-actions";
+import { useCreateUndo, useTaskUndo, useTimerStopUndo } from "./task-actions";
 import { TaskDrawerBody, TaskDrawerHead } from "@/components/focus/patterns/work/task-drawer";
 import { useDemo, useTicker } from "./demo-store";
 import { useNavGuard } from "./nav-guard";
@@ -31,6 +31,7 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
   const isDemo = useIsDemo();
   const undo = useTaskUndo();
   const undoCreate = useCreateUndo();
+  const stopUndo = useTimerStopUndo();
   const taskId = params.get("task") ?? defaultTaskId ?? null;
   const task = demo.state.tasks.find((t) => t.id === taskId) ?? null;
   const [base, setBase] = useState<{ id: string; version: string } | null>(null);
@@ -129,8 +130,8 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
           onPause: demo.timerPause, onStop: () => {
             const r = demo.timerStop();
             if (!r) return;
-            const restore = () => demo.timerRestore(r.stopped, r.elapsedMs, r.entry?.id);
-            toast.push({ title: `נרשמו ${r.minutes} דק׳`, detail: r.task?.title, undo: { onUndo: r.write?.ok && r.task ? undo(r.task, r.write.task.version, restore) : restore } });
+            if (r.minutes > 0 && !r.write?.ok) { toast.push({ kind: "error", title: "הטיימר נעצר, אבל הזמן לא נרשם", detail: r.write && "refused" in r.write ? r.write.refused : "המשימה עודכנה בינתיים." }); return; }
+            toast.push({ title: r.minutes > 0 ? `נרשמו ${r.minutes} דק׳` : "הטיימר נעצר", detail: r.minutes > 0 ? `${r.task?.title ?? ""}${caps.trackTime === "planned" ? " · יכולת מתוכננת — בהדגמה בלבד" : ""}` : "פחות מחצי דקה — לא נרשם זמן.", undo: { onUndo: stopUndo(r) } });
           },
         }}
         entries={demo.state.timeEntries}

@@ -109,7 +109,7 @@ export function TaskDrawerBody(p: DrawerProps) {
           </div>
         )}
         <div className="f-td__titlerow">
-          {edit ? (
+          {edit && can("complete") ? (
             <input type="checkbox" className="f-check__box f-check__box--round f-td__done" checked={done} aria-label={done ? "סמן כלא בוצע" : "סמן כבוצע"}
               onChange={() => patch({ status: done ? "todo" : "done" })} />
           ) : <span className="f-tl__dot" aria-hidden />}
@@ -125,7 +125,9 @@ export function TaskDrawerBody(p: DrawerProps) {
               // while the reason form is open the select shows "חסום…" (what was picked), not the old status
               <select ref={statusRef} className={cx("f-td__pill", `f-td__pill--${manualBlock || blocking_ ? "blocked" : t.status}`)} value={manualBlock || blocking_ ? BLOCK : t.status}
                 aria-controls={blocking_ ? `${id}-blockform` : undefined}
-                onChange={(e) => (e.target.value === BLOCK ? setBlocking(true) : (closeBlock(), patch({ status: e.target.value as WorkStatus })))}>
+                onChange={(e) => (e.target.value === BLOCK ? setBlocking(true)
+                  // "ממתין" on a manually blocked task (already waiting) means: lift the block, keep waiting
+                  : (closeBlock(), patch(manualBlock && e.target.value === "waiting" ? { unblock: true } : { status: e.target.value as WorkStatus })))}>
                 {t.status === "unknown" && <option value="unknown">{WORK.unknown.glyph} {WORK.unknown.word}</option>}
                 {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{WORK[s].glyph} {WORK[s].word}</option>)}
                 {t.status !== "unknown" && <option value={BLOCK}>{WORK.blocked.glyph} {manualBlock ? WORK.blocked.word : `${WORK.blocked.word}…`}</option>}
@@ -190,7 +192,7 @@ export function TaskDrawerBody(p: DrawerProps) {
           </label>
           <label className="f-td__date">
             <span className="f-td__fl">יעד {caps.setDueDate === "planned" && <PlannedTag />}</span>
-            {edit ? <input type="date" className="f-td__dateinput" value={t.dueDate ?? ""} min={t.startDate ?? undefined} onChange={(e) => patch({ dueDate: e.target.value || null })} /> : <b>{t.dueDate ? fmtDate(t.dueDate) : "—"}</b>}
+            {edit && can("setDueDate") ? <input type="date" className="f-td__dateinput" value={t.dueDate ?? ""} min={t.startDate ?? undefined} onChange={(e) => patch({ dueDate: e.target.value || null })} /> : <b>{t.dueDate ? fmtDate(t.dueDate) : "—"}</b>}
           </label>
         </div>
 
@@ -243,7 +245,7 @@ export function TaskDrawerBody(p: DrawerProps) {
             );
           })}
           {blocking(t, all).length > 0 && <span className="f-meta">חוסם: {blocking(t, all).map((b) => b.title).join(", ")}</span>}
-          {edit && candidates.length > 0 && (
+          {edit && can("depend") && candidates.length > 0 && (
             <form className="f-td__adddep" onSubmit={(e) => {
               e.preventDefault();
               const on = all.find((x) => x.id === depPick);
@@ -269,11 +271,11 @@ export function TaskDrawerBody(p: DrawerProps) {
           ))}
           {t.subtasks.map((s) => (
             <label key={s.id} className="f-td__sub">
-              <input type="checkbox" className="f-check__box f-check__box--round f-check__box--sm" checked={s.done} disabled={!edit} onChange={() => patch({ subtask: { id: s.id, done: !s.done } })} />
+              <input type="checkbox" className="f-check__box f-check__box--round f-check__box--sm" checked={s.done} disabled={!edit || !can("nest")} onChange={() => patch({ subtask: { id: s.id, done: !s.done } })} />
               <span className={cx("f-td__item", s.done && "f-td__struck")}>{s.title}</span>
             </label>
           ))}
-          {edit && (
+          {edit && can("nest") && (
             <form className="f-td__addrow" onSubmit={(e) => { e.preventDefault(); if (!subDraft.trim()) return; patch({ addSubtask: { id: `s-${Date.now()}`, title: subDraft.trim() } }); setSubDraft(""); setDirty(commentDraft, "", checkDraft, manual); }}>
               <label htmlFor={`${id}-sub`} className="f-sr">תת־משימה חדשה</label>
               <input id={`${id}-sub`} className="f-input f-input--sm" placeholder="+ תת־משימה" value={subDraft} onChange={(e) => { setSubDraft(e.target.value); setDirty(commentDraft, e.target.value, checkDraft, manual); }} />
@@ -284,11 +286,11 @@ export function TaskDrawerBody(p: DrawerProps) {
         <Section title="Checklist · לפני שליחה" planned={caps.checklist === "planned"} count={<span className={cx("f-meta-sm f-num", checkedCount === t.checklist.length && t.checklist.length > 0 && "f-td__allok")}>{checkedCount}/{t.checklist.length}</span>}>
           {t.checklist.map((c) => (
             <label key={c.id} className="f-td__check">
-              <input type="checkbox" className="f-check__box f-check__box--sm" checked={c.checked} disabled={!edit} onChange={() => patch({ checklistItem: { id: c.id, checked: !c.checked } })} />
+              <input type="checkbox" className="f-check__box f-check__box--sm" checked={c.checked} disabled={!edit || !can("checklist")} onChange={() => patch({ checklistItem: { id: c.id, checked: !c.checked } })} />
               <span className={cx("f-td__item", c.checked && "f-td__struck")}>{c.label}</span>
             </label>
           ))}
-          {edit && (
+          {edit && can("checklist") && (
             <form className="f-td__addrow" onSubmit={(e) => { e.preventDefault(); if (!checkDraft.trim()) return; patch({ addChecklistItem: { id: `k-${Date.now()}`, label: checkDraft.trim() } }); setCheckDraft(""); setDirty(commentDraft, subDraft, "", manual); }}>
               <label htmlFor={`${id}-chk`} className="f-sr">פריט חדש ברשימה</label>
               <input id={`${id}-chk`} className="f-input f-input--sm" placeholder="+ פריט" value={checkDraft} onChange={(e) => { setCheckDraft(e.target.value); setDirty(commentDraft, subDraft, e.target.value, manual); }} />

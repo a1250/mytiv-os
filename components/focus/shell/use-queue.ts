@@ -7,6 +7,7 @@ import { columnFor, TODAY_QUEUE } from "@/lib/focus/fixtures/today";
 import { fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { canQuickApprove, queueOrder } from "@/lib/focus/state/approvals";
+import { PUBLISH_SUSHI } from "@/lib/focus/fixtures/marketing";
 import { jobStatus } from "@/lib/focus/state/jobs";
 import { canUndo } from "@/lib/focus/state/undo";
 import type { CardPhase } from "@/components/focus/patterns/action-card";
@@ -45,10 +46,16 @@ export function useQueue() {
     if (a.status === "approved" && rev.kind === "none" && st.executions[approvalId]?.step === "sent") { toast.push({ kind: "error", title: "לא ניתן לבטל", detail: rev.label }); return false; }
     if (rev.kind === "until" && !canUndo({ startedAt: 0, endsAt: Date.parse(rev.until) }, Date.parse(demoIso()))) { toast.push({ kind: "error", title: "חלון הביטול נסגר", detail: rev.label }); return false; }
     const scheduleJobs = [`schedule-${approvalId}`, a.content ? `publish-${a.content.designId}` : null].filter((x): x is string => !!x);
-    const confirmedAtMeta = scheduleJobs.some((id) => { const j = st.jobs.find((x) => x.id === id && !x.cancelledAt); return !!j && jobStatus(j, Date.now()).state === "done"; });
+    const states = scheduleJobs.map((id) => { const j = st.jobs.find((x) => x.id === id && !x.cancelledAt); return j ? jobStatus(j, Date.now()) : null; });
+    const confirmedAtMeta = states.some((x) => x?.state === "done");
+    const unknownAtMeta = states.some((x) => x?.state === "failed" && x.unknown);
     for (const id of scheduleJobs) demo.cancelJob(id);
+    // a schedule Meta already confirmed is cancelled AT Meta: that is its own request, confirmed only when Meta answers
+    if (confirmedAtMeta) demo.startJob({ id: `unschedule-${approvalId}`, kind: "schedule_meta", label: "מבטל את התזמון ב־Meta", detail: "", durationMs: META_SCHEDULE_MS, outcome: "success", href: R.today });
     demo.undoDecision(approvalId);
-    const detail = confirmedAtMeta ? "התזמון ב־Meta בוטל והפריט חזר לתור. דבר לא פורסם." : "הפריט חזר לתור. דבר לא פורסם.";
+    const detail = confirmedAtMeta ? "הפריט חזר לתור. ביטול התזמון נשלח ל־Meta, ו״בוטל״ יוצג רק אחרי שהיא תאשר. דבר לא פורסם."
+      : unknownAtMeta ? "הפריט חזר לתור. ייתכן שהתזמון נקלט ב־Meta לפני שהבקשה נקטעה — בדקו שם ובטלו אם צריך."
+      : "הפריט חזר לתור. דבר לא פורסם.";
     if (!fromToast) toast.push({ kind: "info", title: "ההחלטה בוטלה", detail });
     return `ההחלטה בוטלה. ${detail}`;
   };
@@ -60,12 +67,23 @@ export function useQueue() {
     if (withToast) toast.push({ title: "האישור נשמר", detail: "מבקש תזמון מ־Meta. \"מתוזמן\" יוצג רק אחרי ש־Meta תאשר.", undo: { onUndo: () => undo(approvalId, decidedAt, true) } });
   };
 
+  /** The publish rule (E7): a post whose photo is still a placeholder cannot be scheduled until the photo task is done. */
+  const photoMissing = (approvalId: string): string | null => {
+    const ph = PUBLISH_SUSHI.approvalId === approvalId ? PUBLISH_SUSHI.placeholder : undefined;
+    if (!ph) return null;
+    return demo.getLatest().tasks.find((t) => t.id === ph.taskId)?.status === "done" ? null : ph.title;
+  };
+
   /** Quick approve — only for low risk without an external irreversible action. */
   const quickApprove = (approvalId: string) => {
     const a = approval(approvalId);
     if (!a || !canQuickApprove(a)) return;
     const r = demo.decide(approvalId, "approve", "");
-    if (r.ok) scheduleWithMeta(approvalId, true, r.decidedAt);
+    if (!r.ok) return;
+    // content whose real photo is still missing is approved, but never scheduled at Meta with the placeholder
+    const missing = photoMissing(approvalId);
+    if (missing) toast.push({ title: "אושר", detail: `התזמון ב־Meta ימתין: ${missing}.`, undo: { onUndo: () => undo(approvalId, r.decidedAt, true) } });
+    else scheduleWithMeta(approvalId, true, r.decidedAt);
   };
 
   const phaseOf = (item: ActionItem): CardPhase => {
@@ -77,7 +95,7 @@ export function useQueue() {
     if (job && !job.cancelledAt) {
       const st = jobStatus(job, state.clock);
       if (st.state === "running") return { kind: "working", label: "שומר ומבקש תזמון מ־Meta…" };
-      if (st.state === "failed" && st.unknown) return { kind: "failed", title: "לא ידוע אם התזמון נקלט", detail: "הבקשה ל־Meta נקטעה לפני תשובה. האישור נשמר. בדקו ב־Meta לפני ניסיון נוסף.", onRetry: () => scheduleWithMeta(id, false) };
+      if (st.state === "failed" && st.unknown) return { kind: "failed", title: "לא ידוע אם התזמון נקלט", detail: "הבקשה ל־Meta נקטעה לפני תשובה. האישור נשמר. בדקו ב־Meta לפני ניסיון נוסף.", onRetry: () => scheduleWithMeta(id, false), retryLabel: "בדקתי ב־Meta · תזמן שוב" };
       if (st.state === "failed") return { kind: "failed", title: "התזמון לא בוצע", detail: "האישור נשמר. Meta לא זמינה כרגע.", onRetry: () => scheduleWithMeta(id, false) };
       return {
         kind: "done", title: "אושר ומתוזמן", detail: `Meta אישרה ב־${fmtTime(demoIso(st.at))}. הסטורי יעלה מחר ב־18:00.`,

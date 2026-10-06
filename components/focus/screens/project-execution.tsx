@@ -9,7 +9,7 @@ import { PEOPLE } from "@/lib/focus/fixtures/people";
 import { fmtAgo, fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { canDo } from "@/lib/focus/state/work";
-import { jobStatus } from "@/lib/focus/state/jobs";
+import { jobStatus, syncJobId } from "@/lib/focus/state/jobs";
 import { ProjectHeader } from "@/components/focus/patterns/project/project-parts";
 import { BlockedTaskPanel, type BlockedDraft, type SyncState } from "@/components/focus/patterns/work/blocked-panel";
 import { TaskListView } from "@/components/focus/patterns/work/task-list";
@@ -53,9 +53,11 @@ function Inner() {
   const project = state.tasks.filter((t) => t.links.projectId === AUTUMN_PROJECT_ID);
   const tasks = project.filter((t) => owner === "all" || t.assigneeId === owner);
   const task = state.tasks.find((t) => t.id === selected) ?? null;
-  const job = state.jobs.find((j) => j.id === `sync-${selected}`);
+  // the sync of the write the task is at now (an earlier write's "synced" never carries over)
+  const job = task ? state.jobs.find((j) => j.id === syncJobId(task.id, task.version)) : undefined;
   const js = job && !job.cancelledAt ? jobStatus(job, state.clock) : null;
-  const sync: SyncState = !js ? { kind: "idle" } : js.state === "running" ? { kind: "syncing" } : js.state === "done" ? { kind: "synced", at: fmtTime(demoIso(js.at)) } : { kind: "failed", message: "ClickUp לא אישר את השינוי." };
+  const sync: SyncState = !js ? { kind: "idle" } : js.state === "running" ? { kind: "syncing" } : js.state === "done" ? { kind: "synced", at: fmtTime(demoIso(js.at)) }
+    : { kind: "failed", message: js.state === "failed" && js.unknown ? "הסנכרון נקטע לפני ש־ClickUp ענה — לא ידוע אם נקלט. בדקו ב־ClickUp לפני ניסיון נוסף." : "ClickUp לא אישר את השינוי." };
   const onDirty = useCallback((d: boolean) => setDirty(d), []);
   const refreshJob = state.jobs.find((j) => j.id === "refresh-clickup");
   const refreshing = refreshJob && !refreshJob.cancelledAt && jobStatus(refreshJob, state.clock).state === "running";
@@ -83,9 +85,9 @@ function Inner() {
     setDirty(false);
     if (task.source === "clickup") {
       const fail = state.failNext; if (fail) demo.setFailNext(false);
-      demo.startJob({ id: `sync-${task.id}`, kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "שומר אחראי, צעד הבא ותאריך מעקב.", durationMs: 1800, outcome: fail ? "failure" : "success", href: R.projectExecution("umino") });
+      demo.startJob({ id: syncJobId(task.id, r.task.version), kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "שומר אחראי, צעד הבא ותאריך מעקב.", durationMs: 1800, outcome: fail ? "failure" : "success", href: R.projectExecution("umino") });
     }
-    toast.push({ title: task.source === "clickup" ? "נשמר · מסנכרן ל־ClickUp" : "נשמר", detail: [task.source === "clickup" ? "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר." : null, planned].filter(Boolean).join(" ") || undefined, undo: { onUndo: undo(r.previous!, r.task.version, () => revertSync(task.id, R.projectExecution("umino"))) } });
+    toast.push({ title: task.source === "clickup" ? "נשמר · מסנכרן ל־ClickUp" : "נשמר", detail: [task.source === "clickup" ? "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר." : null, planned].filter(Boolean).join(" ") || undefined, undo: { onUndo: undo(r.previous!, r.task.version, revertSync(task.id, r.task.version, R.projectExecution("umino"))) } });
   };
 
   const toggleDone = useToggleDone();
@@ -108,18 +110,18 @@ function Inner() {
             <span className="f-source-dot">ClickUp {project.filter((t) => t.source === "clickup").length} · בתקופת מעבר</span>
             <span className="f-grow" />
             <span className="f-meta-sm">{refreshing ? "מרענן מ־ClickUp…" : `סונכרן ${refreshJob ? "עכשיו" : fmtAgo(HOURS_SYNC.at, now)}`}</span>
-            <Button variant="quiet" size="sm" disabled={!!refreshing} onClick={() => demo.startJob({ id: "refresh-clickup", kind: "sync_clickup", label: "מרענן מ־ClickUp", detail: "", durationMs: 1200, outcome: "success" })}>רענן</Button>
+            <Button variant="quiet" size="sm" disabled={!!refreshing} onClick={() => demo.startJob({ id: "refresh-clickup", kind: "refresh_sources", label: "מרענן מ־ClickUp", detail: "", durationMs: 1200, outcome: "success" })}>רענן</Button>
           </div>
           <TaskListView tasks={tasks} all={state.tasks} now={now} expandedIds={[]} onToggleExpand={() => {}} onToggleDone={toggleDone} selectedId={selected} canEdit={canDo(state.role, "complete")}
             groupBy="status" groupOrder={GROUPS.map((g) => ({ ...g, collapsed: g.collapsed && !showDone }))} columns={["assignee", "due", "dependency"]} onOpen={(t) => select(t.id)} />
-          <Button variant="quiet" size="sm" onClick={() => setShowDone(!showDone)}>{showDone ? "הסתר שהושלמו" : `הצג ${project.filter((t) => t.status === "done").length} שהושלמו`}</Button>
+          <Button variant="quiet" size="sm" onClick={() => setShowDone(!showDone)}>{showDone ? "הסתר שהושלמו" : `הצג ${tasks.filter((t) => t.status === "done").length} שהושלמו`}</Button>
         </div>
         {task && (
           // keyed by the adopted draft token: it only moves while the panel is clean (or on save), so a draft is never
           // discarded by a remount and a clean panel shows the new values
           <BlockedTaskPanel key={`${task.id}:${draftBase?.version ?? task.version}`} task={task} all={state.tasks} now={now} viewerId={demo.viewer.id} sync={sync}
             canEdit={canDo(state.role, "edit")} onSave={save} onDirtyChange={onDirty}
-            onRetry={() => demo.startJob({ id: `sync-${task.id}`, kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "", durationMs: 1500, outcome: "success" })} />
+            onRetry={() => demo.startJob({ id: syncJobId(task.id, task.version), kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "", durationMs: 1500, outcome: "success" })} />
         )}
       </div>
       <Dialog open={!!pending} onClose={() => setPending(null)} label="שינויים שלא נשמרו">

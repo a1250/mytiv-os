@@ -1,9 +1,9 @@
 "use client";
 
-import type { BoardColumn, Task, WriteResult } from "@/lib/focus/contracts/work";
+import type { ActiveTimer, BoardColumn, Task, TimeEntry, WriteResult } from "@/lib/focus/contracts/work";
 import { CAPABILITIES } from "@/lib/focus/fixtures/work";
 import { CAPABILITY_FOR, canComplete, canDo, type WorkAction } from "@/lib/focus/state/work";
-import { jobStatus } from "@/lib/focus/state/jobs";
+import { jobStatus, syncJobId } from "@/lib/focus/state/jobs";
 import { useToast } from "@/components/focus/ui/toast";
 import { useDemo } from "./demo-store";
 import { useIsDemo } from "./scope";
@@ -35,9 +35,9 @@ export function useTaskGate() {
 export function useTaskUndo() {
   const demo = useDemo();
   const toast = useToast();
-  return (previous: Task, token: string, alsoOnUndo?: () => string | void) => (): string | false => {
+  return (previous: Task, token: string, alsoOnUndo?: (reverted: Task) => string | void) => (): string | false => {
     const r = demo.undoTask(previous, token);
-    if (r.ok) return alsoOnUndo?.() || "בוטל.";
+    if (r.ok) return alsoOnUndo?.(r.task) || "בוטל.";
     toast.push({ kind: "error", title: "הביטול לא בוצע", detail: why(r) });
     return false;
   };
@@ -56,21 +56,39 @@ export function useCreateUndo() {
 }
 
 /**
- * After undoing a write that goes to ClickUp: a sync still running is cancelled (nothing reached ClickUp); a sync
- * ClickUp already confirmed gets a revert sync — never "nothing changed" when the source already has the change.
+ * After undoing a write that goes to ClickUp: the sync of that write (`writeVersion`) still running is stopped before
+ * ClickUp confirmed; one ClickUp already confirmed gets a revert sync for the undo's own write — never "nothing
+ * changed" when the source already has the change. Returns the `alsoOnUndo` for `useTaskUndo`.
  */
 export function useRevertSync() {
   const demo = useDemo();
-  return (taskId: string, href?: string): string | void => {
-    const id = `sync-${taskId}`;
+  return (taskId: string, writeVersion: string, href?: string) => (reverted: Task): string | void => {
+    const id = syncJobId(taskId, writeVersion);
     const j = demo.getLatest().jobs.find((x) => x.id === id && !x.cancelledAt);
     if (!j) return;
     const st = jobStatus(j, Date.now());
-    if (st.state === "running") { demo.cancelJob(id); return "בוטל לפני שהגיע ל־ClickUp."; }
-    if (st.state === "done") {
-      demo.startJob({ id, kind: "sync_clickup", label: "מחזיר את השינוי ב־ClickUp", detail: "", durationMs: 1500, outcome: "success", href });
+    if (st.state === "running") { demo.cancelJob(id); return "בוטל · הסנכרון ל־ClickUp נעצר לפני אישור."; }
+    if (st.state === "done" || (st.state === "failed" && st.unknown)) {
+      demo.startJob({ id: syncJobId(taskId, reverted.version), kind: "sync_clickup", label: "מחזיר את השינוי ב־ClickUp", detail: "", durationMs: 1500, outcome: "success", href });
       return "בוטל כאן · ההחזרה ב־ClickUp בדרך.";
     }
+  };
+}
+
+/**
+ * `onUndo` for a timer stop: the logged minutes come off through the versioned undo and the timer comes back paused
+ * at its stop time — refused while another timer runs (it would be overwritten and its time lost).
+ */
+export function useTimerStopUndo() {
+  const demo = useDemo();
+  const toast = useToast();
+  const undo = useTaskUndo();
+  return (r: { stopped: ActiveTimer; elapsedMs: number; task?: Task; entry: TimeEntry | null; write: WriteResult | null }) => (): string | false => {
+    if (demo.getLatest().timer) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "טיימר אחר פועל עכשיו. עצרו אותו קודם, ואז אפשר להחזיר את הקודם." }); return false; }
+    const restore = () => { demo.timerRestore(r.stopped, r.elapsedMs, r.entry?.id); };
+    if (r.write?.ok && r.task) return undo(r.task, r.write.task.version, restore)();
+    restore();
+    return "בוטל.";
   };
 }
 
