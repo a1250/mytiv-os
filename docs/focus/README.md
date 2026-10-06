@@ -2,18 +2,22 @@
 
 Branch `auto/focus-redesign`, base `auto/preview-mvp-app` (`e35a189`). The approved Claude Design direction
 "Direction C — Focus" (RTL, time-based "my day", approvals first, large targets) built as a typed, accessible
-component library. **Frontend only:** no backend, DB, migrations or API routes change on this branch.
+component library. **Frontend only** on `auto/focus-redesign`. The real integration (Work on the Mytiv DB, Marketing OS
+approvals/campaigns, Gmail through backend-owned attempts) is on `auto/focus-integration` — see
+[INTEGRATION.md](INTEGRATION.md).
 
 Focus lives under the tenant segment, `/{businessSlug}/focus/…`, and is scoped on the server like `lib/api-guard.ts`
 (session → membership → verified business):
-- **A business you are a member of** sees an honest "Focus עדיין לא מחובר לנתונים של …" page until the adapters
-  exist. No fixture is ever rendered as a business's data.
+- **A business you are a member of** sees its own data in the areas that are connected (server flags, see
+  [INTEGRATION.md](INTEGRATION.md)) and an honest "not connected yet" page everywhere else. No fixture is ever
+  rendered as a business's data.
 - **The fixture demo** (`/_demo/focus/…`) is the only scope that renders fixtures, and it exists only where prototype
   surfaces are on: `next dev`, and Vercel Preview (`VERCEL_ENV=preview`). In any production build it is a 404.
 - Not signed in → `/login`. Not a member, or no such business → 404 (indistinguishable).
 
 | Document | What it covers |
 |---|---|
+| [INTEGRATION.md](INTEGRATION.md) | the business-scope integration: boundary and flags, Work on the DB, approvals / campaigns from the Marketing OS contracts, backend-owned Gmail/Meta attempts, migrations 0013–0015, API changes, the local verification stack |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | tenant scope, layers (`ui` → `patterns` → `shell` → `screens`), contracts, demo store and its single write path, navigation guard, theming, accessibility rules |
 | [mytiv-work-contract.md](mytiv-work-contract.md) | Mytiv Work components ↔ props/callbacks/types, commands, concurrency token, derived "blocked", errors, permissions + source capabilities, timer lifecycle, endpoint map, what `auto/work-pkg1` has and lacks, integration order |
 | [QA.md](QA.md) | gates and their results, per-screen visual QA against the handoff, open issues by severity |

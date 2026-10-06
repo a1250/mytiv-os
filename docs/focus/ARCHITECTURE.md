@@ -1,9 +1,10 @@
 # Focus frontend — architecture
 
 Direction C ("Focus") of Mytiv OS, built from the Claude Design handoff. Branch `auto/focus-redesign`.
-Frontend only: **no DB schema, migrations, API routes or backend contracts change on this branch.**
-The fixture demo runs every screen through a client-side demo store that stands in for the backend; a real business
-sees an honest "not connected yet" page until the adapters exist.
+The fixture demo runs every screen through a client-side demo store that stands in for the backend. On
+`auto/focus-integration` a real business gets its connected areas from the server — Work through the same store in
+remote mode, approvals / marketing / mail as server-read screens — and "not connected yet" elsewhere; see
+[INTEGRATION.md](INTEGRATION.md).
 
 ## Tenant scope
 
@@ -13,7 +14,7 @@ sees an honest "not connected yet" page until the adapters exist.
 | Scope decision (pure) | `lib/focus/scope.ts` → `decideFocusScope(slug, deps)` | `_demo` → the demo scope only when prototype surfaces are on; otherwise session → membership (`resolveBusinessOrNull`, the same model as `api-guard.ts`). No user → login; not a member / unknown → notFound. The business identity comes from the resolved row, never from the URL, query or client. Unknown roles narrow to `member`. |
 | Server wiring | `lib/focus/scope.server.ts` → `getFocusScope` (cached per request), `rendersFixtures(params)`, `requireDemoScope`, `fixtureMetadata` | `redirect("/login")` / `notFound()`. Every fixture page renders nothing unless the scope is the demo; prototype pages (`screens`, `reference/[id]`, `m/[n]`, `work/task`) require the demo scope in the page **and** in `generateMetadata` (Next resolves metadata even when the layout 404s). |
 | Prototype switch | `prototypeSurfacesEnabled()` | `NODE_ENV !== "production"` or `VERCEL_ENV === "preview"`. Plain `next start` and Vercel production are off. |
-| Layout | `app/(focus)/[businessSlug]/focus/layout.tsx` | Server layout: resolves the scope, provides it (`FocusScopeProvider`). Demo → `DemoStoreProvider` › `ToastProvider` › `NavGuardProvider` › top bar + page + screen-map button. Business → `FocusNotConnected` (server component, no store, no fixtures). |
+| Layout | `app/(focus)/[businessSlug]/focus/layout.tsx` | Server layout: resolves the scope, provides it (`FocusScopeProvider`). Demo → `DemoStoreProvider` › `ToastProvider` › `NavGuardProvider` › top bar + page + screen-map button. Business with a connected area → `BusinessShell` (the store in remote mode over `/api/[slug]/work`, toasts, nav guard, a top bar with only the connected areas); otherwise `FocusNotConnected`. Pages of areas that are not connected render `AreaNotConnected`. |
 | Links | `components/focus/ui/link.tsx` → `Link`, `useFocusRouter`, `useScopedHref` | `R.*` paths are scope-relative; `scopedHref(base, href)` resolves them into the verified scope, is idempotent, and never rewrites another scope's path or an external URL. Every Focus component imports `Link` from here (a test asserts no direct `next/link` outside it and the not-connected exit). |
 
 ## Layers
