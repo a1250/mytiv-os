@@ -1,0 +1,115 @@
+/*
+ * Mytiv OS — "Focus" (Direction C). Design tokens = the handoff's Design System
+ * (docs/focus/reference/handoff/README.md → "Design Tokens").
+ *
+ * Tokens live on :root while a .focus-app is mounted, so the legacy dark app (globals.css) is untouched and the page
+ * background follows the theme. Every colour is written once with light-dark(): the theme is chosen by color-scheme —
+ *   system (default)  → follows prefers-color-scheme
+ *   data-f-theme=light|dark on .focus-app → forced (set before first paint by ThemeScript in the Focus layout)
+ * Shadows are composed from colour tokens so they switch too (dark: shadow → 1px line, per the handoff).
+ */
+:root:has(.focus-app) {
+  color-scheme: light dark;
+
+  /* surfaces */
+  --f-bg: light-dark(#f3f5f9, #11141c);            /* canvas */
+  --f-surface: light-dark(#ffffff, #1a1f2b);       /* cards, panels, top bar */
+  --f-surface-2: light-dark(#eef1f6, #222838);     /* fill: neutral button, icon button, inner row */
+  --f-surface-3: light-dark(#e2e7ef, #2b3244);     /* fill hover */
+  --f-surface-sunk: light-dark(#fbfbfd, #161a24);  /* decision footer, quiet band */
+  --f-border: light-dark(#dde2ea, #2e3546);        /* line */
+  --f-line-strong: light-dark(#c3cad6, #435069);   /* field border */
+  --f-disabled-bg: light-dark(#dde2ea, #2e3546);
+  /* text */
+  --f-ink: light-dark(#161d2e, #eef1f7);
+  --f-ink-soft: light-dark(#2c364b, #d3d9e6);
+  --f-muted: light-dark(#4d5870, #a9b2c5);         /* ink-2: meta, labels (6.5:1) */
+  --f-faint: light-dark(#8a93a6, #7b869c);         /* decorative only — never body text */
+  --f-faint-2: light-dark(#aeb6c7, #aab3c6);       /* text on the strong (dark) bar */
+  /* accent — action, link, location, selection; nothing else */
+  --f-accent: light-dark(#5b45c9, #6e58e0);
+  --f-accent-hover: light-dark(#4b37b3, #5f49d1);
+  --f-accent-press: light-dark(#3f2ea3, #5340c0);
+  --f-on-accent: #ffffff;
+  --f-accent-ink: light-dark(#3f2ea3, #b3a6f7);    /* text on accent-soft; links */
+  --f-accent-weak: light-dark(#ece8fb, #2a2550);   /* accent-soft */
+  --f-accent-weak-hover: light-dark(#ddd6f8, #332c63);
+  --f-accent-soft-2: light-dark(#d4cdf5, #3d3577);
+  --f-accent-avatar: light-dark(#c9c1f0, #3b3470);
+  --f-accent-tint: light-dark(#f8f7fe, #1e1a36);
+  --f-accent-line: light-dark(rgba(91,69,201,.28), rgba(179,166,247,.35));
+  /* strong (inverse) bar: timer, "start one-by-one", toast */
+  --f-strong-bg: light-dark(#161d2e, #2b3346);
+  --f-strong-bg-2: light-dark(#2b3245, #3a4359);
+  --f-strong-text: light-dark(#ffffff, #eef1f7);
+  /* status: *-bg + *-ink = chip; *-text = status text on a surface. Always with a symbol + word.
+     Dark rule: risk colours become solid fills with dark text. */
+  --f-red-bg: light-dark(#fbe4e1, #f3887c);     --f-red-ink: light-dark(#b8322a, #2a0f0c);     --f-red-text: light-dark(#b8322a, #f3887c);
+  --f-red-line: light-dark(#f3c4bf, #6b2a24);   --f-red-solid: light-dark(#b8322a, #e0574a);   --f-red-press: light-dark(#9a2820, #c84436);
+  --f-red-ink-strong: light-dark(#7f1f19, #ffd0ca);
+  --f-amber-bg: light-dark(#fbf0d9, #e8b75a);   --f-amber-ink: light-dark(#8c5a00, #2a1c00);   --f-amber-text: light-dark(#8c5a00, #e8b75a);
+  --f-amber-ink-strong: light-dark(#5e3d00, #f3d28f);  /* text inside a warning panel */
+  --f-green-bg: light-dark(#e3f3ea, #6fcf97);   --f-green-ink: light-dark(#23774a, #0c2417);   --f-green-text: light-dark(#23774a, #6fcf97);
+  --f-green-ink-strong: light-dark(#185436, #b9ebcd);  --f-green-ink-soft: light-dark(#1f4a33, #a3dcbb);
+  --f-green-line: light-dark(#bcd4c6, #2f5a43);
+  --f-neutral-bg: light-dark(#e9edf3, #2b3344); --f-neutral-ink: light-dark(#56617a, #a9b2c5); --f-neutral-text: light-dark(#56617a, #a9b2c5);
+  /* panels that sit on a status background keep their own readable text */
+  --f-red-panel: light-dark(#fbe4e1, #3a1d1b);   --f-red-panel-ink: light-dark(#7f1f19, #ffd0ca);
+  --f-amber-panel: light-dark(#fbf0d9, #33280f); --f-amber-panel-ink: light-dark(#5e3d00, #f3d28f);
+  --f-green-panel: light-dark(#e3f3ea, #13301f); --f-green-panel-ink: light-dark(#185436, #b9ebcd);
+  /* shape + elevation */
+  --f-r-pill: 999px;
+  --f-shadow-c: light-dark(rgba(22,29,46,.06), transparent);
+  --f-float-c: light-dark(rgba(22,29,46,.45), rgba(0,0,0,.6));
+  --f-scrim: light-dark(rgba(22,29,46,.5), rgba(0,0,0,.6));
+  --f-line: 0 0 0 1px var(--f-border);                                   /* elevation 0 */
+  --f-shadow: 0 1px 2px var(--f-shadow-c), 0 0 0 1px var(--f-border);    /* elevation 1 · action card */
+  --f-shadow-float: 0 0 0 1px var(--f-border), 0 24px 48px -28px var(--f-float-c); /* elevation 2 */
+  --f-nav-h: 68px;
+  --f-motion: 160ms;
+
+  background: var(--f-bg);
+}
+:root:has(.focus-app[data-f-theme="light"]) { color-scheme: light; }
+:root:has(.focus-app[data-f-theme="dark"]) { color-scheme: dark; }
+
+/* The legacy globals.css paints <body> dark; while Focus is mounted it owns the page background. */
+body:has(.focus-app) { background: var(--f-bg); }
+
+.focus-app {
+  font-family: var(--font-focus, "Open Sans"), system-ui, sans-serif;
+  background: var(--f-bg);
+  color: var(--f-ink);
+  min-height: 100vh;
+  flex: 1 0 auto; /* the root <body> is a flex column — grow with content */
+  overflow-x: clip;
+}
+.focus-app :where(*, *::before, *::after) { box-sizing: border-box; }
+:where(.focus-app) a { color: inherit; text-decoration: none; }
+:where(.focus-app) button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; margin: 0; text-align: inherit; }
+:where(.focus-app) button:disabled { cursor: not-allowed; }
+:where(.focus-app) input, :where(.focus-app) textarea, :where(.focus-app) select { font: inherit; color: inherit; }
+:where(.focus-app) h1, :where(.focus-app) h2, :where(.focus-app) h3, :where(.focus-app) h4, :where(.focus-app) p { margin: 0; }
+.focus-app :focus-visible { outline: 3px solid var(--f-ink); outline-offset: 2px; } /* handoff: focus = 3px ink, offset 2 */
+/* User-written text (task titles, notes, comments, anything typed into a field) takes its direction from its own first
+   strong letter, like dir="auto": "Fix menu PDF (v2)." keeps its period at the end inside the RTL layout. Display text
+   stays aligned to the layout (match-parent); fields follow what is typed. UI strings are not included. */
+.focus-app :where(input[type=text], input[type=search], input[type=email], input[type=url], input:not([type]), textarea) { unicode-bidi: plaintext; }
+.focus-app :where(.f-ugc, .f-tcard__link, .f-tl__title, .f-td__title, .f-td__notes, .f-td__comment, .f-td__item, .f-bpanel__title, .f-review__text, .f-cm-msg__line, .f-cm-msghead__subject) { unicode-bidi: plaintext; text-align: match-parent; }
+.focus-app .f-mono { font-family: var(--font-mono, "IBM Plex Mono"), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.focus-app .f-num { font-variant-numeric: tabular-nums; }
+.focus-app .f-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .focus-app *, .focus-app *::before, .focus-app *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+
+/* ---------- visual reference (raw handoff conversion, /focus/reference/[id]) ---------- */
+.f-screen { max-width: 1440px; margin-inline: auto; }
+.f-device { min-height: 100vh; display: flex; justify-content: center; padding: 40px 16px 64px; }
+.f-device__stage { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.f-device__note { max-width: 560px; text-align: center; color: var(--f-muted); font-size: 13px; line-height: 1.5; margin: 0; }
+
+/* skip link + main landmark */
+.f-skip { position: absolute; inset-inline-start: 12px; top: -60px; z-index: 100; padding: 10px 16px; border-radius: 999px; background: var(--f-strong-bg); color: var(--f-strong-text); font-weight: 700; }
+.f-skip:focus { top: 12px; }
+.f-main:focus { outline: none; }

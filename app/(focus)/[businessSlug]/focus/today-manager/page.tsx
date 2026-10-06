@@ -1,0 +1,9 @@
+import { fixtureMetadata, rendersFixtures, type FocusPageProps } from "@/lib/focus/scope.server";
+import CommsTodayManagerScreen from "@/components/focus/screens/comms-today-manager";
+
+export const generateMetadata = fixtureMetadata({ title: "היום שלי · מנהלת · נתונים חלקיים ותקלה — Mytiv OS" });
+
+export default async function Page({ params }: FocusPageProps) {
+  if (!(await rendersFixtures(params))) return null;
+  return <CommsTodayManagerScreen />;
+}

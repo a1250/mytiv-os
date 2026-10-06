@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Focus redesign — prototype on temporary data, isolated from the app
+/docs/focus/reference/

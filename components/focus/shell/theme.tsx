@@ -1,0 +1,62 @@
+"use client";
+
+import { useCallback, useSyncExternalStore } from "react";
+
+/**
+ * Theme: light / dark / system, remembered per browser. The choice is applied to the Focus root
+ * (`.focus-app[data-f-theme]`, which carries suppressHydrationWarning) by an inline script before first paint
+ * (ThemeScript, the first child of that root), so there is no flash and the shared <html> is never touched;
+ * "system" removes the attribute and the tokens follow prefers-color-scheme (light-dark() in focus.css).
+ */
+export type ThemePref = "light" | "dark" | "system";
+export const THEME_KEY = "mytiv-focus-theme";
+
+const SCRIPT = `(function(){try{var t=localStorage.getItem(${JSON.stringify(THEME_KEY)});var s=document.currentScript;var d=s&&s.closest(".focus-app");if(!d)return;if(t==="light"||t==="dark"){d.setAttribute("data-f-theme",t)}else{d.removeAttribute("data-f-theme")}}catch(e){}})();`;
+
+/** Blocking inline script — must render before the Focus content. */
+export function ThemeScript() {
+  return <script dangerouslySetInnerHTML={{ __html: SCRIPT }} />;
+}
+
+/** Stored value → preference; anything unknown is "system". Pure (unit-tested). */
+export const parseThemePref = (v: string | null | undefined): ThemePref => (v === "light" || v === "dark" ? v : "system");
+/** The attribute to put on the Focus root for a preference (null = remove, follow prefers-color-scheme). */
+export const themeAttr = (p: ThemePref): "light" | "dark" | null => (p === "system" ? null : p);
+
+const listeners = new Set<() => void>();
+function read(): ThemePref {
+  try {
+    return parseThemePref(localStorage.getItem(THEME_KEY));
+  } catch {
+    return "system";
+  }
+}
+function subscribe(fn: () => void) {
+  listeners.add(fn);
+  const onStorage = (e: StorageEvent) => { if (e.key === THEME_KEY) { apply(read()); fn(); } };
+  window.addEventListener("storage", onStorage);
+  return () => { listeners.delete(fn); window.removeEventListener("storage", onStorage); };
+}
+function apply(p: ThemePref) {
+  const d = document.querySelector(".focus-app");
+  if (!d) return;
+  const a = themeAttr(p);
+  if (a) d.setAttribute("data-f-theme", a);
+  else d.removeAttribute("data-f-theme");
+}
+
+export function useTheme() {
+  const pref = useSyncExternalStore(subscribe, read, () => "system" as ThemePref);
+  const setPref = useCallback((p: ThemePref) => {
+    try { if (p === "system") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, p); } catch { /* storage blocked: applies for this page only */ }
+    apply(p);
+    listeners.forEach((l) => l());
+  }, []);
+  return { pref, setPref };
+}
+
+export const THEME_OPTIONS: { value: ThemePref; label: string; icon: "sun" | "moon" | "monitor" }[] = [
+  { value: "light", label: "בהיר", icon: "sun" },
+  { value: "dark", label: "כהה", icon: "moon" },
+  { value: "system", label: "לפי המערכת", icon: "monitor" },
+];
