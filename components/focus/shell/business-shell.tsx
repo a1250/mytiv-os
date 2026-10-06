@@ -46,6 +46,7 @@ const NAV = [
   { area: "work" as const, href: R.work, label: "המשימות שלי", match: (p: string) => p === "/focus/work" },
   { area: "work" as const, href: R.allTasks, label: "כל המשימות", match: (p: string) => p.startsWith("/focus/work/all-tasks") },
   { area: "approvals" as const, href: R.approvals, label: "אישורים", match: (p: string) => p.startsWith("/focus/approvals") },
+  { area: "approvals" as const, href: R.marketingBoard, label: "שיווק", match: (p: string) => p.startsWith("/focus/marketing/board") },
   { area: "mail" as const, href: R.comms, label: "דואר", match: (p: string) => p === "/focus/comms" },
 ];
 

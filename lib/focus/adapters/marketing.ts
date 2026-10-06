@@ -10,6 +10,8 @@ export type FocusMarketingApproval = {
   title: string; why: string; actionType: string; actionClass: "GREEN" | "YELLOW" | "RED"; qaVerdict: "PASS" | "BLOCKED" | "NOT_RUN";
   rollbackNote: string; requestedChange: string | null; diffSummary: string | null; factsCited: string[];
   decision: { decision: "approved" | "rejected"; note: string; decidedAt: string; reconciledState: string | null } | null;
+  /** execution receipts recorded here for this approval (marketing_evidence, kind execution_receipt) */
+  receipts: { id: string; createdAt: string; reconciledState: string | null }[];
 };
 
 /** The engine's action class is its risk: GREEN low · YELLOW medium · RED high. */

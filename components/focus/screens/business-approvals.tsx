@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { approvalPhase, DECISION_REFUSAL, riskOf, type FocusMarketingApproval } from "@/lib/focus/adapters/marketing";
 import { fmtDayMonth, fmtTime } from "@/lib/focus/format";
+import { reconciledLabel } from "@/lib/marketing/view";
 import { Page, PageHeader } from "@/components/focus/patterns/page";
 import { Button } from "@/components/focus/ui/button";
 import { Banner, EmptyState } from "@/components/focus/ui/feedback";
@@ -92,8 +93,11 @@ function ApprovalCard({ a, canDecide }: { a: FocusMarketingApproval; canDecide: 
         <div><dt>נכון ל־</dt><dd>{fmtDayMonth(a.asOf)} {fmtTime(a.asOf)}</dd></div>
       </dl>
       {a.decision && (
-        <p className="f-meta">{a.decision.decision === "approved" ? "אושר" : "נדחה"} · {fmtDayMonth(a.decision.decidedAt)} {fmtTime(a.decision.decidedAt)} · נימוק: {a.decision.note}</p>
+        <p className="f-meta">{a.decision.decision === "approved" ? "אושר" : "נדחה"} · {fmtDayMonth(a.decision.decidedAt)} {fmtTime(a.decision.decidedAt)} · נימוק: {a.decision.note} · <span data-reconciled={a.decision.reconciledState ?? "none"}>{reconciledLabel(a.decision.reconciledState)}</span></p>
       )}
+      {a.receipts.map((r) => (
+        <p key={r.id} className="f-meta" data-receipt={r.id}>קבלת ביצוע נרשמה · {fmtDayMonth(r.createdAt)} {fmtTime(r.createdAt)} · {reconciledLabel(r.reconciledState)}</p>
+      ))}
       {phase === "pending" && canDecide && (
         <div className="f-mkt-appr__decide">
           <TextAreaField label="נימוק (חובה)" rows={2} maxLength={2000} value={note} error={error ?? undefined}

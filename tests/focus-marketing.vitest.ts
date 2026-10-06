@@ -6,7 +6,7 @@ import { approvalPhase, DECISION_REFUSAL, riskOf, type FocusMarketingApproval } 
 const item = (over: Partial<FocusMarketingApproval> = {}): FocusMarketingApproval => ({
   projectId: 'p', projectName: 'P', client: null, bindingVersion: 1, sourceArtifactId: 's', asOf: '2026-10-01T00:00:00.000Z',
   approvalId: 'a1', contentHash: 'a'.repeat(64), state: 'pending', title: 't', why: 'w', actionType: 'campaign_activate',
-  actionClass: 'RED', qaVerdict: 'PASS', rollbackNote: 'r', requestedChange: null, diffSummary: null, factsCited: [], decision: null, ...over,
+  actionClass: 'RED', qaVerdict: 'PASS', rollbackNote: 'r', requestedChange: null, diffSummary: null, factsCited: [], decision: null, receipts: [], ...over,
 });
 
 describe('marketing approvals adapter', () => {

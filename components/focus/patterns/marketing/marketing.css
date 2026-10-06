@@ -442,3 +442,18 @@ a.f-mk-side__item:hover { background: var(--f-accent-tint); box-shadow: inset 0 
   .f-mk-pre__trail, .f-mk-pre__body, .f-mk-pre__foot { padding-inline: 16px; }
   .f-mk-pre__row { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/* Business campaigns & execution (Marketing OS C12 / C7 / evidence, read-only) */
+.f-bmkt__proj { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; margin-top: 14px; }
+.f-bmkt__h { font-size: 18px; font-weight: 700; margin: 0; }
+.f-bmkt__sub { font-size: 14.5px; font-weight: 700; margin: 8px 0 0; }
+.f-bmkt__table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.f-bmkt__table th { text-align: start; font-weight: 600; color: var(--f-muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--f-border); }
+.f-bmkt__table td { padding: 8px; border-bottom: 1px solid var(--f-border); vertical-align: top; overflow-wrap: anywhere; }
+.f-bmkt__records { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+@media (max-width: 767px) {
+  .f-bmkt__proj { padding: 16px; }
+  .f-bmkt__table thead { display: none; }
+  .f-bmkt__table tr { display: block; padding: 8px 0; border-bottom: 1px solid var(--f-border); }
+  .f-bmkt__table td { display: block; border: 0; padding: 2px 0; }
+}

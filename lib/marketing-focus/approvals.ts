@@ -33,6 +33,8 @@ export async function readMarketingApprovals(businessId: string): Promise<{ conn
         approvalId: it.approval_id, contentHash: it.content_hash, state: it.state, title: it.title, why: it.why, actionType: it.action_type,
         actionClass: it.action_class, qaVerdict: it.qa_verdict, rollbackNote: it.rollback_note, requestedChange: it.requested_change ?? null,
         diffSummary: it.diff_summary ?? null, factsCited: it.facts_cited ?? [],
+        receipts: records.evidence.filter((e) => e.kind === "execution_receipt" && e.approvalId === it.approval_id)
+          .map((e) => ({ id: e.id, createdAt: e.createdAt, reconciledState: e.reconciledState ?? null })),
         decision: decision ? { decision: decision.decision as "approved" | "rejected", note: decision.note, decidedAt: decision.decidedAt, reconciledState: decision.reconciledState ?? null } : null,
       });
     }
