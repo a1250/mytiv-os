@@ -15,6 +15,9 @@ export type WorkTaskRow = {
   participants: string[]; dependsOn: { id: string; title: string }[];
   children: { id: string; title: string; done: boolean; ownerUserId: string | null; dueOn: string | null }[];
   activity: { id: string; at: string; actorId: string; event: string; detail: Record<string, unknown> }[];
+  /** 0015: comments (oldest first) and the total logged minutes; absent on a server without 0015 */
+  comments?: { id: string; authorId: string; at: string; text: string }[];
+  spentMinutes?: number | null;
 };
 export type WorkPersonRow = { id: string; name: string; role: string; active: boolean };
 export type WorkProjectRow = { id: string; name: string; client: string | null; workSource: "clickup" | "mytiv" };
@@ -40,6 +43,8 @@ const FIELD_WORDS: Record<string, string> = {
 export function activityOf(rows: WorkTaskRow["activity"]): ActivityEvent[] {
   return rows.map((e) => {
     if (e.event === "created") return { id: e.id, at: e.at, actorId: e.actorId, text: "יצר/ה את המשימה", tone: "default" as const };
+    if (e.event === "commented") return { id: e.id, at: e.at, actorId: e.actorId, text: "הוסיף/ה תגובה", tone: "default" as const };
+    if (e.event === "time_logged") return { id: e.id, at: e.at, actorId: e.actorId, text: `רשם/ה ${Number(e.detail.minutes) || 0} דק׳ (${e.detail.source === "timer" ? "טיימר" : "ידני"})`, tone: "default" as const };
     const fields = Array.isArray(e.detail.fields) ? (e.detail.fields as string[]) : [];
     const to = (e.detail.to ?? {}) as { status?: string };
     const done = to.status === "done" && fields.includes("statusKey");
@@ -56,7 +61,7 @@ export function taskFromRow(r: WorkTaskRow): Task {
     assigneeId: r.ownerUserId, participantIds: r.participants ?? [],
     startDate: r.startOn, dueDate: r.dueOn && /^\d{4}-\d{2}-\d{2}$/.test(r.dueOn) ? r.dueOn : null,
     estimateMinutes: r.estimateMinutes,
-    spentMinutes: null, // Mytiv time entries are not connected yet (0014): unknown, never 0
+    spentMinutes: typeof r.spentMinutes === "number" ? r.spentMinutes : null, // without 0015 the time is unknown, never 0
     subtasks: (r.children ?? []).map((c) => ({ id: c.id, title: c.title, done: c.done, ...(c.ownerUserId ? { assigneeId: c.ownerUserId } : {}), ...(c.dueOn ? { dueDate: c.dueOn } : {}) })),
     checklist: [],
     parentId: r.parentId,
@@ -67,7 +72,7 @@ export function taskFromRow(r: WorkTaskRow): Task {
     ...(status === "waiting" && r.waitingOn ? { waitingFor: WAITING_ON[r.waitingOn] ?? r.waitingOn } : {}),
     ...(status === "waiting" && r.blockedReason?.trim() ? { blockedReason: r.blockedReason } : {}),
     followUp: r.followUpOn,
-    comments: [], evidence: [],
+    comments: (r.comments ?? []).map((c) => ({ id: c.id, authorId: c.authorId, at: c.at, text: c.text })), evidence: [],
     activity: activityOf(r.activity ?? []),
     source: "mytiv", state: "live",
     version: String(r.version),
@@ -78,11 +83,11 @@ export function taskFromRow(r: WorkTaskRow): Task {
 
 /**
  * What the Mytiv source supports today in a business scope (live = a DB function backs it; planned = not connected
- * yet, refused outside the demo). Comments, time and checklist arrive with 0014/0015.
+ * yet, refused outside the demo). Comments and logged time are live with 0015; the checklist is not connected.
  */
 export const MYTIV_LIVE_CAPABILITIES: CapabilityMap = {
   changeStatus: "live", assign: "live", create: "live", setDueDate: "live", depend: "live", nest: "live",
-  comment: "planned", trackTime: "planned", checklist: "planned",
+  comment: "live", trackTime: "live", checklist: "planned",
 };
 
 /** A business member as a Focus person (initial for avatars; admin shown as manager). */
@@ -101,10 +106,13 @@ export type ServerCreate = { title: string; notes?: string; statusKey?: string; 
 
 /**
  * One Focus edit → the server writes that perform it, in order: the task's own patch, then sub-task writes (a Focus
- * sub-task is a child task: adding one creates it, ticking it changes its status). Edits with no live backend yet
- * (comments, checklist, logged time) come back in `unsupported` — the caller refuses them, never fakes them.
+ * sub-task is a child task: adding one creates it, ticking it changes its status; a comment and logged time are
+ * their own append-only writes). Edits with no live backend (the checklist, removing logged time) come back in
+ * `unsupported` — the caller refuses them, never fakes them.
  */
-export type WorkWrite = { kind: "update"; taskId: string; patch: ServerPatch } | { kind: "create"; fields: ServerCreate };
+export type WorkWrite =
+  | { kind: "update"; taskId: string; patch: ServerPatch } | { kind: "create"; fields: ServerCreate }
+  | { kind: "comment"; taskId: string; body: string } | { kind: "time"; taskId: string; minutes: number; source: "timer" | "manual"; startedAt: string };
 export function writesForPatch(task: Task, patch: import("@/lib/focus/contracts/work").TaskPatch): { writes: WorkWrite[]; unsupported: string[] } {
   const p: ServerPatch = {};
   const writes: WorkWrite[] = [];
@@ -143,7 +151,14 @@ export function writesForPatch(task: Task, patch: import("@/lib/focus/contracts/
         writes.push({ kind: "update", taskId: s.id, patch: { statusKey: s.done ? "done" : "todo" } });
         break;
       }
-      default: unsupported.push(key); // addComment, checklistItem, addChecklistItem, logMinutes: not connected yet
+      case "addComment": writes.push({ kind: "comment", taskId: task.id, body: (value as { text: string }).text }); break;
+      case "logMinutes": {
+        const m = value as number;
+        if (Number.isInteger(m) && m >= 1 && m <= 1440) writes.push({ kind: "time", taskId: task.id, minutes: m, source: "manual", startedAt: new Date(Date.now() - m * 60000).toISOString() });
+        else unsupported.push("logMinutes"); // logged time is append-only: it is never taken back
+        break;
+      }
+      default: unsupported.push(key); // checklistItem, addChecklistItem: not connected yet
     }
   }
   return { writes: Object.keys(p).length ? [{ kind: "update", taskId: task.id, patch: p }, ...writes] : writes, unsupported };

@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { canonicalize } from "@/lib/marketing/artifacts";
 
 /**
- * Mytiv Work writes (plan PR 6). Every write runs in one DB function (migration 0013): authorization re-checked in the
+ * Mytiv Work writes (plan PR 6). Every write runs in one DB function (migrations 0013, 0015): authorization re-checked in the
  * DB, the request id recorded in `work_requests` (an exact replay returns the recorded result; a different payload or
  * actor reusing it is refused), the version checked under a row lock — a stale version changes nothing and comes
  * back as a conflict — and every Work rule enforced there. Nothing here writes a table directly.
@@ -79,4 +79,16 @@ export type UpdatePatch = Partial<{
 export async function updateWorkTask(scope: WorkScope, requestId: string, taskId: string, expectedVersion: number, patch: UpdatePatch): Promise<WriteOutcome> {
   const hash = payloadHash("update", { taskId, expectedVersion, patch });
   return outcome(await call(sql`select work_update_task(${scope.businessId}::uuid, ${scope.userId}::uuid, ${requestId}::uuid, ${hash}, ${taskId}::uuid, ${expectedVersion}::int, ${JSON.stringify(patch)}::jsonb) as r`));
+}
+
+/** A comment on a task (work_add_comment, 0015): any active member; ledgered; the task's version is unchanged. */
+export async function addWorkComment(scope: WorkScope, requestId: string, taskId: string, body: string): Promise<WriteOutcome> {
+  const hash = payloadHash("comment", { taskId, body });
+  return outcome(await call(sql`select work_add_comment(${scope.businessId}::uuid, ${scope.userId}::uuid, ${requestId}::uuid, ${hash}, ${taskId}::uuid, ${JSON.stringify(body)}::jsonb) as r`));
+}
+
+/** The actor's own time on a task (work_log_time, 0015): 1..1440 minutes per entry; ledgered; version unchanged. */
+export async function logWorkTime(scope: WorkScope, requestId: string, taskId: string, minutes: number, startedAt: string, source: "timer" | "manual"): Promise<WriteOutcome> {
+  const hash = payloadHash("log_time", { taskId, minutes, startedAt, source });
+  return outcome(await call(sql`select work_log_time(${scope.businessId}::uuid, ${scope.userId}::uuid, ${requestId}::uuid, ${hash}, ${taskId}::uuid, ${minutes}::int, ${startedAt}::timestamptz, ${source}) as r`));
 }

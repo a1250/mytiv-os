@@ -306,10 +306,7 @@ function useStoreValue(remote?: RemoteWork) {
     const r = applyPatch(cur, patch, expectedVersion, nowIso(), s.tasks, actor);
     if (r.ok) {
       dispatch({ type: "replaceTask", task: r.task });
-      for (const w of plan?.writes ?? []) {
-        if (w.kind === "update") void remoteRef.current!.update(w.taskId, w.patch);
-        else void remoteRef.current!.create(`sub:${crypto.randomUUID()}`, w.fields);
-      }
+      for (const w of plan?.writes ?? []) void remoteRef.current!.apply(w);
     }
     return { ...r, previous: cur };
   }, [s.tasks, nowIso, actor]);
@@ -322,13 +319,16 @@ function useStoreValue(remote?: RemoteWork) {
     const tasks = latestTasks.current;
     const cur = tasks.find((t) => t.id === previous.id);
     if (!cur) return { ok: false, refused: "המשימה לא נמצאה." };
+    // logged time and comments are append-only on the server: an undo cannot take them back
+    if (remoteRef.current && ((cur.spentMinutes ?? 0) !== (previous.spentMinutes ?? 0) || cur.comments.length !== previous.comments.length))
+      return { ok: false, refused: "זמן שנרשם ותגובות נשמרים בשרת ולא ניתן לבטל אותם." };
     const undo = remoteRef.current ? writesForPatch(cur, undoPatch(cur, previous)) : null;
     if (undo?.unsupported.length) return { ok: false, refused: "הביטול הזה עדיין לא מחובר לשרת המשימות." };
     const r = revertTask(cur, previous, expectedVersion, nowIso(), tasks, actor);
     if (r.ok) {
       dispatch({ type: "replaceTask", task: r.task }); latestTasks.current = tasks.map((t) => (t.id === r.task.id ? r.task : t));
       // a business-scope undo is a compensating write on the server, checked there like any other
-      for (const w of undo?.writes ?? []) if (w.kind === "update") void remoteRef.current!.update(w.taskId, w.patch);
+      for (const w of undo?.writes ?? []) void remoteRef.current!.apply(w);
     }
     return r;
   }, [nowIso, actor]);
@@ -392,18 +392,22 @@ function useStoreValue(remote?: RemoteWork) {
     return { ok: true };
   }, []);
 
-  const addEntry = (taskId: string, minutes: number, source: TimeEntry["source"]) => {
-    const entry: TimeEntry = { id: `te-${Date.now()}-${taskId}`, taskId, personId: VIEWER.id, start: demoIso(), minutes, source, certainty: "known" };
+  const addEntry = useCallback((taskId: string, minutes: number, source: TimeEntry["source"]) => {
+    const entry: TimeEntry = { id: `te-${Date.now()}-${taskId}`, taskId, personId: actor, start: nowIso(), minutes, source, certainty: "known" };
     dispatch({ type: "timeEntry", entry });
     return entry;
-  };
+  }, [actor, nowIso]);
   /** Logged time is a write like any other (new token, actor) — so it never shows up as someone else's conflict. */
-  const addSpent = useCallback((task: Task | undefined, minutes: number): PatchResult | null => {
+  const addSpent = useCallback((task: Task | undefined, minutes: number, source: TimeEntry["source"]): PatchResult | null => {
     if (!task) return null;
-    const r = applyPatch(task, { logMinutes: minutes }, task.version, demoIso(), s.tasks, VIEWER.id);
-    if (r.ok) dispatch({ type: "replaceTask", task: r.task });
+    const r = applyPatch(task, { logMinutes: minutes }, task.version, nowIso(), s.tasks, actor);
+    if (r.ok) {
+      dispatch({ type: "replaceTask", task: r.task });
+      // business scope: the time is recorded on the server as the viewer's own entry (work_log_time)
+      if (remoteRef.current && minutes >= 1 && minutes <= 1440) void remoteRef.current.apply({ kind: "time", taskId: task.id, minutes, source, startedAt: new Date(Date.now() - minutes * 60000).toISOString() });
+    }
     return r;
-  }, [s.tasks]);
+  }, [s.tasks, nowIso, actor]);
 
   /** One timer per person: starting another task stops and logs the running one first (switchTimer). */
   const timerStart = useCallback((taskId: string) => {
@@ -414,12 +418,12 @@ function useStoreValue(remote?: RemoteWork) {
     // the entry exists only when the logged time was written to the task (same rule as stop)
     let loggedOk = false;
     if (r.logged && r.logged.minutes > 0 && prevTask) {
-      loggedOk = !!addSpent(prevTask, r.logged.minutes)?.ok;
+      loggedOk = !!addSpent(prevTask, r.logged.minutes, "timer")?.ok;
       if (loggedOk) addEntry(r.logged.taskId, r.logged.minutes, "timer");
     }
     dispatch({ type: "timer", timer: r.next });
     return { ...r, loggedOk };
-  }, [s.tasks, s.timer, addSpent]);
+  }, [s.tasks, s.timer, addSpent, addEntry]);
   const timerPause = useCallback(() => { if (s.timer) dispatch({ type: "timer", timer: pauseTimer(s.timer, Date.now()) }); }, [s.timer]);
   const timerResume = useCallback(() => { if (s.timer) dispatch({ type: "timer", timer: resumeTimer(s.timer, new Date().toISOString()) }); }, [s.timer]);
   const timerStop = useCallback(() => {
@@ -430,12 +434,12 @@ function useStoreValue(remote?: RemoteWork) {
     const task = s.tasks.find((t) => t.id === stopped.taskId);
     // a timer that outlived its task (e.g. one created in a closed tab) logs nothing — no orphan time entries
     const minutes = task ? minutesToLog(stopped, stoppedAt) : 0;
-    const write = minutes > 0 ? addSpent(task, minutes) : null;
+    const write = minutes > 0 ? addSpent(task, minutes, "timer") : null;
     // the entry exists only when the logged time was written to the task
     const entry = write?.ok ? addEntry(stopped.taskId, minutes, "timer") : null;
     dispatch({ type: "timer", timer: null });
     return { stopped, elapsedMs, minutes, task, entry, write, orphan: !task };
-  }, [s.timer, s.tasks, addSpent]);
+  }, [s.timer, s.tasks, addSpent, addEntry]);
   /** Undo a stop: the timer resumes paused at the time it had when stopped (the gap is not counted), the entry goes. */
   const timerRestore = useCallback((t: ActiveTimer, elapsedMs: number, entryId?: string) => {
     dispatch({ type: "timer", timer: { ...t, running: false, elapsedMs, startedAt: new Date().toISOString() } });
@@ -444,11 +448,11 @@ function useStoreValue(remote?: RemoteWork) {
   /** Manual time (validated by parseDuration in the caller). */
   const logTime = useCallback((taskId: string, minutes: number) => {
     const task = s.tasks.find((t) => t.id === taskId);
-    const result = addSpent(task, minutes) ?? { ok: false as const, refused: "המשימה לא נמצאה." };
+    const result = addSpent(task, minutes, "manual") ?? { ok: false as const, refused: "המשימה לא נמצאה." };
     // the time entry exists only when the task write went through (no orphan entries for a refused write)
     const entry = result.ok ? addEntry(taskId, minutes, "manual") : null;
     return { entry, result, previous: task };
-  }, [s.tasks, addSpent]);
+  }, [s.tasks, addSpent, addEntry]);
   const removeTimeEntry = useCallback((id: string) => dispatch({ type: "removeTimeEntry", id }), []);
 
   const startJob = useCallback((job: Omit<Job, "startedAt">) => {

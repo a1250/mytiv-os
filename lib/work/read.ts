@@ -5,7 +5,7 @@ import type { WorkPersonRow, WorkProjectRow, WorkTaskRow } from "@/lib/focus/ada
 
 /**
  * The Mytiv Work read model for one business (what Focus renders): every live task with its status key/label,
- * dependencies, sub-tasks, participants, last writer and recent activity; the business's members and projects.
+ * dependencies, sub-tasks, participants, comments, logged time, last writer and recent activity; the business's members and projects.
  * Tenant-scoped by `business_id` in every subquery. Read-only.
  */
 const TASK_LIMIT = 2000;
@@ -32,6 +32,9 @@ export async function readWorkTasks(businessId: string, onlyTaskId?: string): Pr
       'children', coalesce((select json_agg(json_build_object('id', c.id, 'title', c.title, 'done', c.status_category = 'done',
                               'ownerUserId', c.owner_user_id, 'dueOn', c.due_on) order by c.created_at)
                              from tasks c where c.business_id = t.business_id and c.parent_id = t.id and c.deleted_at is null), '[]'::json),
+      'comments', coalesce((select json_agg(x order by x.at) from (select c.id, c.author_id as "authorId", c.created_at as at, c.body as text
+                             from task_comments c where c.business_id = t.business_id and c.task_id = t.id order by c.created_at desc limit 100) x), '[]'::json),
+      'spentMinutes', (select coalesce(sum(te.minutes), 0) from task_time_entries te where te.business_id = t.business_id and te.task_id = t.id),
       'activity', coalesce((select json_agg(x) from (select e.id, e.at, e.actor_id as "actorId", e.event, e.detail from work_events e
                              where e.business_id = t.business_id and e.task_id = t.id order by e.at desc limit 20) x), '[]'::json)
     ) as task

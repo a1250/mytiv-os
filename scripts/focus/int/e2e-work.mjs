@@ -84,6 +84,32 @@ await check("concurrent edit by another member: the stale write is refused by th
   return after.title === `${TITLE} (נערך)` && after.status === "waiting" ? "member's title kept, stale status refused, toast shown" : `${after.title} / ${after.status}`;
 });
 
+await check("a comment from the drawer is stored on the server (append-only), survives a reload, and does not bump the version", async () => {
+  const t0 = await taskByTitle(page, `${TITLE} (נערך)`);
+  await page.goto(BASE + `/mytiv/focus/work/all-tasks?task=${t0.id}`, { waitUntil: "domcontentloaded" }); await settle(page);
+  await page.waitForSelector("dialog[open].f-tdrawer", { timeout: 10000 });
+  await page.fill(".f-td__cinput", "תגובה מה־E2E");
+  await page.press(".f-td__cinput", "Enter");
+  await page.waitForTimeout(1200);
+  await page.reload({ waitUntil: "domcontentloaded" }); await settle(page);
+  await page.waitForSelector("dialog[open].f-tdrawer", { timeout: 10000 });
+  const shown = await page.locator(".f-td__ctext", { hasText: "תגובה מה־E2E" }).count();
+  const t1 = (await api(page, "/api/mytiv/work/tasks")).body.tasks.find((x) => x.id === t0.id);
+  return shown === 1 && t1.comments.length === 1 && t1.version === t0.version ? `comment stored; version stays v${t1.version}` : `shown=${shown} comments=${t1.comments.length} v${t0.version}→v${t1.version}`;
+});
+
+await check("manual time from the drawer is logged as the viewer's own entry; the total is known after a reload; no undo is offered", async () => {
+  const t0 = await taskByTitle(page, `${TITLE} (נערך)`);
+  await page.fill(".f-td__maninput", "0:45");
+  await page.click(".f-td__manual button[type=submit]");
+  await page.waitForSelector(".f-toast >> text=נרשמו 45 דק׳ ידנית", { timeout: 8000 });
+  const undoOffered = await page.locator(".f-toast button", { hasText: "בטל" }).count();
+  await page.waitForTimeout(1200);
+  await page.reload({ waitUntil: "domcontentloaded" }); await settle(page);
+  const t1 = (await api(page, "/api/mytiv/work/tasks")).body.tasks.find((x) => x.id === t0.id);
+  return t1.spentMinutes === (t0.spentMinutes ?? 0) + 45 && undoOffered === 0 ? `spent ${t0.spentMinutes} → ${t1.spentMinutes} min` : `spent=${t1.spentMinutes} undo=${undoOffered}`;
+});
+
 await check("tenant isolation: another business's member cannot read or write this business's Work", async () => {
   const b = await new Session("b").login("owner-b@staging.invalid", PW);
   const list = await b.json("/api/mytiv/work/tasks");

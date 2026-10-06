@@ -274,6 +274,55 @@ export const workEvents = pgTable(
   ]
 );
 
+/**
+ * Task comments (migration 0015). Append-only: written only by work_add_comment (authorized, ledgered); never
+ * edited or deleted in place. A comment does not change the task's version — it never conflicts with an edit.
+ */
+export const taskComments = pgTable(
+  "task_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull(),
+    authorId: uuid("author_id").notNull(),
+    requestId: uuid("request_id").notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("task_comments_task_idx").on(t.businessId, t.taskId, t.createdAt),
+    foreignKey({ name: "task_comments_task_fk", columns: [t.businessId, t.taskId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "task_comments_author_fk", columns: [t.businessId, t.authorId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+    check("task_comments_body_len", sql`char_length(${t.body}) between 1 and 5000`),
+  ]
+);
+
+/**
+ * Logged time per task and person (migration 0015). Append-only, written only by work_log_time. `source` says how
+ * it was measured (a Focus timer or a manual entry); `minutes` is bounded to one day per entry.
+ */
+export const taskTimeEntries = pgTable(
+  "task_time_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    requestId: uuid("request_id").notNull(),
+    minutes: integer("minutes").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    source: text("source").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("task_time_entries_task_idx").on(t.businessId, t.taskId),
+    foreignKey({ name: "task_time_entries_task_fk", columns: [t.businessId, t.taskId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "task_time_entries_user_fk", columns: [t.businessId, t.userId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+    check("task_time_entries_minutes", sql`${t.minutes} between 1 and 1440`),
+    check("task_time_entries_source", sql`${t.source} in ('timer', 'manual')`),
+  ]
+);
+
 /** Append-only history of every status definition change (rename, reorder, retire). */
 export const workStatusRevisions = pgTable("work_status_revisions", {
   id: uuid("id").primaryKey().defaultRandom(),

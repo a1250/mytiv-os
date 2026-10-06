@@ -1,7 +1,7 @@
 "use client";
 
 import type { Task } from "@/lib/focus/contracts/work";
-import type { ServerCreate, ServerPatch, WorkPersonRow, WorkProjectRow } from "@/lib/focus/adapters/work";
+import type { ServerCreate, ServerPatch, WorkPersonRow, WorkProjectRow, WorkWrite } from "@/lib/focus/adapters/work";
 
 /**
  * The business-scope link between the Focus store and the Mytiv Work API (`/api/[slug]/work/*`).
@@ -29,6 +29,7 @@ const REFUSAL: Record<string, string> = {
   block_reason_required: "חסימה דורשת סיבה כתובה.", assignee_not_member: "האחראי אינו חבר פעיל בעסק.", start_after_due: "תאריך ההתחלה אחרי תאריך היעד.",
   not_member: "אין לך גישה לעסק הזה.", forbidden: "אין לך הרשאה לפעולה הזו.", not_found: "המשימה לא נמצאה.", nothing_to_update: "אין מה לעדכן.",
   request_conflict: "הבקשה כבר נרשמה עם תוכן אחר.", field_not_allowed: "השדה לא ניתן לעריכה כאן.", work_unavailable: "שירות המשימות לא זמין כרגע.",
+  invalid_minutes: "משך הזמן חייב להיות בין דקה ל־24 שעות.", invalid_started_at: "זמן ההתחלה לא תקין.", invalid_comment: "התגובה ריקה או ארוכה מדי.",
 };
 export const refusalText = (code: string | undefined) => (code && REFUSAL[code]) ?? (code?.startsWith("invalid_") ? "ערך לא תקין." : "השרת סירב לשינוי.");
 
@@ -98,6 +99,27 @@ export class WorkRemote {
       if (!r) { this.h.notice({ kind: "error", title: "לא ידוע אם המשימה נוצרה", detail: "אין תשובה מהשרת. הרשימה נטענת מחדש." }); this.h.dropped(tempId); await this.refresh(); return; }
       this.h.notice({ kind: "error", title: "המשימה לא נוצרה", detail: refusalText(r.body.error as string | undefined) });
       this.h.dropped(tempId);
+    });
+  }
+
+  /** Any planned write (lib/focus/adapters/work.ts writesForPatch). */
+  apply(w: WorkWrite): Promise<void> {
+    if (w.kind === "update") return this.update(w.taskId, w.patch);
+    if (w.kind === "create") return this.create(`sub:${crypto.randomUUID()}`, w.fields);
+    if (w.kind === "comment") return this.append(w.taskId, "comments", { body: w.body }, "התגובה לא נשמרה");
+    return this.append(w.taskId, "time", { minutes: w.minutes, source: w.source, startedAt: w.startedAt }, "הזמן לא נרשם");
+  }
+
+  /** A comment or logged time: append-only, never a version conflict; the server's copy of the task comes back. */
+  private append(taskId: string, what: "comments" | "time", body: Record<string, unknown>, failed: string): Promise<void> {
+    return this.enqueue(taskId, async () => {
+      const id = this.realId(taskId);
+      const r = await this.send(`${this.base}/${id}/${what}`, "POST", body);
+      if (!r) { this.h.notice({ kind: "error", title: `לא ידוע אם ${what === "time" ? "הזמן נרשם" : "התגובה נשמרה"}`, detail: "אין תשובה מהשרת. המשימה נטענת מחדש מהשרת." }); await this.refresh(); return; }
+      const task = r.body.task as Task | undefined;
+      if (r.status === 200 && task) { this.accept(task); return; }
+      this.h.notice({ kind: "error", title: failed, detail: refusalText(r.body.error as string | undefined) });
+      await this.refresh();
     });
   }
 

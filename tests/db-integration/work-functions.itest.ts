@@ -120,7 +120,7 @@ describe('read model → the Focus contract', () => {
     const task = taskFromRow(row);
     expect(task).toMatchObject({ status: 'waiting', blockedReason: 'Client feedback', assigneeId: member, participantIds: [owner],
       dueDate: '2026-10-08', dependsOn: [{ id: pre.taskId, title: 'Shoot' }], subtasks: [{ id: sub.taskId, title: 'Caption', done: false }],
-      context: { client: 'Client 1', project: 'P1' }, source: 'mytiv', state: 'live', spentMinutes: null, updatedBy: member, version: '4' });
+      context: { client: 'Client 1', project: 'P1' }, source: 'mytiv', state: 'live', spentMinutes: 0, comments: [], updatedBy: member, version: '4' }); // 0015: logged time is known (0), not unknown
     expect(task.activity[0].text).toMatch(/חסימה/);
     expect((await readWorkTasks(B)).tasks.some((x) => x.id === t.taskId)).toBe(false);
   });
