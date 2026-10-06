@@ -166,6 +166,11 @@ export const tasks = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     deletedBy: uuid("deleted_by").references(() => users.id),
     trashBatchId: uuid("trash_batch_id"),
+    // ── Mytiv Work functions (0013): fields the Work UI writes, only through the work_* DB functions ──
+    /** Manual block: only on a 'waiting' task and never blank (blocked is otherwise derived from open dependencies). */
+    blockedReason: text("blocked_reason"),
+    nextAction: text("next_action"),
+    followUpOn: date("follow_up_on"),
   },
   (t) => [
     index("tasks_business_idx").on(t.businessId),
@@ -183,6 +188,89 @@ export const tasks = pgTable(
     check("tasks_version_ck", sql`${t.version} >= 1`),
     check("tasks_status_pair_ck", sql`(${t.statusId} is null) = (${t.statusCategory} is null)`),
     check("tasks_not_own_parent_ck", sql`${t.parentId} is null or ${t.parentId} <> ${t.id}`),
+    check("tasks_blocked_reason_ck", sql`${t.blockedReason} is null or (${t.statusCategory} = 'waiting' and btrim(${t.blockedReason}) <> '')`),
+  ]
+);
+
+/** "A waits for B" (blocks), same business and same project only (checked by work_task_update); no self edge. */
+export const taskDependencies = pgTable(
+  "task_dependencies",
+  {
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull(),
+    dependsOnId: uuid("depends_on_id").notNull(),
+    kind: text("kind").notNull().default("blocks"),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: "task_dependencies_pk", columns: [t.businessId, t.taskId, t.dependsOnId] }),
+    index("task_dependencies_on_idx").on(t.businessId, t.dependsOnId),
+    foreignKey({ name: "task_dependencies_task_fk", columns: [t.businessId, t.taskId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "task_dependencies_on_fk", columns: [t.businessId, t.dependsOnId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "task_dependencies_creator_fk", columns: [t.businessId, t.createdBy], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+    check("task_dependencies_kind_ck", sql`${t.kind} = 'blocks'`),
+    check("task_dependencies_not_self_ck", sql`${t.taskId} <> ${t.dependsOnId}`),
+  ]
+);
+
+/** Participants of a task (besides its owner). */
+export const taskMembers = pgTable(
+  "task_members",
+  {
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: "task_members_pk", columns: [t.businessId, t.taskId, t.userId] }),
+    foreignKey({ name: "task_members_task_fk", columns: [t.businessId, t.taskId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "task_members_member_fk", columns: [t.businessId, t.userId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  ]
+);
+
+/**
+ * The Work write ledger (plan §3.10): one row per client request id, written by the work_* function that performed
+ * it, with the result it returned. A replay with the same actor + operation + payload returns that result; anything
+ * else reusing the id is refused. Append-only.
+ */
+export const workRequests = pgTable(
+  "work_requests",
+  {
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    requestId: uuid("request_id").notNull(),
+    actorId: uuid("actor_id").notNull(),
+    operation: text("operation").notNull(),
+    targetId: uuid("target_id"),
+    payloadHash: text("payload_hash").notNull(),
+    result: jsonb("result").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: "work_requests_pk", columns: [t.businessId, t.requestId] }),
+    foreignKey({ name: "work_requests_actor_fk", columns: [t.businessId, t.actorId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  ]
+);
+
+/** Append-only activity of a task (who did what, when) — the drawer's history and the audit of every Work write. */
+export const workEvents = pgTable(
+  "work_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull(),
+    actorId: uuid("actor_id").notNull(),
+    requestId: uuid("request_id"),
+    event: text("event").notNull(),
+    detail: jsonb("detail").notNull().default(sql`'{}'::jsonb`),
+    version: integer("version"),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("work_events_task_idx").on(t.businessId, t.taskId, t.at),
+    foreignKey({ name: "work_events_task_fk", columns: [t.businessId, t.taskId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "work_events_actor_fk", columns: [t.businessId, t.actorId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
   ]
 );
 
