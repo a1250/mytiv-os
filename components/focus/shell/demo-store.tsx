@@ -141,7 +141,7 @@ const Ctx = createContext<Store | null>(null);
  * storage, the clock is the real one, the actor is the signed-in member. Areas with no backend yet stay empty here
  * (the business shell does not mount their screens).
  */
-export type RemoteWork = { slug: string; viewer: Person; role: WorkRole; tasks: Task[]; people: Person[]; projects: WorkProjectRow[]; capabilities: Record<TaskSource, CapabilityMap> };
+export type RemoteWork = { slug: string; viewer: Person; role: WorkRole; /** Work API connected (else no Work data, nothing synced) */ live: boolean; tasks: Task[]; people: Person[]; projects: WorkProjectRow[]; capabilities: Record<TaskSource, CapabilityMap> };
 export type Directory = { people: Person[]; peopleById: Record<string, Person>; projects: { id: string; name: string; client: string | null }[]; capabilities: Record<TaskSource, CapabilityMap> };
 const DEMO_DIRECTORY: Directory = {
   people: Object.values(PEOPLE) as Person[],
@@ -169,7 +169,7 @@ function useStoreValue(remote?: RemoteWork) {
   const remoteRef = useRef<WorkRemote | null>(null);
   const capabilitiesRef = useRef(remote?.capabilities);
   useEffect(() => {
-    if (!remote) return;
+    if (!remote?.live) return;
     const r = new WorkRemote(remote.slug, {
       task: (task) => dispatch({ type: "replaceTask", task }),
       created: (tempId, task) => { if (tempId.startsWith("sub:")) void r.refresh(); else dispatch({ type: "swapTask", tempId, task }); },

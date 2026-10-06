@@ -15,13 +15,14 @@ import { ToastProvider, useToast } from "@/components/focus/ui/toast";
  * the one navigation guard, and a slim top bar with only the connected areas — no demo controls, no fixture
  * notifications, no screen map. Other areas render their "not connected yet" page.
  */
-export function BusinessShell({ remote, children }: { remote: RemoteWork; children: ReactNode }) {
+export type BusinessAreas = { work: boolean; approvals: boolean };
+export function BusinessShell({ remote, areas, children }: { remote: RemoteWork; areas: BusinessAreas; children: ReactNode }) {
   return (
     <DemoStoreProvider remote={remote}>
       <ToastProvider>
         <RemoteNotices />
         <NavGuardProvider>
-          <BusinessTopBar />
+          <BusinessTopBar areas={areas} />
           <main id="main" tabIndex={-1} className="f-main">{children}</main>
         </NavGuardProvider>
       </ToastProvider>
@@ -42,11 +43,12 @@ function RemoteNotices() {
 }
 
 const NAV = [
-  { href: R.work, label: "המשימות שלי", match: (p: string) => p === "/focus/work" },
-  { href: R.allTasks, label: "כל המשימות", match: (p: string) => p.startsWith("/focus/work/all-tasks") },
+  { area: "work" as const, href: R.work, label: "המשימות שלי", match: (p: string) => p === "/focus/work" },
+  { area: "work" as const, href: R.allTasks, label: "כל המשימות", match: (p: string) => p.startsWith("/focus/work/all-tasks") },
+  { area: "approvals" as const, href: R.approvals, label: "אישורים", match: (p: string) => p.startsWith("/focus/approvals") },
 ];
 
-function BusinessTopBar() {
+function BusinessTopBar({ areas }: { areas: BusinessAreas }) {
   const scope = useFocusScope();
   const { viewer } = useDemo();
   const path = unscopedPath(scope.base, usePathname());
@@ -56,7 +58,7 @@ function BusinessTopBar() {
       <div className="f-topbar__inner">
         <span className="f-topbar__brand"><b>Focus</b> · <bdi>{name}</bdi></span>
         <nav aria-label="ניווט ראשי" className="f-topbar__nav">
-          {NAV.map((n) => <Link key={n.href} href={n.href} className="f-topbar__link" aria-current={n.match(path) ? "page" : undefined}>{n.label}</Link>)}
+          {NAV.filter((n) => areas[n.area]).map((n) => <Link key={n.href} href={n.href} className="f-topbar__link" aria-current={n.match(path) ? "page" : undefined}>{n.label}</Link>)}
         </nav>
         <span className="f-grow" />
         <span className="f-meta-sm">{viewer.name}</span>

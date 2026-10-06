@@ -46,6 +46,8 @@ export async function rendersFixtures(params: FocusPageProps["params"]): Promise
  * server-side and off by default. Everything else in Focus stays "not connected yet" for a business.
  */
 export const workConnected = () => process.env.WORK_API_ENABLED === "true";
+/** Approvals read the Marketing OS contracts already in Mytiv; on where the marketing module is (its own flag). */
+export const approvalsConnected = () => process.env.MARKETING_MODULE_ENABLED === "true";
 
 /** Page-level guard for the Work screens: the demo renders them on fixtures; a business when Work is connected. */
 export async function rendersWork(params: FocusPageProps["params"]): Promise<boolean> {

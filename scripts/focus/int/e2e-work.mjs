@@ -94,7 +94,7 @@ await check("tenant isolation: another business's member cannot read or write th
 });
 
 await check("areas without a backend say so for the business (no fixtures)", async () => {
-  await page.goto(BASE + "/mytiv/focus/approvals", { waitUntil: "domcontentloaded" }); await settle(page);
+  await page.goto(BASE + "/mytiv/focus/reports", { waitUntil: "domcontentloaded" }); await settle(page);
   const html = await page.content();
   return (await page.isVisible("#area-nc-h")) && !html.includes("נועה") ? "not-connected page" : false;
 });

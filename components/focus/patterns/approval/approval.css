@@ -356,3 +356,15 @@ button.f-design__layer { cursor: pointer; text-align: start; }
   .f-atable__row > .f-atable__act { grid-column: 1 / -1; }
   .f-atable__cta { min-height: 48px; }
 }
+
+/* Business approvals (Marketing OS C2a queue imported into Mytiv) */
+.f-mkt-appr { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; }
+.f-mkt-appr__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.f-mkt-appr__title { font-size: 17px; font-weight: 700; line-height: 1.4; margin: 0; }
+.f-mkt-appr__why { font-size: 14.5px; line-height: 1.6; margin: 0; color: var(--f-ink-soft); }
+.f-mkt-appr__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 16px; margin: 0; }
+.f-mkt-appr__facts dt { font-size: 12px; color: var(--f-muted); }
+.f-mkt-appr__facts dd { margin: 2px 0 0; font-size: 13.5px; overflow-wrap: anywhere; }
+.f-mkt-appr__decide { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--f-border); }
+.f-mkt-appr__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 767px) { .f-mkt-appr { padding: 16px; } .f-mkt-appr__actions > button { min-height: 44px; } }

@@ -14,7 +14,7 @@ import "@/components/focus/patterns/clients/clients.css";
 import "@/components/focus/patterns/comms/comms.css";
 import "@/components/focus/patterns/marketing/marketing.css";
 import { fixturesAllowed, requireBusinessScope } from "@/lib/focus/scope";
-import { getFocusScope, workConnected } from "@/lib/focus/scope.server";
+import { approvalsConnected, getFocusScope, workConnected } from "@/lib/focus/scope.server";
 import { BusinessShell } from "@/components/focus/shell/business-shell";
 import { loadBusinessWork } from "@/lib/work/focus-shell";
 import { DemoStoreProvider } from "@/components/focus/shell/demo-store";
@@ -67,8 +67,8 @@ export default async function FocusLayout({ children, params }: { children: Reac
               </NavGuardProvider>
             </ToastProvider>
           </DemoStoreProvider>
-        ) : workConnected() ? (
-          <BusinessShell remote={await loadBusinessWork(requireBusinessScope(scope))}>{children}</BusinessShell>
+        ) : workConnected() || approvalsConnected() ? (
+          <BusinessShell remote={await loadBusinessWork(requireBusinessScope(scope))} areas={{ work: workConnected(), approvals: approvalsConnected() }}>{children}</BusinessShell>
         ) : (
           <main id="main" tabIndex={-1} className="f-main"><FocusNotConnected scope={requireBusinessScope(scope)} /></main>
         )}
