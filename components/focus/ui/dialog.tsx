@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { cx } from "./cx";
+import { useToastOutletRef } from "./toast";
 
 /**
  * Modal surfaces on the native <dialog> + showModal(): focus is trapped and moved inside, Esc closes, the page behind
@@ -15,6 +16,7 @@ export function Dialog({
   className?: string; children: ReactNode; initialFocus?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const toastOutlet = useToastOutletRef();
   const opener = useRef<Element | null>(null);
   useEffect(() => {
     const d = ref.current;
@@ -35,7 +37,8 @@ export function Dialog({
     return () => {
       if (!d?.open) return;
       const o = opener.current as HTMLElement | null;
-      requestAnimationFrame(() => { if (o?.isConnected) o.focus(); });
+      // opened from another page or by a deep link: no opener here — the page's main region takes focus instead
+      requestAnimationFrame(() => { if (o?.isConnected && o !== document.body) o.focus(); else document.getElementById("main")?.focus(); });
     };
   }, []);
   useEffect(() => {
@@ -57,6 +60,8 @@ export function Dialog({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {open && children}
+      {/* toasts raised while this modal is open render here (outside it the page is inert, the undo unreachable) */}
+      {open && <div ref={toastOutlet} className="f-toast-outlet" />}
     </dialog>
   );
 }

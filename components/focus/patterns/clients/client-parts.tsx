@@ -118,7 +118,7 @@ export function ConnectionsCard({ connections }: { connections: Loadable<ClientC
           <ul className="f-cl-conns">
             {list.map((c) => (
               <li key={c.id}>
-                <SystemLine status={CONN_STATUS[c.state]} className="f-cl-conns__line">
+                <SystemLine status={CONN_STATUS[c.state]} live={false} className="f-cl-conns__line">
                   {c.label} · {c.detail}{c.since ? ` · מ־${fmtDayMonth(c.since)}` : ""}
                 </SystemLine>
                 {c.state !== "ok" && <ButtonLink href={R.settings} variant="link" size="sm" className="f-cl-conns__fix">חבר מחדש בהגדרות</ButtonLink>}

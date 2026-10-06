@@ -362,7 +362,7 @@ export function TaskDrawerBody(p: DrawerProps) {
         )}
         {can("create") && <Button variant="neutral" onClick={p.onDuplicate}>שכפל</Button>}
         <span className="f-grow" />
-        {/* not a live region: every write already raises its own toast */}
+        {/* not a live region: the host confirms each write once (a toast, or its own status line) */}
         <span className="f-meta f-td__saved">עודכן {fmtAgo(t.updatedAt, now)} · שינויי שדות נשמרים מיד</span>
       </div>
     </div>

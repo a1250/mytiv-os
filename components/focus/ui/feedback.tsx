@@ -17,12 +17,12 @@ const BANNER_GLYPH: Record<BannerKind, string> = {
 };
 
 /**
- * A banner is a polite status region: a banner that appears after an action is announced, one that is part of the
- * page as loaded is not read out (screen readers do not announce a status region's initial content — an `alert`
- * would be, on every page load). `live={false}` for a banner that receives focus itself (read from there, once).
+ * A banner that appears after an action is announced (an error as an alert, anything else politely). `live={false}`
+ * for a banner that is part of the page as loaded (an alert there would be read on every load) or that receives
+ * focus itself (read from there, once).
  */
 export function Banner({ kind, title, detail, action, className, live = true }: { kind: BannerKind; title: ReactNode; detail?: ReactNode; action?: ReactNode; className?: string; live?: boolean }) {
-  const role = live ? "status" : undefined;
+  const role = !live ? undefined : kind === "error" ? "alert" : "status";
   return (
     <div role={role} className={cx("f-banner", `f-banner--${kind}`, className)}>
       <span className="f-banner__glyph" aria-hidden><span className={kind === "processing" ? "f-spin" : undefined}>{BANNER_GLYPH[kind]}</span></span>

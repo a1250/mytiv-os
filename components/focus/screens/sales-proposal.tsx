@@ -6,7 +6,7 @@ import { fmtAgo, fmtDate, fmtMoney, fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { computeTotals, fromDraft, lineValid, LineItems, PdfPreview, toDraft, TotalsBox, VersionsCard, type LineDraft } from "@/components/focus/patterns/sales/proposal-editor";
 import { fmtAmount, PlannedDialog, ProposalStatusPill } from "@/components/focus/patterns/sales/sales-parts";
-import { saveProposal, useSales, type SalesState } from "@/components/focus/patterns/sales/sales-store";
+import { getSales, saveProposal, useSales, type SalesState } from "@/components/focus/patterns/sales/sales-store";
 import { useDemo } from "@/components/focus/shell/demo-store";
 import { FocusBar } from "@/components/focus/shell/focus-bar";
 import { Button, ButtonLink } from "@/components/focus/ui/button";
@@ -90,12 +90,17 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
    * Undo of a whole-form change: only while that change is still the latest (a later edit is never thrown away) and
    * never once the proposal is being sent or was sent (what was sent must stay what the page shows).
    */
-  const undoTo = (prev: Form, made: Form) => (): boolean => {
+  const undoTo = (prev: Form, made: Form) => {
+    // what this change stored: the undo applies only while the stored proposal is still exactly that (the editor may
+    // have been left and reopened since — a ref inside one editor instance would not see edits made in the next one)
+    const madeStored = JSON.stringify(getSales().proposal);
+    return (): boolean => {
     const ex = demo.getLatest().executions[d.approvalId];
     if (ex?.step === "sending" || ex?.step === "sent") { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "ההצעה כבר בשליחה או נשלחה, ולכן היא לא משתנה." }); return false; }
-    if (formNow.current !== made) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "ההצעה נערכה מאז, והביטול היה מוחק את העריכות האחרונות." }); return false; }
+    if (JSON.stringify(getSales().proposal) !== madeStored || formNow.current !== made) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "ההצעה נערכה מאז, והביטול היה מוחק את העריכות האחרונות." }); return false; }
     commit(prev);
     return true;
+    };
   };
 
   const changeTemplate = (id: string) => {

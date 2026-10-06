@@ -8,7 +8,7 @@ import { fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { canQuickApprove, queueOrder } from "@/lib/focus/state/approvals";
 import { PUBLISH_SUSHI } from "@/lib/focus/fixtures/marketing";
-import { jobStatus } from "@/lib/focus/state/jobs";
+import { jobStatus, runningNow } from "@/lib/focus/state/jobs";
 import { canUndo } from "@/lib/focus/state/undo";
 import type { CardPhase } from "@/components/focus/patterns/action-card";
 import { useToast } from "@/components/focus/ui/toast";
@@ -51,9 +51,9 @@ export function useQueue() {
     const unknownAtMeta = states.some((x) => x?.state === "failed" && x.unknown);
     for (const id of scheduleJobs) demo.cancelJob(id);
     // a schedule Meta already confirmed is cancelled AT Meta: that is its own request, confirmed only when Meta answers
-    if (confirmedAtMeta) demo.startJob({ id: `unschedule-${approvalId}`, kind: "schedule_meta", label: "מבטל את התזמון ב־Meta", detail: "", durationMs: META_SCHEDULE_MS, outcome: "success", href: R.today });
+    if (confirmedAtMeta) demo.startJob({ id: `unschedule-${approvalId}`, kind: "schedule_meta", label: "ביטול התזמון ב־Meta", detail: "", durationMs: META_SCHEDULE_MS, outcome: "success", href: R.today });
     demo.undoDecision(approvalId);
-    const detail = confirmedAtMeta ? "הפריט חזר לתור. ביטול התזמון נשלח ל־Meta, ו״בוטל״ יוצג רק אחרי שהיא תאשר. דבר לא פורסם."
+    const detail = confirmedAtMeta ? "הפריט חזר לתור. ביטול התזמון נשלח ל־Meta — התראה תגיע כשהיא תאשר. דבר לא פורסם."
       : unknownAtMeta ? "הפריט חזר לתור. ייתכן שהתזמון נקלט ב־Meta לפני שהבקשה נקטעה — בדקו שם ובטלו אם צריך."
       : "הפריט חזר לתור. דבר לא פורסם.";
     if (!fromToast) toast.push({ kind: "info", title: "ההחלטה בוטלה", detail });
@@ -78,11 +78,14 @@ export function useQueue() {
   const quickApprove = (approvalId: string) => {
     const a = approval(approvalId);
     if (!a || !canQuickApprove(a)) return;
+    // a cancel still on its way to Meta: a new schedule now would race it
+    const cancelling = demo.getLatest().jobs.find((j) => j.id === `unschedule-${approvalId}` && !j.cancelledAt);
+    if (runningNow(cancelling)) { toast.push({ kind: "info", title: "עוד רגע", detail: "ביטול התזמון הקודם עדיין בדרך ל־Meta. נסו שוב כשהוא יאושר." }); return; }
     const r = demo.decide(approvalId, "approve", "");
     if (!r.ok) return;
     // content whose real photo is still missing is approved, but never scheduled at Meta with the placeholder
     const missing = photoMissing(approvalId);
-    if (missing) toast.push({ title: "אושר", detail: `התזמון ב־Meta ימתין: ${missing}.`, undo: { onUndo: () => undo(approvalId, r.decidedAt, true) } });
+    if (missing) toast.push({ title: "אושר · לא תוזמן", detail: `${missing}. אחרי שיתווסף צילום אמיתי, תזמנו ממסך הפרסום.`, undo: { onUndo: () => undo(approvalId, r.decidedAt, true) } });
     else scheduleWithMeta(approvalId, true, r.decidedAt);
   };
 

@@ -74,7 +74,9 @@ guard entry with the destination (no duplicate history entry); Back-leave steps 
 the guard entry is stepped off in the same commit, and any navigation started meanwhile is queued behind that step
 (never undone by it). Discarding a draft and navigating in place (`useFocusRouter().discardAndReplace`: closing the
 drawer or switching the D3 task without saving) steps off first, so the discarded state is no history entry. "Leave"
-does not raise the browser's own prompt as well; with nothing behind the page it goes to the Focus home. A jump of
+does not raise the browser's own prompt as well; with nothing behind the page (known up front from the Navigation API,
+a timer only where it is missing) it goes to the Focus home. Toasts raised while a modal dialog is open render inside
+it, so their undo stays reachable. A jump of
 several entries at once (Back's long-press menu) cannot be held by any page — the guard then lets it go without
 touching the other page's history (drafts kept in the store, like mail, survive it). Screens keep in-page confirmations only for in-page actions (closing the task drawer, switching
 the selected task, closing a form) — never a second leave dialog.
@@ -84,9 +86,10 @@ the selected task, closing a form) — never a second leave dialog.
 - **Styling**: class names `f-<block>__<elem>--<mod>` in the area's CSS file. Colours only via tokens (`var(--f-…)`
   in `app/(focus)/[businessSlug]/focus/focus.css`); the theme attribute lives on `.focus-app` (no hydration mismatch).
   Inline styles only for data-driven geometry/brand colours.
-- **Announcements**: banners are polite status regions (an error is its own variant, never an `alert` read on every
-  load); a toast is announced once by its container; a result that receives focus (pre-execution sent / failed) is
-  read from there, not also as a live region.
+- **Announcements**: a banner or failed line that appears after an action is announced (errors as alerts, the rest
+  politely); one that is part of the page as loaded opts out (`live={false}`), so nothing is read on every load; a
+  toast is announced once by its container; drawer writes without a toast are confirmed by one status line; a result
+  that receives focus (pre-execution sent / failed) is read from there, not also as a live region.
 - **Status language**: never render a glyph or a status colour by hand — use the status components (symbol + word).
   "Blocked" is derived (`displayStatus`, `blockedWhy`, `manualBlockText`); other domains read a task's block live
   (`blockedByTask`), never a copied sentence.

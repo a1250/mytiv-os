@@ -228,7 +228,8 @@ function useStoreValue() {
           dispatch({ type: "decide", decision: { approvalId: id, outcome: "approve", reason: `אישור מפורש לפני ביצוע: ${a.execution?.confirmText ?? ""}`.trim(), decidedAt: demoIso(), decidedBy: VIEWER.id }, status: "approved" });
           // the follow-up the summary promised exists only now, after the target confirmed
           const f = a.execution?.followUpTask;
-          if (f && !latestTasks.current.some((t) => t.id === `t-followup-${id}`)) createRef.current?.({ id: `t-followup-${id}`, title: f.title, dueDate: f.dueDate, priority: "medium", assigneeId: f.assigneeId });
+          if (f && !latestTasks.current.some((t) => t.id === `t-followup-${id}`)) createRef.current?.({ id: `t-followup-${id}`, title: f.title, dueDate: f.dueDate, priority: "medium", assigneeId: f.assigneeId, links: f.leadId ? { leadId: f.leadId } : {}, context: f.client ? { client: f.client } : {},
+            activity: [{ id: "a0", at: demoIso(), actorId: "system", text: `נוצרה אוטומטית אחרי ש־${a.execution?.target.label ?? "המערכת"} אישר את השליחה`, tone: "done" }] });
         }
       }, a.simulate.latencyMs);
     }
@@ -326,12 +327,14 @@ function useStoreValue() {
     if (!t) return null;
     const r = switchTimer(s.timer, t, new Date().toISOString());
     const prevTask = r.logged ? s.tasks.find((x) => x.id === r.logged!.taskId) : undefined;
+    // the entry exists only when the logged time was written to the task (same rule as stop)
+    let loggedOk = false;
     if (r.logged && r.logged.minutes > 0 && prevTask) {
-      addEntry(r.logged.taskId, r.logged.minutes, "timer");
-      addSpent(prevTask, r.logged.minutes);
+      loggedOk = !!addSpent(prevTask, r.logged.minutes)?.ok;
+      if (loggedOk) addEntry(r.logged.taskId, r.logged.minutes, "timer");
     }
     dispatch({ type: "timer", timer: r.next });
-    return r;
+    return { ...r, loggedOk };
   }, [s.tasks, s.timer, addSpent]);
   const timerPause = useCallback(() => { if (s.timer) dispatch({ type: "timer", timer: pauseTimer(s.timer, Date.now()) }); }, [s.timer]);
   const timerResume = useCallback(() => { if (s.timer) dispatch({ type: "timer", timer: resumeTimer(s.timer, new Date().toISOString()) }); }, [s.timer]);

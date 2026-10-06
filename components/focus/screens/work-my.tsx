@@ -51,7 +51,7 @@ function Inner() {
     ? { activeTaskId: state.timer?.running ? state.timer.taskId : null, onStart: (id: string) => {
         const t = state.tasks.find((x) => x.id === id); const g = t ? gate(t, "trackTime") : null;
         if (!g?.ok) { toast.push({ kind: "error", title: "הטיימר לא הופעל", detail: g?.refused ?? "המשימה לא נמצאה." }); return; }
-        const r = demo.timerStart(id); if (r?.conflict && r.logged) toast.push({ title: "הטיימר עבר משימה", detail: `הטיימר הקודם נעצר ונרשמו ${r.logged.minutes} דק׳.` }); }, onPause: demo.timerPause }
+        const r = demo.timerStart(id); if (r?.conflict && r.logged) toast.push({ title: "הטיימר עבר משימה", detail: (r.logged.minutes === 0 ? "הטיימר הקודם נעצר. פחות מחצי דקה — לא נרשם זמן." : r.loggedOk ? `הטיימר הקודם נעצר ונרשמו ${r.logged.minutes} דק׳.` : "הטיימר הקודם נעצר, אבל הזמן לא נרשם — המשימה לא קיבלה את הרישום.") }); }, onPause: demo.timerPause }
     : undefined;
   const toggleDone = useToggleDone();
   const onMove = useBoardMove();

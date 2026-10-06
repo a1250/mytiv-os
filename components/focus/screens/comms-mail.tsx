@@ -123,7 +123,7 @@ function Inner() {
     // a send (that would drop the send and allow a second one), never over a later edit
     const onUndo = () => {
       const cur = (demo.getLatest().drafts[MAIL_DRAFTS] as Record<string, DraftLocal> | undefined)?.[thread.id];
-      if (cur?.send?.jobId !== prev?.send?.jobId) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "התשובה נשלחה מאז, ולכן הטיוטה לא חוזרת לגרסה הקודמת." }); return false; }
+      if (cur?.send?.jobId !== prev?.send?.jobId) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "מאז נעשה ניסיון לשלוח את התשובה, ולכן הטיוטה לא חוזרת לגרסה הקודמת." }); return false; }
       if (cur?.savedAt !== next.savedAt || cur?.text !== next.text) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "הטיוטה נערכה מאז, והביטול היה מוחק את העריכות האחרונות." }); return false; }
       setDrafts((xs) => { const c = { ...xs }; if (prev) c[thread.id] = prev; else delete c[thread.id]; return c; });
       return true;
@@ -236,7 +236,7 @@ function Inner() {
                   )}
                   <div className="f-cm-reply__foot">
                     <Button variant="primary" onClick={() => setSendOpen(true)} disabled={!base || aiRunning || sending}>בדוק ושלח</Button>
-                    {thread.alternates.length > 0 && <Button variant="neutral" onClick={regenerate} disabled={aiRunning || sending} loading={aiRunning} loadingLabel="מנסח…">נסח מחדש</Button>}
+                    {thread.alternates.length > 0 && <Button variant="neutral" onClick={regenerate} disabled={sending} loading={aiRunning} loadingLabel="מנסח…">נסח מחדש</Button>}
                     <Button variant="neutral" onClick={saveDraft} disabled={!base || aiRunning || sending}>שמור טיוטה</Button>
                     <span className="f-grow" />
                     <span className="f-meta-sm">אין שליחה אוטומטית</span>

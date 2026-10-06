@@ -57,7 +57,8 @@ function Inner() {
   const job = task ? state.jobs.find((j) => j.id === syncJobId(task.id, task.version)) : undefined;
   const js = job && !job.cancelledAt ? jobStatus(job, state.clock) : null;
   const sync: SyncState = !js ? { kind: "idle" } : js.state === "running" ? { kind: "syncing" } : js.state === "done" ? { kind: "synced", at: fmtTime(demoIso(js.at)) }
-    : { kind: "failed", message: js.state === "failed" && js.unknown ? "הסנכרון נקטע לפני ש־ClickUp ענה — לא ידוע אם נקלט. בדקו ב־ClickUp לפני ניסיון נוסף." : "ClickUp לא אישר את השינוי." };
+    : js.state === "failed" && js.unknown ? { kind: "failed", unknown: true, message: "הסנכרון נקטע לפני ש־ClickUp ענה. השינוי נשמר כאן; בדקו ב־ClickUp לפני ניסיון נוסף." }
+    : { kind: "failed", message: "ClickUp לא אישר את השינוי." };
   const onDirty = useCallback((d: boolean) => setDirty(d), []);
   const refreshJob = state.jobs.find((j) => j.id === "refresh-clickup");
   const refreshSt = refreshJob && !refreshJob.cancelledAt ? jobStatus(refreshJob, state.clock) : null;
@@ -85,6 +86,8 @@ function Inner() {
     if (!r.ok) { toast.push({ kind: "error", title: "לא נשמר", detail: "refused" in r ? r.refused : "המשימה עודכנה בזמן שערכת. השינוי שלך לא נשמר — בדקו את הערכים החדשים ונסו שוב." }); return; }
     setDraftBase({ id: task.id, version: r.task.version });
     setDirty(false);
+    // the panel remounts on its new token: keep keyboard focus on its save button, not <body>
+    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLElement>(".f-bpanel button[type=submit]")?.focus()));
     if (task.source === "clickup") {
       const fail = state.failNext; if (fail) demo.setFailNext(false);
       demo.startJob({ id: syncJobId(task.id, r.task.version), kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "שומר אחראי, צעד הבא ותאריך מעקב.", durationMs: 1800, outcome: fail ? "failure" : "success", href: R.projectExecution("umino") });

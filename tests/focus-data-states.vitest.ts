@@ -47,9 +47,9 @@ describe("unavailable vs empty vs error", () => {
     expect(ready).toContain("<li>a</li>");
     for (const s of [empty, error, unavailable]) expect(s).not.toContain("<li>");
     expect(empty).toContain("אין פריטים");
-    // an error is its own variant, announced as a (polite) status when it appears — not an alert read on every load
+    // an error is its own variant and is announced as an alert when it appears (a load-time one opts out)
     expect(error).toContain("f-banner--error");
-    expect(error).toContain('role="status"');
+    expect(error).toContain('role="alert"');
     expect(unavailable).toContain("27.9");
     expect(new Set([empty, error, unavailable]).size).toBe(3);
   });

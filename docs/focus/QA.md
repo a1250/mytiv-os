@@ -186,6 +186,10 @@ prerequisites are listed separately in [mytiv-work-contract.md](mytiv-work-contr
   own route tree before real data lands. Not verified on a production build with a real session.
 - A jump of several history entries at once while a screen is dirty (Back's long-press menu) cannot be held by a page:
   the guard lets it go cleanly; an in-memory draft is lost (store-backed drafts, e.g. mail, survive).
+- History edges of the guard: a multi-step jump that lands on an earlier entry with the same URL as the dirty page is
+  treated as one Back (asked, forward history cut); discarding a draft steps off the guard entry, which then stays as
+  a forward entry (Forward twice reopens the discarded state); "leave" from a page whose only history is another
+  origin goes to the Focus home rather than back to that site.
 - Mail: switching threads while a draft is unsaved uses the guard entry up; a later Back leaves without asking (the
   drafts stay per thread in the store, nothing is lost).
 - Timer across tabs: two tabs of the same browser share the `localStorage` timer; stopping it in both can log twice

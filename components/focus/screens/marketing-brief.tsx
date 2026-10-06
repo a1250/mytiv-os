@@ -41,7 +41,7 @@ export default function MarketingBriefScreen() {
   };
   const toBrain = () => {
     setInBrain(true);
-    toast.push({ title: `נוסף למוח העסק של ${b.client.name}`, detail: "רק המידע שאושר. מסקנות ה־AI לא נשמרו כעובדות.", undo: { onUndo: () => setInBrain(false) } });
+    toast.push({ title: `סומן להוספה למוח העסק של ${b.client.name}`, detail: "רק המידע שאושר, לא מסקנות ה־AI. ההוספה עצמה עדיין מתוכננת.", undo: { onUndo: () => setInBrain(false) } });
   };
 
   return (
@@ -49,7 +49,7 @@ export default function MarketingBriefScreen() {
       <header className="f-mk-briefpg__head">
         <h1 className="f-mk-briefpg__title">ניתוח · {b.title}</h1>
         {inBrain
-          ? <span className="f-mk-briefpg__done" role="status"><span aria-hidden>✓</span> נשמר במוח העסק</span>
+          ? <span className="f-mk-briefpg__done" role="status"><span aria-hidden>✓</span> סומן להוספה למוח העסק · החיבור עדיין מתוכנן</span>
           : <Button variant="neutral" id="to-brain" disabled={!confirmed} disabledReason={!confirmed ? "אשרו קודם את המידע מהבריף" : undefined} onClick={toBrain}>הוסף למוח העסק</Button>}
         <PlannedAction className="f-mk-planned--pill">הפוך למשימות</PlannedAction>
         <ButtonLink href={`${R.marketingPlan}?from=brief:${b.id}`}>צור קמפיין</ButtonLink>

@@ -38,6 +38,8 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
   const [conflict, setConflict] = useState<{ theirs: Task; mine: TaskPatch; by: string } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  // field writes without a toast of their own (comment, sub-task, checklist, priority, dates…) are confirmed here
+  const [saidSaved, setSaidSaved] = useState("");
   const now = useTicker(!!demo.state.timer?.running && demo.state.timer.taskId === taskId, 1000);
 
   // capture the version the drawer "loaded" when it opens on a task (a later remote edit is then detectable) —
@@ -69,6 +71,10 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
     const r = demo.patchTask(task.id, patch, expected);
     if (r.ok) {
       setBase({ id: task.id, version: r.task.version });
+      if (!(patch.status || patch.assigneeId !== undefined || patch.block || patch.unblock)) {
+        // alternate the text so a second identical confirmation is announced again
+        setSaidSaved((x) => (x === "השינוי נשמר." ? "השינוי נשמר" : "השינוי נשמר."));
+      }
       if (patch.status || patch.assigneeId !== undefined || patch.block || patch.unblock) {
         const cap = patch.assigneeId !== undefined ? caps.assign : caps.changeStatus;
         toast.push({
@@ -91,6 +97,7 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
   return (
     <Dialog open onClose={() => close()} variant="drawer" labelledBy="task-title" className="f-tdrawer">
       <TaskDrawerHead task={task} onClose={() => close()} />
+      <span className="f-sr" role="status">{saidSaved}</span>
       {confirmClose && (
         // focus moves into the question (its first, safe answer); the text is its description
         <div className="f-td__confirm" role="alertdialog" aria-label="יש טיוטה שלא נשמרה" aria-describedby="td-confirm-text">
@@ -128,11 +135,11 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
         }}
         timer={{
           active: timer, elapsedMs: timer ? (demo.hydrated ? elapsedOf(timer, now) : timer.elapsedMs) : 0, // no clock math before hydration
-          onStart: () => { const r = demo.timerStart(task.id); if (r?.conflict && r.logged) toast.push({ title: `טיימר עבר ל"${task.title}"`, detail: `הטיימר הקודם נעצר ונרשמו ${r.logged.minutes} דק׳.` }); },
+          onStart: () => { const r = demo.timerStart(task.id); if (r?.conflict && r.logged) toast.push({ title: `טיימר עבר ל"${task.title}"`, detail: (r.logged.minutes === 0 ? "הטיימר הקודם נעצר. פחות מחצי דקה — לא נרשם זמן." : r.loggedOk ? `הטיימר הקודם נעצר ונרשמו ${r.logged.minutes} דק׳.` : "הטיימר הקודם נעצר, אבל הזמן לא נרשם — המשימה לא קיבלה את הרישום.") }); },
           onPause: demo.timerPause, onStop: () => {
             const r = demo.timerStop();
             if (!r) return;
-            if (r.minutes > 0 && !r.write?.ok) { toast.push({ kind: "error", title: "הטיימר נעצר, אבל הזמן לא נרשם", detail: r.write && "refused" in r.write ? r.write.refused : "המשימה עודכנה בינתיים." }); return; }
+            if (r.minutes > 0 && !r.write?.ok) { demo.timerRestore(r.stopped, r.elapsedMs); toast.push({ kind: "error", title: "הזמן לא נרשם · הטיימר נשאר מושהה", detail: r.write && "refused" in r.write ? r.write.refused : "המשימה עודכנה בינתיים." }); return; }
             toast.push({ title: r.minutes > 0 ? `נרשמו ${r.minutes} דק׳` : "הטיימר נעצר", detail: r.minutes > 0 ? `${r.task?.title ?? ""}${caps.trackTime === "planned" ? " · יכולת מתוכננת — בהדגמה בלבד" : ""}` : "פחות מחצי דקה — לא נרשם זמן.", undo: { onUndo: stopUndo(r) } });
           },
         }}

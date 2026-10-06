@@ -96,9 +96,10 @@ export function OriginTag({ origin, label, size = "md" }: { origin: ContentOrigi
   return <span className={cx("f-origin", size === "sm" && "f-origin--sm")}><span aria-hidden>✦</span>{label ?? ORIGIN[origin]}</span>;
 }
 
-export function SystemLine({ status, children, className }: { status: SystemStatus; children: ReactNode; className?: string }) {
+/** A failed line appearing after an action is an alert; `live={false}` for a failure that is part of the page as loaded. */
+export function SystemLine({ status, children, className, live = true }: { status: SystemStatus; children: ReactNode; className?: string; live?: boolean }) {
   return (
-    <span className={cx("f-sysline", `f-sysline--${status}`, className)} role={status === "failed" ? "alert" : undefined}>
+    <span className={cx("f-sysline", `f-sysline--${status}`, className)} role={status === "failed" && live ? "alert" : undefined}>
       <span aria-hidden className={status === "processing" ? "f-spin" : undefined}>{SYSTEM[status].glyph}</span>{children}
     </span>
   );

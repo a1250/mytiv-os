@@ -19,7 +19,7 @@ import { PRIORITY } from "./task-card";
  * are guarded by the caller.
  */
 export type BlockedDraft = { assigneeId: string | null; nextAction: string; followUp: string | null; note: string };
-export type SyncState = { kind: "idle" } | { kind: "syncing" } | { kind: "synced"; at: string } | { kind: "failed"; message: string };
+export type SyncState = { kind: "idle" } | { kind: "syncing" } | { kind: "synced"; at: string } | { kind: "failed"; message: string; unknown?: boolean };
 
 export function BlockedTaskPanel({
   task, all, now, viewerId, sync, onSave, onRetry, onDirtyChange, canEdit,
@@ -84,7 +84,9 @@ export function BlockedTaskPanel({
           <ol className="f-bpanel__hist">
             {task.activity.map((a) => <li key={a.id} className="f-meta-sm">{fmtDayMonth(a.at)} · {a.text}</li>)}
           </ol>
-          {sync.kind === "failed" && <Banner kind="error" title="הסנכרון ל־ClickUp נכשל" detail={`${sync.message} השינוי נשמר כאן, אבל עדיין לא ב־ClickUp.`} action={<Button variant="neutral" size="sm" onClick={onRetry}>נסה שוב</Button>} />}
+          {sync.kind === "failed" && (sync.unknown
+            ? <Banner kind="warning" title="לא ידוע אם ClickUp קיבל את השינוי" detail={sync.message} action={<Button variant="neutral" size="sm" onClick={onRetry}>בדקתי ב־ClickUp · נסה שוב</Button>} />
+            : <Banner kind="error" title="הסנכרון ל־ClickUp נכשל" detail={`${sync.message} השינוי נשמר כאן, אבל עדיין לא ב־ClickUp.`} action={<Button variant="neutral" size="sm" onClick={onRetry}>נסה שוב</Button>} />)}
           {sync.kind === "synced" && <Banner kind="done" title="סונכרן ל־ClickUp" detail={`ClickUp אישר ב־${sync.at}.`} />}
           <div className="f-bpanel__actions">
             <Button type="submit" variant="primary" loading={sync.kind === "syncing"} loadingLabel="מסנכרן ל־ClickUp…" disabled={!dirty && sync.kind !== "syncing"} disabledReason={!dirty && sync.kind !== "syncing" ? "אין שינויים לשמור" : undefined}>

@@ -1,12 +1,13 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { canUndo, fmtRemaining, openWindow, remainingMs, TOAST_MS, UNDO_WINDOW_MS, type UndoWindow } from "@/lib/focus/state/undo";
 import { cx } from "./cx";
 import { Icon } from "./icon";
 
 /**
- * Toasts (§6.11). Plain toasts leave after 6s; errors stay until closed; a toast with "בטל" leaves 6s after its undo window ends. "Success" is only
+ * Toasts (§6.11). Plain toasts leave after 6s; errors stay until closed; a toast with "בטל" leaves 6s after its undo window ends (2.5s after it was used). "Success" is only
  * raised by callers after the target system confirmed. Polite live region; errors are assertive.
  */
 export type ToastInput = {
@@ -30,6 +31,16 @@ export function useToast() {
   return c;
 }
 
+const OutletCtx = createContext<((el: HTMLElement) => () => void) | null>(null);
+
+/** For modal surfaces (Dialog): a ref for an element inside the dialog where toasts render while it is open. */
+export function useToastOutletRef() {
+  const register = useContext(OutletCtx);
+  const [el, setEl] = useState<HTMLElement | null>(null);
+  useEffect(() => (register && el ? register(el) : undefined), [register, el]);
+  return setEl;
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const seq = useRef(0);
@@ -42,15 +53,27 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     return id;
   }, [dismiss]);
   const value = useMemo(() => ({ push, dismiss }), [push, dismiss]);
-  return (
-    <Ctx.Provider value={value}>
-      {children}
+  // an open modal dialog makes the rest of the page inert — toasts (and their undo) render inside the topmost one
+  const [outlets, setOutlets] = useState<HTMLElement[]>([]);
+  const registerOutlet = useCallback((el: HTMLElement) => {
+    setOutlets((xs) => [...xs.filter((x) => x !== el), el]);
+    return () => setOutlets((xs) => xs.filter((x) => x !== el));
+  }, []);
+  const target = outlets.at(-1) ?? null;
+  const regions = (
+    <>
       <div className="f-toasts" aria-live="polite" aria-relevant="additions text">
         {items.filter((t) => t.kind !== "error").map((t) => <Toast key={t.id} t={t} onClose={() => dismiss(t.id)} onUndone={(text) => setItems((xs) => xs.map((x) => x.id === t.id ? { ...x, undone: text } : x))} />)}
       </div>
       <div className="f-toasts f-toasts--errors" aria-live="assertive">
         {items.filter((t) => t.kind === "error").map((t) => <Toast key={t.id} t={t} onClose={() => dismiss(t.id)} onUndone={() => {}} />)}
       </div>
+    </>
+  );
+  return (
+    <Ctx.Provider value={value}>
+      <OutletCtx.Provider value={registerOutlet}>{children}</OutletCtx.Provider>
+      {target ? createPortal(regions, target) : regions}
     </Ctx.Provider>
   );
 }

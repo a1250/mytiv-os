@@ -45,7 +45,7 @@ export function TimerBarView({
 }
 
 export function TimerBar({ variant = "fixed", note }: { variant?: "fixed" | "inline"; note?: string }) {
-  const { state, hydrated, timerPause, timerResume, timerStop } = useDemo();
+  const { state, hydrated, timerPause, timerResume, timerStop, timerRestore } = useDemo();
   const toast = useToast();
   const stopUndo = useTimerStopUndo();
   const isDemo = useIsDemo();
@@ -68,7 +68,7 @@ export function TimerBar({ variant = "fixed", note }: { variant?: "fixed" | "inl
         const r = timerStop();
         if (!r) return;
         if (r.orphan) { toast.push({ kind: "error", title: "הטיימר נעצר בלי לרשום זמן", detail: "המשימה שלו כבר לא קיימת." }); return; }
-        if (r.minutes > 0 && !r.write?.ok) { toast.push({ kind: "error", title: "הטיימר נעצר, אבל הזמן לא נרשם", detail: r.write && "refused" in r.write ? r.write.refused : "המשימה עודכנה בינתיים." }); return; }
+        if (r.minutes > 0 && !r.write?.ok) { timerRestore(r.stopped, r.elapsedMs); toast.push({ kind: "error", title: "הזמן לא נרשם · הטיימר נשאר מושהה", detail: r.write && "refused" in r.write ? r.write.refused : "המשימה עודכנה בינתיים." }); return; }
         // undo: the logged minutes come off through the versioned undo; the timer resumes paused at its stop time
         const planned = timerTask && CAPABILITIES[timerTask.source].trackTime === "planned" ? " · יכולת מתוכננת — בהדגמה בלבד" : "";
         toast.push({ title: r.minutes > 0 ? `נרשמו ${r.minutes} דק׳ על "${r.stopped.title}"` : "הטיימר נעצר", detail: r.minutes > 0 ? `נוסף לדוח השעות${planned}.` : "פחות מחצי דקה — לא נרשם זמן.", undo: { onUndo: stopUndo(r) } });

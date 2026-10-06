@@ -51,6 +51,9 @@ export function jobStatus(j: Job, now: number): JobStatus {
 }
 
 
+/** Is the job still running right now (for callbacks outside render, e.g. a click handler). */
+export const runningNow = (j: Job | undefined): boolean => !!j && !j.cancelledAt && jobStatus(j, Date.now()).state === "running";
+
 /**
  * On reload: an external job still running has an unknown outcome (the page that waited for the answer is gone).
  * Internal jobs keep running on the clock as before.

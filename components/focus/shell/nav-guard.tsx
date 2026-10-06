@@ -193,16 +193,20 @@ export function NavGuardProvider({ children }: { children: ReactNode }) {
     leaving.current = true;
     setTimeout(() => { leaving.current = false; }, 1500); // still here (in-app navigation, or nowhere to go back to)
     if (t.kind === "back") {
+      const steps = hadEntry ? 2 : 1;
+      // nothing before this page (opened in a new tab): leave to the Focus home instead of doing nothing. Decided up
+      // front from the Navigation API where it exists — a Back into another (slow) document fires no popstate, so a
+      // timer would wrongly replace the page while that Back is still loading
+      type Nav = { currentEntry?: { index: number } | null };
+      const nav = (window as unknown as { navigation?: Nav }).navigation;
+      if (nav?.currentEntry && nav.currentEntry.index < steps) { router.replace(base); return; }
       ignoreNextPop.current = true;
-      window.history.go(hadEntry ? -2 : -1);
-      // nothing before this page (opened in a new tab): no popstate comes — leave to the Focus home instead of doing
-      // nothing (the guard entry on top is replaced by it), and the next real Back is not swallowed
-      const onPop = () => { clearTimeout(fallback); };
-      const fallback = setTimeout(() => {
-        window.removeEventListener("popstate", onPop);
-        if (ignoreNextPop.current) { ignoreNextPop.current = false; router.replace(base); }
-      }, 400);
-      window.addEventListener("popstate", onPop, { once: true });
+      window.history.go(-steps);
+      if (nav?.currentEntry) return;
+      // no Navigation API: fall back to a timer, cancelled by any sign that the Back is happening
+      const cancel = () => { clearTimeout(fallback); window.removeEventListener("popstate", cancel); window.removeEventListener("pagehide", cancel); window.removeEventListener("beforeunload", cancel); };
+      const fallback = setTimeout(() => { cancel(); if (ignoreNextPop.current) { ignoreNextPop.current = false; router.replace(base); } }, 1500);
+      window.addEventListener("popstate", cancel); window.addEventListener("pagehide", cancel); window.addEventListener("beforeunload", cancel);
       return;
     }
     // replace the guard entry with the destination: Back from there returns to the page, not to a duplicate

@@ -104,7 +104,7 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     await card.locator("a.f-btn").focus();
     await page.keyboard.press("a");
     await page.waitForSelector(".f-acard--done", { timeout: 5000 });
-    const waits = await page.isVisible(".f-toast >> text=התזמון ב־Meta ימתין");
+    const waits = await page.isVisible(".f-toast >> text=אושר · לא תוזמן");
     const scheduling = await page.isVisible(".f-acard--working");
     await page.click(".f-acard--done .f-btn--neutral"); // undo, back to the queue
     await page.waitForTimeout(200);
@@ -384,7 +384,7 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     await page.waitForSelector("#cm-sent-h", { timeout: 5000 });
     await saveToast.locator(".f-toast__btn >> text=בטל").click();
     await page.waitForTimeout(200);
-    const refused = await page.isVisible(".f-toast >> text=התשובה נשלחה מאז");
+    const refused = await page.isVisible(".f-toast >> text=מאז נעשה ניסיון לשלוח");
     return refused && (await page.isVisible("#cm-sent-h")) ? "refused, still sent once" : false;
   });
   await check("proposal: an undo toast cannot change a proposal that was sent", async () => {
