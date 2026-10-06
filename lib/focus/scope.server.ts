@@ -48,6 +48,8 @@ export async function rendersFixtures(params: FocusPageProps["params"]): Promise
 export const workConnected = () => process.env.WORK_API_ENABLED === "true";
 /** Approvals read the Marketing OS contracts already in Mytiv; on where the marketing module is (its own flag). */
 export const approvalsConnected = () => process.env.MARKETING_MODULE_ENABLED === "true";
+/** Business mail in Focus: Gmail sends only through backend-owned attempts (migration 0014). Off by default. */
+export { externalActionsEnabled as mailConnected } from "@/lib/external/flag";
 
 /** Page-level guard for the Work screens: the demo renders them on fixtures; a business when Work is connected. */
 export async function rendersWork(params: FocusPageProps["params"]): Promise<boolean> {

@@ -11,11 +11,11 @@ import { unscopedPath } from "@/lib/focus/scope";
 import { ToastProvider, useToast } from "@/components/focus/ui/toast";
 
 /**
- * The Focus shell of a real business (Work connected): the same store in remote mode (Mytiv Work API), toasts,
+ * The Focus shell of a real business (Work, approvals and/or mail connected): the same store in remote mode (Mytiv Work API), toasts,
  * the one navigation guard, and a slim top bar with only the connected areas — no demo controls, no fixture
  * notifications, no screen map. Other areas render their "not connected yet" page.
  */
-export type BusinessAreas = { work: boolean; approvals: boolean };
+export type BusinessAreas = { work: boolean; approvals: boolean; mail: boolean };
 export function BusinessShell({ remote, areas, children }: { remote: RemoteWork; areas: BusinessAreas; children: ReactNode }) {
   return (
     <DemoStoreProvider remote={remote}>
@@ -46,6 +46,7 @@ const NAV = [
   { area: "work" as const, href: R.work, label: "המשימות שלי", match: (p: string) => p === "/focus/work" },
   { area: "work" as const, href: R.allTasks, label: "כל המשימות", match: (p: string) => p.startsWith("/focus/work/all-tasks") },
   { area: "approvals" as const, href: R.approvals, label: "אישורים", match: (p: string) => p.startsWith("/focus/approvals") },
+  { area: "mail" as const, href: R.comms, label: "דואר", match: (p: string) => p === "/focus/comms" },
 ];
 
 function BusinessTopBar({ areas }: { areas: BusinessAreas }) {

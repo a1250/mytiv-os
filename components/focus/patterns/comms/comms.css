@@ -435,3 +435,27 @@ a.f-cm-ev:hover { box-shadow: inset 0 0 0 1px var(--f-accent-line); }
   .f-cm-tm__retry { width: 100%; }
   .f-cm-tm__previews { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Business mail (real Gmail through backend-owned attempts) */
+.f-bmail__grid { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 16px; align-items: start; margin-top: 12px; }
+.f-bmail__list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.f-bmail__item { width: 100%; display: flex; flex-direction: column; gap: 2px; text-align: start; padding: 10px 12px; border: 1px solid transparent; border-radius: 12px; background: var(--f-surface); color: inherit; font: inherit; cursor: pointer; min-height: 44px; }
+.f-bmail__item:hover { border-color: var(--f-border); }
+.f-bmail__item[aria-current="true"] { border-color: var(--f-accent-line); background: var(--f-accent-tint); }
+.f-bmail__from { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.f-bmail__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--f-accent); flex: none; }
+.f-bmail__subj { font-size: 13.5px; color: var(--f-ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.f-bmail__thread { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; min-width: 0; }
+.f-bmail__title { font-size: 18px; font-weight: 700; margin: 0; }
+.f-bmail__msgs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.f-bmail__msg { padding: 10px 12px; border-radius: 12px; background: var(--f-surface-sunk); border: 1px solid var(--f-border); }
+.f-bmail__msg--sent { background: var(--f-accent-tint); border-color: var(--f-accent-line); }
+.f-bmail__body { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; line-height: 1.6; }
+.f-bmail__status { margin: 0; padding: 8px 12px; border-radius: 10px; font-size: 13.5px; font-weight: 600; }
+.f-bmail__status--sent { background: var(--f-green-bg); color: var(--f-green-text); }
+.f-bmail__status--failed { background: var(--f-red-bg); color: var(--f-red-text); }
+.f-bmail__status--unknown { background: var(--f-amber-bg); color: var(--f-amber-text); }
+.f-bmail__status--in_flight { background: var(--f-neutral-bg); color: var(--f-neutral-text); }
+.f-bmail__reply { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--f-border); }
+.f-bmail__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 767px) { .f-bmail__grid { grid-template-columns: 1fr; } .f-bmail__thread { padding: 16px; } }

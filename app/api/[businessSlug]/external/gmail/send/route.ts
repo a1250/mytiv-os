@@ -3,7 +3,8 @@ import { guard } from "@/lib/api-guard";
 import { OpsPolicyError } from "@/lib/ops-policy";
 import { admitAttempt, settleAttempt } from "@/lib/external/attempts";
 import { gmailSendDraft } from "@/lib/external/providers";
-import { isUuid, workRouteError, writeEnvelope } from "@/lib/work/route";
+import { isUuid, workRouteError, writeEnvelope, notFound } from "@/lib/work/route";
+import { externalActionsEnabled } from "@/lib/external/flag";
 import { WorkRefusal } from "@/lib/work/commands";
 
 const ID = /^[A-Za-z0-9_-]{1,200}$/;
@@ -15,6 +16,7 @@ const ID = /^[A-Za-z0-9_-]{1,200}$/;
  * A replay of the same request id returns the same attempt and never calls Gmail again.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
+  if (!externalActionsEnabled()) return notFound();
   try {
     const { businessSlug } = await params;
     const { businessId, userId } = await guard(businessSlug);

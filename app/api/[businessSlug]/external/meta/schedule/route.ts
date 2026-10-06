@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guard } from "@/lib/api-guard";
 import { META_CONFIGURED } from "@/lib/external/providers";
-import { workRouteError, writeEnvelope } from "@/lib/work/route";
+import { workRouteError, writeEnvelope, notFound } from "@/lib/work/route";
+import { externalActionsEnabled } from "@/lib/external/flag";
 
 /**
  * POST — a Meta schedule. Mytiv has no Meta integration (no app, no Page token, no API code), so the request is
@@ -9,6 +10,7 @@ import { workRouteError, writeEnvelope } from "@/lib/work/route";
  * runs through external_attempt_admit / settle exactly like the Gmail send (target meta:<approvalId>).
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ businessSlug: string }> }) {
+  if (!externalActionsEnabled()) return notFound();
   try {
     const { businessSlug } = await params;
     await guard(businessSlug);
