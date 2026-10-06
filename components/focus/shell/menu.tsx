@@ -74,11 +74,3 @@ export function MenuLink({ href, children, onSelect, current, hint }: { href: st
     </Link>
   );
 }
-
-export function MenuButton({ children, onSelect, checked, hint }: { children: ReactNode; onSelect: () => void; checked?: boolean; hint?: ReactNode }) {
-  return (
-    <button type="button" role={checked == null ? "menuitem" : "menuitemradio"} aria-checked={checked} tabIndex={-1} className="f-menu__item" onClick={onSelect}>
-      {children}{hint && <span className="f-menu__hint">{hint}</span>}
-    </button>
-  );
-}

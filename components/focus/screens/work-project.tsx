@@ -17,12 +17,13 @@ import { TimerBar } from "@/components/focus/shell/timer-bar";
 import { SelectField } from "@/components/focus/ui/field";
 import { PlannedTag } from "@/components/focus/ui/status";
 import { NavTabs } from "@/components/focus/ui/tabs";
+import { AUTUMN_PROJECT_ID } from "@/lib/focus/fixtures/work";
 
 /**
  * Project · execution in Mytiv Work (handoff W2 list with nested sub-tasks + dependencies, W3 Kanban, W4 drawer via
  * ?task=). Same project tasks in both views; status / assignee filters are real.
  */
-const PROJECT_ID = "umino-autumn";
+const PROJECT_ID = AUTUMN_PROJECT_ID;
 
 function Inner({ view, defaultTaskId }: { view: "list" | "board"; defaultTaskId?: string }) {
   const demo = useDemo();
@@ -57,7 +58,7 @@ function Inner({ view, defaultTaskId }: { view: "list" | "board"; defaultTaskId?
         ]} />
         <span className="f-grow" />
         <span className="f-wproj__legend"><span className="f-source-dot f-source-dot--mytiv">Mytiv {counts.mytiv}</span> <span className="f-source-dot">ClickUp {counts.clickup}</span></span>
-        {canDo(role, "create") && <Link href={`${R.work}?create=1`} className="f-btn f-btn--primary">+ משימה</Link>}
+        {canDo(role, "create") && <Link href={R.workCreate(PROJECT_ID)} className="f-btn f-btn--primary">+ משימה</Link>}
       </div>
       <div className="f-wproj__body">
         {tasks.length === 0 && <p className="f-meta">אין משימות שמתאימות לסינון. <button type="button" className="f-link" onClick={() => { setStatus("all"); setOwner("all"); }}>נקה סינון</button></p>}
@@ -65,7 +66,7 @@ function Inner({ view, defaultTaskId }: { view: "list" | "board"; defaultTaskId?
           <>
             <TaskListView tasks={tasks} all={state.tasks} now={now} expandedIds={expanded} canEdit={canDo(role, "complete")}
               onToggleExpand={(id) => setExpanded((e) => (e.includes(id) ? e.filter((x) => x !== id) : [...e, id]))} onToggleDone={toggleDone} />
-            {canDo(role, "create") && <Link href={`${R.work}?create=1`} className="f-wproj__new">+ משימה חדשה בפרויקט</Link>}
+            {canDo(role, "create") && <Link href={R.workCreate(PROJECT_ID)} className="f-wproj__new">+ משימה חדשה בפרויקט</Link>}
           </>
         ) : (
           <>

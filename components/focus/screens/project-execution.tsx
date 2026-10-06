@@ -21,6 +21,7 @@ import { SelectField } from "@/components/focus/ui/field";
 import { PlannedTag } from "@/components/focus/ui/status";
 import { NavTabs } from "@/components/focus/ui/tabs";
 import { useToast } from "@/components/focus/ui/toast";
+import { AUTUMN_PROJECT_ID } from "@/lib/focus/fixtures/work";
 
 /**
  * Project › execution (handoff D3, prototype flow 2): tasks grouped by status with dependencies, and the selected task
@@ -46,7 +47,7 @@ function Inner() {
   const [dirty, setDirty] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
-  const project = state.tasks.filter((t) => t.links.projectId === "umino-autumn");
+  const project = state.tasks.filter((t) => t.links.projectId === AUTUMN_PROJECT_ID);
   const tasks = project.filter((t) => owner === "all" || t.assigneeId === owner);
   const task = state.tasks.find((t) => t.id === selected) ?? null;
   const job = state.jobs.find((j) => j.id === `sync-${selected}`);
@@ -96,7 +97,7 @@ function Inner() {
             <span className="f-wproj__planned">ציר זמן <PlannedTag /></span>
             <SelectField label="אחראי" labelClassName="f-sr" className="f-wproj__filter" value={owner} onChange={(e) => setOwner(e.target.value)} options={[{ value: "all", label: "אחראי: כולם" }, ...Object.values(PEOPLE).filter((p) => p.role !== "viewer").map((p) => ({ value: p.id, label: p.name }))]} />
             <span className="f-grow" />
-            {canDo(state.role, "create") && <Link href={`${R.work}?create=1`} className="f-btn f-btn--primary f-btn--sm">+ משימה</Link>}
+            {canDo(state.role, "create") && <Link href={R.workCreate(AUTUMN_PROJECT_ID)} className="f-btn f-btn--primary f-btn--sm">+ משימה</Link>}
           </div>
           <div className="f-exec__sync" role="status">
             <span className="f-source-dot f-source-dot--mytiv">Mytiv {project.filter((t) => t.source === "mytiv").length}</span>

@@ -29,7 +29,7 @@ export const APPROVALS: Approval[] = [
     history: [],
     execution: {
       target: { system: "gmail", label: "Gmail" },
-      from: "ron@mytiv.co.il",
+      from: "ron@demo.example",
       recipient: { name: "נועה כהן", address: "noa.cohen@example.co.il" },
       payload: { title: "אירוח עסקי — 8,750 ₪", detail: "גרסה 1 · כולל מע״מ · בתוקף עד 15.10", amount: { amount: 8750, currency: "ILS" }, attachment: "pdf" },
       after: "גרסה 1 ננעלת לעריכה. נוצרת משימת מעקב לדנה ל־4.10.",

@@ -1,4 +1,4 @@
-/* Focus UI primitives — handoff "Design System - Focus" §6. Class names: f-<block>[__elem][--mod]. Tokens: app/focus/focus.css */
+/* Focus UI primitives — handoff "Design System - Focus" §6. Class names: f-<block>[__elem][--mod]. Tokens: app/(focus)/[businessSlug]/focus/focus.css */
 
 /* ---------- hit area: every interactive target is ≥44×44 even when it is drawn smaller (handoff: 44px targets) ---------- */
 .f-hit { position: relative; }

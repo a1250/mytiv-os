@@ -141,24 +141,26 @@ describe("static guarantees over the Focus route tree", () => {
   const APP = join(ROOT, "app/(focus)/[businessSlug]/focus");
   const pages = walk(APP).filter((f) => f.endsWith("page.tsx"));
   const rel = (f: string) => f.replace(ROOT, "");
+  // code only: a guard name in a comment must not satisfy a guarantee
+  const code = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
   it("Focus lives only under the tenant segment (no unscoped app/focus tree)", () => {
     expect(() => statSync(join(ROOT, "app/focus"))).toThrow();
     expect(pages.length).toBeGreaterThan(40);
   });
   it("every Focus page is scope-guarded (fixture pages render nothing for a business)", () => {
-    const unguarded = pages.filter((f) => !/rendersFixtures\(|requireDemoScope\(|getFocusScope\(/.test(readFileSync(f, "utf8")));
+    const unguarded = pages.filter((f) => !/rendersFixtures\(|requireDemoScope\(|getFocusScope\(/.test(code(f)));
     expect(unguarded.map(rel)).toEqual([]);
   });
   it("page metadata is scope-gated too (Next resolves metadata even when the layout 404s)", () => {
-    expect(pages.filter((f) => /export const metadata\b/.test(readFileSync(f, "utf8"))).map(rel)).toEqual([]);
+    expect(pages.filter((f) => /export const metadata\b/.test(code(f))).map(rel)).toEqual([]);
   });
   it("prototype pages require the demo scope", () => {
-    for (const p of ["screens/page.tsx", "reference/[id]/page.tsx", "m/[n]/page.tsx"]) expect(readFileSync(join(APP, p), "utf8"), p).toContain("requireDemoScope(");
+    for (const p of ["screens/page.tsx", "reference/[id]/page.tsx", "m/[n]/page.tsx"]) expect(code(join(APP, p)), p).toContain("requireDemoScope(");
   });
   it("tenant identity never comes from query parameters", () => {
     for (const f of [join(APP, "layout.tsx"), join(ROOT, "lib/focus/scope.ts"), join(ROOT, "lib/focus/scope.server.ts")]) {
-      expect(readFileSync(f, "utf8"), rel(f)).not.toMatch(/searchParams|useSearchParams/);
+      expect(code(f), rel(f)).not.toMatch(/searchParams|useSearchParams/);
     }
   });
   it("Focus components link through the scoped Link (no direct next/link outside the shell exit)", () => {
@@ -169,5 +171,16 @@ describe("static guarantees over the Focus route tree", () => {
   it("prototype controls are gated by the demo scope, not by NODE_ENV", () => {
     const comps = walk(join(ROOT, "components/focus")).filter((f) => /\.tsx?$/.test(f) && !f.includes("/reference/"));
     expect(comps.filter((f) => /process\.env\.NODE_ENV/.test(readFileSync(f, "utf8"))).map(rel)).toEqual([]);
+  });
+});
+
+describe("scoped href is idempotent", () => {
+  it("an already-scoped path is never doubled (also for a business slugged 'focus')", () => {
+    const b = scopeBase("focus");
+    expect(b).toBe("/focus/focus");
+    expect(scopedHref(b, "/focus/focus/work/list")).toBe("/focus/focus/work/list");
+    expect(scopedHref(b, "/focus/work/list")).toBe("/focus/focus/work/list");
+    expect(scopedHref(b, "/focus")).toBe("/focus/focus");
+    expect(scopedHref(scopeBase("acme"), scopedHref(scopeBase("acme"), "/focus/work"))).toBe("/acme/focus/work");
   });
 });

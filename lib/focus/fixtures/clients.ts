@@ -22,7 +22,7 @@ export const PORTFOLIO: PortfolioProject[] = [
   {
     id: umino.id, name: umino.name, client: umino.client, ownerId: umino.ownerId, dueDate: umino.dueDate, health: umino.health,
     hours: umino.hours, pendingApprovals: umino.pendingApprovals, next: umino.next, updated: umino.updated,
-    phase: "active", healthNote: "", href: R.project(umino.id), taskHref: `${R.projectExecution(umino.id)}?create=1`,
+    phase: "active", healthNote: "", href: R.project(umino.id), taskHref: R.workCreate("umino-autumn"),
   },
   {
     id: "gal-site", name: "אתר", client: CLIENTS.gal, ownerId: PEOPLE.yoav.id, dueDate: "2026-10-15",

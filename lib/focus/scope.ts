@@ -8,7 +8,8 @@
  *
  * The fixture demo is a separate scope, `/_demo/focus/...`. It exists only where prototype surfaces are enabled
  * (development and Vercel Preview), carries no business identity, and is the only scope that may render fixtures.
- * `_demo` is outside the business slug format (`^[a-z0-9][a-z0-9-]*$`), so it can never name a real business.
+ * `_demo` has a leading underscore, so it cannot collide with a slug a business is created with (seeded slugs are
+ * lowercase letters, digits and dashes); `decideFocusScope` checks it before any tenant lookup either way.
  *
  * Pure: the server wrapper (scope.server.ts) injects the session and the tenant lookup; tests inject stubs.
  */
@@ -79,6 +80,9 @@ export const scopeBase = (slug: string) => `/${encodeURIComponent(slug)}/focus`;
  * app routes, absolute URLs, `tel:`/`mailto:`, hashes) is returned untouched.
  */
 export function scopedHref(base: string, href: string): string {
+  // already absolute inside this scope (e.g. a pathname from the router): idempotent, never doubled — matters for a
+  // business whose slug is itself "focus" (base "/focus/focus")
+  if (href === base || href.startsWith(base + "/") || href.startsWith(base + "?") || href.startsWith(base + "#")) return href;
   if (href === "/focus") return base;
   if (href.startsWith("/focus/") || href.startsWith("/focus?") || href.startsWith("/focus#")) return base + href.slice("/focus".length);
   return href;

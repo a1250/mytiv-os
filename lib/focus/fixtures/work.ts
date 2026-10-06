@@ -6,7 +6,10 @@ import { PEOPLE } from "./people";
  * Mytiv Work demo tasks (handoff Desktop 6 W1–W6, M9–M10, D1 "העבודה שלי להיום", D3, F5/M6). ONE task set feeds every
  * view — My Tasks buckets, project list, Kanban, drawer, all-tasks — so a change in one view shows everywhere.
  */
-const P_AUTUMN = { projectId: "umino-autumn" };
+/** the one project id of the autumn launch (tasks, hours, links) and the route its screens live under */
+export const AUTUMN_PROJECT_ID = "umino-autumn";
+export const AUTUMN_PROJECT_ROUTE_ID = "umino";
+const P_AUTUMN = { projectId: AUTUMN_PROJECT_ID };
 const C_AUTUMN = { client: "UMINO", project: "השקת תפריט סתיו" };
 const C_GAL = { client: "גל פילאטיס", project: "אתר" };
 const C_SALES = { client: "מכירות" };
@@ -114,7 +117,7 @@ export const TIME_REPORT: TimeReportData = {
 
 export const TIME_REPORT_BY: Record<"project" | "client" | "task", TimeReportData["rows"]> = {
   project: [
-    { key: "umino-autumn", label: "השקת תפריט סתיו", hours: 34, budgetHours: 40, certainty: "known" },
+    { key: AUTUMN_PROJECT_ID, label: "השקת תפריט סתיו", hours: 34, budgetHours: 40, certainty: "known" },
     { key: "gal-site", label: "גל פילאטיס · אתר", hours: 22, budgetHours: 30, certainty: "estimated", note: "2 ללא דיווח" },
     { key: "sales", label: "מכירות", hours: 5.5, budgetHours: null, certainty: "known" },
   ],

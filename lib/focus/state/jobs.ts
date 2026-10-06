@@ -34,4 +34,3 @@ export function jobStatus(j: Job, now: number): JobStatus {
   return { state: "running", progress, step: Math.min(steps - 1, Math.floor(progress * steps)) };
 }
 
-export const isSettled = (s: JobStatus) => s.state !== "running";

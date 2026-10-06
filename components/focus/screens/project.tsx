@@ -5,6 +5,7 @@ import { HOURS_SYNC, MEDIA_BUDGET, PROJECT_UMINO } from "@/lib/focus/fixtures/pr
 import { R } from "@/lib/focus/routes";
 import { BlockersCard, DecisionsCard, HoursRing, Milestones, NextActionHero, ProjectHeader, ResultsCard } from "@/components/focus/patterns/project/project-parts";
 import { useDemo } from "@/components/focus/shell/demo-store";
+import { AUTUMN_PROJECT_ID, AUTUMN_PROJECT_ROUTE_ID } from "@/lib/focus/fixtures/work";
 
 /**
  * Project environment · overview (handoff D2, mobile M5). Pending decisions are read live from the demo store, so a
@@ -24,7 +25,7 @@ export default function ProjectScreen() {
         now={now}
         actions={<div className="f-proj-head__actions">
           <Link href={R.activity} className="f-btn f-btn--neutral">הוסף עדכון</Link>
-          <Link href={`${R.projectExecution(p.id)}?create=1`} className="f-btn f-btn--neutral">+ משימה</Link>
+          <Link href={R.workCreate(p.id === AUTUMN_PROJECT_ROUTE_ID ? AUTUMN_PROJECT_ID : undefined)} className="f-btn f-btn--neutral">+ משימה</Link>
         </div>}
       />
       <div className="f-proj__body">

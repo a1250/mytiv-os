@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { BrandKit, DesignCheck, DesignComment, Layer } from "@/lib/focus/contracts/studio";
 import { cx } from "@/components/focus/ui/cx";
 import { Icon } from "@/components/focus/ui/icon";
@@ -111,9 +111,4 @@ export function ChecksPanel({ checks, comments, onFix, version }: { checks: Desi
       </div>
     </div>
   );
-}
-
-export function useToggle(initial: boolean) {
-  const [v, set] = useState(initial);
-  return [v, () => set((x) => !x)] as const;
 }

@@ -29,14 +29,18 @@ function Inner() {
   const demo = useDemo();
   const toast = useToast();
   const params = useSearchParams();
+  const { now, viewer, state } = demo;
   const [view, setView] = useState<View>("time");
   // "?create=1" opens the form — also when it arrives while this screen is already mounted (top-bar create menu)
   const createParam = params.get("create") === "1";
+  // a project the tasks really belong to (an unknown id is ignored — the param is only a hint, never trusted)
+  const projectParam = params.get("project");
+  const sibling = projectParam ? state.tasks.find((t) => t.links.projectId === projectParam) : undefined;
+  const projectId = sibling ? projectParam : null;
   const [createOpen, setCreateOpen] = useState(createParam);
   const [seenCreate, setSeenCreate] = useState(createParam);
   if (createParam !== seenCreate) { setSeenCreate(createParam); if (createParam) setCreateOpen(true); }
   const [expanded, setExpanded] = useState<string[]>([]);
-  const { now, viewer, state } = demo;
   const buckets = bucketsFor(state.tasks, viewer.id, now);
   const mine = state.tasks.filter((t) => t.assigneeId === viewer.id || t.participantIds.includes(viewer.id));
   const role = state.role;
@@ -66,7 +70,8 @@ function Inner() {
           people={Object.values(PEOPLE).map((p) => ({ id: p.id, name: p.name }))}
           clients={Object.values(CLIENTS).map((c) => c.name)}
           onCreate={(d, keep) => {
-            const t = demo.createTask({ title: d.title, dueDate: d.dueDate ?? now.slice(0, 10), priority: d.priority, assigneeId: d.assigneeId ?? viewer.id, context: d.client ? { client: d.client } : {} });
+            // "?project=…" (from a project screen) creates the task inside that project
+            const t = demo.createTask({ title: d.title, dueDate: d.dueDate ?? now.slice(0, 10), priority: d.priority, assigneeId: d.assigneeId ?? viewer.id, context: projectId && sibling ? { ...sibling.context } : d.client ? { client: d.client } : {}, ...(projectId ? { links: { projectId } } : {}) });
             toast.push({ title: "נוצרה משימה", detail: `${t.title}${keep ? " · אפשר להוסיף עוד" : ""}`, undo: { onUndo: () => demo.removeTask(t.id) } });
             if (!keep) setCreateOpen(false);
           }}

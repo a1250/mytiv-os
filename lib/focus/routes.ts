@@ -33,11 +33,11 @@ export const R = {
   outreach: "/focus/sales/outreach",
   discovery: "/focus/sales/discovery",
   work: "/focus/work",
+  /** open the quick-create form; with a project the new task is created inside it */
+  workCreate: (projectId?: string) => (projectId ? `/focus/work?create=1&project=${encodeURIComponent(projectId)}` : "/focus/work?create=1"),
   workList: "/focus/work/list",
   workBoard: "/focus/work/board",
-  workTask: "/focus/work/task",
   workTime: "/focus/work/time",
-  workStates: "/focus/work/states",
   allTasks: "/focus/work/all-tasks",
   task: (id: string, view: "list" | "board" = "list") => `/focus/work/${view}?task=${encodeURIComponent(id)}`,
   comms: "/focus/comms",
@@ -51,5 +51,6 @@ export const R = {
   settingsBusiness: "/focus/settings/business",
   notifications: "/focus/notifications",
   screens: "/focus/screens",
-  mobile: (n: number) => `/focus/m/${n}`,
+  /** prototype-only (demo scope): the raw handoff frame */
+  reference: (id: string) => `/focus/reference/${id}`,
 } as const;

@@ -17,7 +17,7 @@ export type Reversibility =
  * "Success" is shown only after the target system confirms (`target`).
  */
 export type ExternalAction = {
-  target: SourceRef;                       // e.g. Gmail · ron@mytiv.co.il
+  target: SourceRef;                       // e.g. Gmail · ron@demo.example
   /** sending account at the target */
   from: string;
   recipient: { name: string; address: string };

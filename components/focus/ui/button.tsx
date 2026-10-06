@@ -65,13 +65,3 @@ export function IconButton({
     </button>
   );
 }
-
-export function IconLink({
-  icon, label, surface, className, iconSize = 18, ...rest
-}: { icon: IconName; label: string; surface?: boolean; iconSize?: number } & Omit<ComponentProps<typeof Link>, "children">) {
-  return (
-    <Link {...rest} aria-label={label} title={label} className={cx("f-iconbtn", surface && "f-iconbtn--surface", className)}>
-      <Icon name={icon} size={iconSize} className="f-icon-dim" />
-    </Link>
-  );
-}

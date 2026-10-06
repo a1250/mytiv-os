@@ -6,6 +6,7 @@ import type { ContentUnderReview, DecisionCheck, DecisionOutcome } from "@/lib/f
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
 import type { DecisionResult } from "./decision-block";
+import { R } from "@/lib/focus/routes";
 
 /**
  * Content review side panel (handoff D7, prototype flow 5). Two modes: decide (approve / request changes / reject) and
@@ -41,7 +42,7 @@ export function ContentReviewPanel({
         {done.d && <span className="f-meta">{done.d}</span>}
         {result.reason && <span className="f-review__reason">נימוק: {result.reason}</span>}
         <div className="f-review__actions">
-          {nextHref ? <Link href={nextHref} className="f-btn f-btn--primary">לאישור הבא ←</Link> : <Link href="/focus" className="f-btn f-btn--primary">חזור להיום שלי</Link>}
+          {nextHref ? <Link href={nextHref} className="f-btn f-btn--primary">לאישור הבא ←</Link> : <Link href={R.today} className="f-btn f-btn--primary">חזור להיום שלי</Link>}
           {result.undoable && <Button variant="neutral" onClick={onUndo}>בטל</Button>}
         </div>
       </section>

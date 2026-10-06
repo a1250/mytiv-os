@@ -50,7 +50,6 @@ export function fmtDuration(ms: number) {
   return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
 }
 /** 6h · 1.5h (time report) */
-export const fmtHours = (minutes: number) => `${formatNumber(Math.round((minutes / 60) * 10) / 10)}h`;
 
 const dayIndex = (iso: string) => { const p = parts(iso); return Date.UTC(p.y, p.m - 1, p.d) / 86_400_000; };
 /** Whole calendar days from `a` to `b` (Asia/Jerusalem). */

@@ -1,4 +1,4 @@
-import type { Certainty, Verification } from "./status";
+import type { Verification } from "./status";
 
 /** ISO-8601 timestamp ("2026-10-01T08:10:00+03:00"). Formatting to d.m.yyyy / 24h happens only in lib/focus/format. */
 export type IsoDateTime = string;
@@ -56,5 +56,3 @@ export type Metric = {
 /** A fact the AI or a person relied on, with its verification state. */
 export type Fact = { id: string; text: string; verification: Verification; basis: string; source?: SourceRef };
 
-export const certaintyOf = (r: Reading): Certainty =>
-  r.kind === "known" ? "known" : r.kind === "estimated" ? "estimated" : "unknown";

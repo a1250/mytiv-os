@@ -77,7 +77,7 @@ export async function generateMetadata({ params }: { params: Promise<{ businessS
 export default async function Page({ params }: { params: Promise<{ businessSlug: string; id: string }> }) {
   const { businessSlug, id } = await params;
   await requireDemoScope(businessSlug);
-  const Screen = REFERENCE[id as RefId];
+  const Screen = Object.hasOwn(REFERENCE, id) ? REFERENCE[id as RefId] : undefined;
   if (!Screen) notFound();
   return <div data-reference={id}><Screen /></div>;
 }

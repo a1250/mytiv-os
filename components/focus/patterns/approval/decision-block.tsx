@@ -8,6 +8,7 @@ import { reasonRequired } from "@/lib/focus/state/approvals";
 import { plainShortcut } from "@/lib/focus/state/keyboard";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
+import { R } from "@/lib/focus/routes";
 
 /**
  * Decision block (handoff §6.7, prototype flow 3). The reason is mandatory from medium risk up — trying to approve
@@ -69,7 +70,7 @@ export function DecisionBlock({
         <b className={cx("f-decision__result", `f-decision__result--${t.tone}`)}><span aria-hidden>{t.glyph}</span> {t.text} · נשמר {result.at}</b>
         {result.reason && <span className="f-decision__reason">נימוק: {result.reason}</span>}
         <div className="f-decision__actions">
-          {nextHref ? <Link ref={nextRef} href={nextHref} className="f-btn f-btn--primary f-btn--lg">לאישור הבא ←</Link> : <Link ref={nextRef} href="/focus" className="f-btn f-btn--primary f-btn--lg">סיימת את התור · חזור להיום שלי</Link>}
+          {nextHref ? <Link ref={nextRef} href={nextHref} className="f-btn f-btn--primary f-btn--lg">לאישור הבא ←</Link> : <Link ref={nextRef} href={R.today} className="f-btn f-btn--primary f-btn--lg">סיימת את התור · חזור להיום שלי</Link>}
           {result.undoable && <Button variant="neutral" onClick={onUndo}>בטל החלטה</Button>}
         </div>
       </div>

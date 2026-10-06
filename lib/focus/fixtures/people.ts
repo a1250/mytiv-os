@@ -2,9 +2,9 @@ import type { ClientRef, Person } from "@/lib/focus/contracts/common";
 
 /** Demo team and clients (handoff content: the agency Mytiv and its client UMINO). Placeholders, not real people. */
 export const PEOPLE = {
-  ron: { id: "u-ron", name: "רון", initial: "ר", email: "ron@mytiv.co.il", role: "owner" },
-  dana: { id: "u-dana", name: "דנה", initial: "ד", email: "dana@mytiv.co.il", role: "manager" },
-  yoav: { id: "u-yoav", name: "יואב", initial: "י", email: "yoav@mytiv.co.il", role: "member" },
+  ron: { id: "u-ron", name: "רון", initial: "ר", email: "ron@demo.example", role: "owner" },
+  dana: { id: "u-dana", name: "דנה", initial: "ד", email: "dana@demo.example", role: "manager" },
+  yoav: { id: "u-yoav", name: "יואב", initial: "י", email: "yoav@demo.example", role: "member" },
   shira: { id: "u-shira", name: "שירה", initial: "ש", email: "shira@example.co.il", role: "viewer" },
 } satisfies Record<string, Person>;
 

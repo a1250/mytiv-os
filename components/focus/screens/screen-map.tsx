@@ -8,6 +8,7 @@ import { useDemo } from "@/components/focus/shell/demo-store";
 import { Button } from "@/components/focus/ui/button";
 import { Chips } from "@/components/focus/ui/tabs";
 import { useToast } from "@/components/focus/ui/toast";
+import { R } from "@/lib/focus/routes";
 
 /**
  * Prototype screen map (the handoff's "Mytiv OS - Index"): every frame → its product screen, its reference
@@ -70,7 +71,7 @@ export function ScreenMap() {
                 {s.subtitle && <span className="f-meta-sm">{s.subtitle}</span>}
                 <div className="f-smap__links">
                   <Link href={targets ? targets[0] : s.route} className="f-btn f-btn--secondary f-btn--sm">פתח את המסך</Link>
-                  <Link href={`/focus/reference/${s.id}`} className="f-link f-hit">Reference</Link>
+                  <Link href={R.reference(s.id)} className="f-link f-hit">Reference</Link>
                   {targets && <button type="button" className="f-link f-hit" aria-expanded={phone === s.id} onClick={() => setPhone(phone === s.id ? null : s.id)}>{phone === s.id ? "סגור טלפון" : "תצוגת טלפון"}</button>}
                 </div>
                 {phone === s.id && targets && (

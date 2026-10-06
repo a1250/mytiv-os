@@ -15,6 +15,7 @@ import { Banner } from "@/components/focus/ui/feedback";
 import { Icon } from "@/components/focus/ui/icon";
 import { PlannedTag, SourceDot, WORK, WorkStatusTag } from "@/components/focus/ui/status";
 import { PRIORITY } from "./task-card";
+import { AUTUMN_PROJECT_ID, AUTUMN_PROJECT_ROUTE_ID } from "@/lib/focus/fixtures/work";
 
 /**
  * TaskDrawer (Mytiv Work contract): `{ task, onPatch(patch), onClose }` — every Task field + the activity timeline.
@@ -298,7 +299,7 @@ export function TaskDrawerBody(p: DrawerProps) {
 
         <Section className="f-td__sec--links" title="מקושר אל">
           <div className="f-td__links">
-            {t.links.projectId && <Link href={t.links.projectId === "umino-autumn" ? R.project("umino") : R.projects} className="f-td__link f-td__link--project"><Icon name="folder" size={13} /> פרויקט: {t.context.project ?? t.context.client}</Link>}
+            {t.links.projectId && <Link href={t.links.projectId === AUTUMN_PROJECT_ID ? R.project(AUTUMN_PROJECT_ROUTE_ID) : R.projects} className="f-td__link f-td__link--project"><Icon name="folder" size={13} /> פרויקט: {t.context.project ?? t.context.client}</Link>}
             {t.links.campaignId && <Link href={R.campaign(t.links.campaignId)} className="f-td__link"><Icon name="megaphone" size={13} /> קמפיין: יום חמישי</Link>}
             {t.links.leadId && <Link href={R.lead(t.links.leadId)} className="f-td__link">ליד</Link>}
             {t.links.proposalId && <Link href={R.proposal(t.links.proposalId)} className="f-td__link">הצעת מחיר</Link>}

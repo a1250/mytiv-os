@@ -48,7 +48,7 @@ export function BlockedTaskPanel({
       <div className="f-bpanel__reason" role="note">
         <b>סיבת החסימה</b>
         <span>{blockedWhy(task, all) ?? "המשימה אינה חסומה כרגע."}</span>
-        {impacts.length > 0 && <span>משפיע על: {impacts.map((x) => x.title).join(", ")}{task.links.projectId === "umino-autumn" ? ", השקה 8.10" : ""}</span>}
+        {impacts.length > 0 && <span>משפיע על: {impacts.map((x) => x.title).join(", ")}</span>}
       </div>
       {canEdit ? (
         <form className="f-bpanel__form" onSubmit={(e) => { e.preventDefault(); onSave(d); }}>
