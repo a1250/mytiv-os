@@ -49,7 +49,7 @@ export function PreExecSummary({
       <div className="f-pre__trail">
         <StepTrail steps={["בדיקה", "סיכום סופי", action.target.label === "Gmail" ? "שליחה" : "ביצוע"]} current={state.step === "sent" ? 3 : step} />
         {/* while sending, leaving does not cancel anything — say so instead of offering a "cancel" that isn't */}
-        <Link href={backHref} className="f-pre__cancel">{state.step === "sending" ? "יציאה · השליחה ממשיכה" : "✕ ביטול"}</Link>
+        <Link href={backHref} className="f-pre__cancel">{state.step === "sending" ? "יציאה · השליחה ממשיכה" : <><span aria-hidden>✕ </span>ביטול</>}</Link>
       </div>
       <div className="f-pre__body">
         <div className="f-pre__head">
@@ -82,9 +82,12 @@ export function PreExecSummary({
             </li>
           ))}
         </ul>
-        {state.step === "summary" && blockedReason && (
-          <p className="f-field__error f-pre__notice" role="alert"><span aria-hidden>!</span>{blockedReason}</p>
-        )}
+        {/* persistent live region: the reason is announced when it appears, and the send / retry buttons point at it */}
+        <div role="status" className="f-pre__live">
+          {blockedReason && (state.step === "summary" || state.step === "failed") && (
+            <p id="pre-blocked" className="f-field__error f-pre__notice"><span aria-hidden>!</span>{blockedReason}</p>
+          )}
+        </div>
         {state.step === "summary" && state.notice && (
           <p className="f-field__error f-pre__notice" role="alert"><span aria-hidden>!</span>{state.notice}</p>
         )}
@@ -109,7 +112,8 @@ export function PreExecSummary({
           <div className="f-pre__result">
             <Banner kind="error" title={action.failureTitle} detail={state.message} />
             <div className="f-pre__actions">
-              <Button variant="danger" onClick={onRetry}>נסה שוב לשלוח</Button>
+              <Button variant="danger" aria-disabled={blockedReason ? true : undefined} aria-describedby={blockedReason ? "pre-blocked" : undefined}
+                onClick={() => { if (!blockedReason) onRetry(); }}>נסה שוב לשלוח</Button>
               <Link href={backHref} className="f-btn f-btn--neutral">חזור לבדיקה</Link>
             </div>
           </div>
@@ -121,6 +125,7 @@ export function PreExecSummary({
               loading={sending}
               loadingLabel={action.pendingLabel}
               aria-disabled={(!canExecute(state) || !!blockedReason) && !sending ? true : undefined}
+              aria-describedby={blockedReason && !sending ? "pre-blocked" : undefined}
               onClick={() => { if (!sending && !blockedReason) onSubmit(); }}
             >
               {action.finalLabel}

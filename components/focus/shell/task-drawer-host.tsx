@@ -10,9 +10,9 @@ import { WORK } from "@/components/focus/ui/status";
 import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { useToast } from "@/components/focus/ui/toast";
-import { elapsedOf } from "@/lib/focus/state/work";
+import { elapsedOf, onlyOwnWrites } from "@/lib/focus/state/work";
 import { useIsDemo } from "./scope";
-import { useTaskUndo } from "./task-actions";
+import { useCreateUndo, useTaskUndo } from "./task-actions";
 import { TaskDrawerBody, TaskDrawerHead } from "@/components/focus/patterns/work/task-drawer";
 import { useDemo, useTicker } from "./demo-store";
 import { useNavGuard } from "./nav-guard";
@@ -30,6 +30,7 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
   const toast = useToast();
   const isDemo = useIsDemo();
   const undo = useTaskUndo();
+  const undoCreate = useCreateUndo();
   const taskId = params.get("task") ?? defaultTaskId ?? null;
   const task = demo.state.tasks.find((t) => t.id === taskId) ?? null;
   const [base, setBase] = useState<{ id: string; version: string } | null>(null);
@@ -40,10 +41,11 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
 
   // capture the version the drawer "loaded" when it opens on a task (a later remote edit is then detectable) —
   // derived state updated during render (React's "storing information from previous renders" pattern)
-  if (task && base?.id !== task.id) { setBase({ id: task.id, version: task.version }); setConflict(null); }
-  // the viewer's own writes from elsewhere (timer, manual time, undo, list toggles) move the base with them — only
-  // someone else's write is a conflict
-  else if (task && base && !conflict && task.version !== base.version && task.updatedBy === demo.viewer.id) setBase({ id: task.id, version: task.version });
+  // (another task = a fresh drawer: no conflict, no draft, no pending close confirmation)
+  if (task && base?.id !== task.id) { setBase({ id: task.id, version: task.version }); setConflict(null); setDirty(false); setConfirmClose(false); }
+  // the viewer's own writes from elsewhere (timer, manual time, undo, list toggles) move the base with them — but only
+  // when every write since the base was the viewer's; anyone else's write in between stays a conflict
+  else if (task && base && !conflict && task.version !== base.version && onlyOwnWrites(demo.state.writes, task.id, base.version, task.version, demo.viewer.id)) setBase({ id: task.id, version: task.version });
 
   const close = (force = false) => {
     if (dirty && !force) { setConfirmClose(true); return; }
@@ -87,15 +89,17 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
     <Dialog open onClose={() => close()} variant="drawer" labelledBy="task-title" className="f-tdrawer">
       <TaskDrawerHead task={task} onClose={() => close()} />
       {confirmClose && (
-        <div className="f-td__confirm" role="alertdialog" aria-label="יש טיוטה שלא נשמרה">
-          <b>יש טקסט שלא נשמר (תגובה, תת־משימה או זמן).</b>
+        // focus moves into the question (its first, safe answer); the text is its description
+        <div className="f-td__confirm" role="alertdialog" aria-label="יש טיוטה שלא נשמרה" aria-describedby="td-confirm-text">
+          <b id="td-confirm-text">יש טקסט שלא נשמר (תגובה, תת־משימה או זמן).</b>
           <div className="f-td__confirmactions">
-            <Button variant="neutral" size="sm" onClick={() => setConfirmClose(false)}>חזור לעריכה</Button>
+            <Button variant="neutral" size="sm" autoFocus onClick={() => { setConfirmClose(false); requestAnimationFrame(() => document.querySelector<HTMLElement>(".f-tdrawer .f-td__close")?.focus()); }}>חזור לעריכה</Button>
             <Button variant="secondary" size="sm" onClick={() => close(true)}>סגור בלי לשמור</Button>
           </div>
         </div>
       )}
       <TaskDrawerBody
+        key={task.id}
         task={task}
         all={demo.state.tasks}
         now={demo.now}
@@ -132,8 +136,8 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
         entries={demo.state.timeEntries}
         onLogTime={(m) => {
           const r = demo.logTime(task.id, m);
-          if (!r.result.ok) { demo.removeTimeEntry(r.entry.id); toast.push({ kind: "error", title: "הזמן לא נרשם", detail: "refused" in r.result ? r.result.refused : "המשימה עודכנה בינתיים." }); return; }
-          toast.push({ title: `נרשמו ${m} דק׳ ידנית`, detail: caps.trackTime === "planned" ? `${task.title} · יכולת מתוכננת — בהדגמה בלבד` : task.title, undo: { onUndo: undo(r.previous!, r.result.task.version, () => demo.removeTimeEntry(r.entry.id)) } });
+          if (!r.result.ok || !r.entry) { toast.push({ kind: "error", title: "הזמן לא נרשם", detail: "refused" in r.result ? r.result.refused : "המשימה עודכנה בינתיים." }); return; }
+          toast.push({ title: `נרשמו ${m} דק׳ ידנית`, detail: caps.trackTime === "planned" ? `${task.title} · יכולת מתוכננת — בהדגמה בלבד` : task.title, undo: { onUndo: undo(r.previous!, r.result.task.version, () => demo.removeTimeEntry(r.entry!.id)) } });
         }}
         onDuplicate={() => {
           // a copy starts fresh: open, unblocked, no history — and it is a local Mytiv task (creating at ClickUp is
@@ -141,7 +145,7 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
           const { blockedReason: _blocked, statusKey: _key, version: _v, updatedBy: _by, ...rest } = task;
           void _blocked; void _key; void _v; void _by;
           const copy = demo.createTask({ ...rest, id: `t-copy-${Date.now()}`, title: `${task.title} (עותק)`, status: "todo", source: "mytiv", state: "live", comments: [], activity: [], dependsOn: [], spentMinutes: 0 });
-          toast.push({ title: "נוצר עותק ב־Mytiv", detail: copy.title, undo: { onUndo: () => demo.removeTask(copy.id) } });
+          toast.push({ title: "נוצר עותק ב־Mytiv", detail: copy.title, undo: { onUndo: undoCreate(copy) } });
         }}
         onClose={() => close()}
         onDirtyChange={setDirty}

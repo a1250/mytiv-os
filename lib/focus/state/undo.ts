@@ -3,10 +3,10 @@
  * Two kinds of window:
  *  - a short UI window after any reversible action (UNDO_WINDOW_MS) — the toast's "בטל" button;
  *  - a domain window carried by the action itself (e.g. a scheduled post can be cancelled until it is published).
- * Pure functions so they are unit-tested (tests/focus/undo.test.ts).
+ * Pure functions so they are unit-tested (tests/focus-flows.vitest.ts).
  */
 export const UNDO_WINDOW_MS = 10_000;
-/** Plain toasts disappear after this; errors and undo toasts stay until closed. */
+/** Plain toasts disappear after this; an undo toast closes this long after its window ends; errors stay until closed. */
 export const TOAST_MS = 6_000;
 
 export type UndoWindow = { startedAt: number; endsAt: number };

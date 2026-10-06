@@ -8,8 +8,9 @@ import { DEMO_NOW, demoIso } from "@/lib/focus/fixtures/clock";
 import { VIEWER } from "@/lib/focus/fixtures/people";
 import { ACTIVE_TIMER, TASKS, TIME_ENTRIES } from "@/lib/focus/fixtures/work";
 import { checkDecision } from "@/lib/focus/state/approvals";
+import { getSales, proposalSendBlock } from "@/components/focus/patterns/sales/sales-store";
 import { execReducer, initialExec, type ExecEvent, type ExecState } from "@/lib/focus/state/execution";
-import { jobStatus, type Job } from "@/lib/focus/state/jobs";
+import { interruptExternal, jobStatus, type Job } from "@/lib/focus/state/jobs";
 import { applyPatch, checkMove, elapsedOf, minutesToLog, nextVersion, pauseTimer, resumeTimer, revertTask, statusForColumn, switchTimer, taskInvariant, type PatchResult } from "@/lib/focus/state/work";
 
 /**
@@ -40,11 +41,13 @@ type State = {
   /** demo clock for job status — advanced when a job starts or settles (never read from Date.now() during render) */
   clock: number;
   hydrated: boolean;
+  /** task write lineage, `${taskId}@${version}` → the version it replaced and who wrote it (drawer adoption of own writes) */
+  writes: Record<string, { prev: string; by?: string }>;
 };
 
 const initial: State = {
   decisions: {}, approvals: {}, executions: {}, tasks: TASKS, timer: ACTIVE_TIMER, timerLog: [], timeEntries: TIME_ENTRIES, role: "owner", jobs: [],
-  formats: {}, drafts: {}, notifications: [], failNext: false, clock: 0, hydrated: false,
+  formats: {}, drafts: {}, notifications: [], failNext: false, clock: 0, hydrated: false, writes: {},
 };
 
 type Action =
@@ -87,7 +90,11 @@ function reducer(s: State, a: Action): State {
     }
     case "exec": return { ...s, executions: { ...s.executions, [a.id]: execReducer(s.executions[a.id] ?? initialExec, a.event) } };
     case "resetExec": { const executions = { ...s.executions }; delete executions[a.id]; return { ...s, executions }; }
-    case "replaceTask": return { ...s, tasks: s.tasks.map((t) => (t.id === a.task.id ? a.task : t)) };
+    case "replaceTask": {
+      const old = s.tasks.find((t) => t.id === a.task.id);
+      const writes = old && old.version !== a.task.version ? { ...s.writes, [`${a.task.id}@${a.task.version}`]: { prev: old.version, by: a.task.updatedBy } } : s.writes;
+      return { ...s, tasks: s.tasks.map((t) => (t.id === a.task.id ? a.task : t)), writes };
+    }
     case "addTask": return { ...s, tasks: [a.task, ...s.tasks] };
     case "removeTask": return { ...s, tasks: s.tasks.filter((t) => t.id !== a.id) };
     case "timer": return { ...s, timer: a.timer, timerLog: a.log ? [...s.timerLog, a.log] : s.timerLog };
@@ -134,7 +141,6 @@ function useStoreValue() {
     const session = readJson<Partial<State>>(() => sessionStorage, SESSION_KEY) ?? {};
     const timer = readJson<ActiveTimer | null | "none">(() => localStorage, TIMER_KEY);
     const t = timer === "none" ? null : timer ?? { ...ACTIVE_TIMER, startedAt: new Date().toISOString() };
-    // executions that were "sending" when the page closed are resolved as failed-safe: nothing is marked sent
     // a send interrupted by a reload has an UNKNOWN outcome: nothing is marked sent, and a resend needs a fresh,
     // explicit confirmation (never a one-click retry that could send twice)
     const executions = Object.fromEntries(Object.entries(session.executions ?? {}).map(([k, v]) => [k, v.step === "sending" ? { step: "summary", confirmed: false, attempted: false, notice: "השליחה הקודמת נקטעה לפני שהתקבל אישור, ולכן לא ידוע אם נשלחה. בדקו במערכת היעד לפני שליחה חוזרת, ואשרו מחדש." } as ExecState : v]));
@@ -142,7 +148,9 @@ function useStoreValue() {
     void _h; void _c;
     // persisted tasks must satisfy the stored-task invariant; otherwise fall back to the fixtures
     if (rest.tasks && !rest.tasks.every((t) => taskInvariant(t).ok)) delete rest.tasks;
-    dispatch({ type: "hydrate", state: { ...rest, executions, timer: t, clock: Date.now() } });
+    // the same for external jobs (mail send, Meta schedule) still running when the page closed: outcome unknown
+    const jobs = rest.jobs ? interruptExternal(rest.jobs, Date.now()) : rest.jobs;
+    dispatch({ type: "hydrate", state: { ...rest, ...(jobs ? { jobs } : {}), executions, timer: t, clock: Date.now() } });
   }, []);
 
   useEffect(() => {
@@ -196,13 +204,20 @@ function useStoreValue() {
 
   /** Pre-execution summary. `submit` starts the simulated target system; success is set only on its confirmation. */
   const exec = useCallback((id: string, event: ExecEvent) => {
-    dispatch({ type: "exec", id, event });
     const a = APPROVALS.find((x) => x.id === id);
-    const cur = s.executions[id] ?? initialExec;
-    const willSend = (event.type === "submit" && cur.step === "summary" && cur.confirmed) || (event.type === "retry" && cur.step === "failed");
+    const latest = latestState.current;
+    // every send — the first submit and every retry — is checked against what was approved, here and not only in the UI
+    const ev: ExecEvent = (event.type === "submit" || event.type === "retry") && a
+      ? { ...event, blocked: proposalSendBlock(a, getSales().proposal) }
+      : event;
+    const cur = latest.executions[id] ?? initialExec;
+    const next = execReducer(cur, ev);
+    dispatch({ type: "exec", id, event: ev });
+    latestState.current = { ...latest, executions: { ...latest.executions, [id]: next } };
+    const willSend = cur.step !== "sending" && next.step === "sending";
     if (willSend && a?.simulate) {
-      const fail = s.failNext || a.simulate.outcome === "failure";
-      if (s.failNext) dispatch({ type: "failNext", value: false });
+      const fail = latest.failNext || a.simulate.outcome === "failure";
+      if (latest.failNext) dispatch({ type: "failNext", value: false });
       clearTimeout(timers.current[`exec-${id}`]);
       timers.current[`exec-${id}`] = setTimeout(() => {
         if (fail) dispatch({ type: "exec", id, event: { type: "targetFailed", now: Date.now(), message: a.execution?.failureDetail ?? "המערכת לא אישרה." } });
@@ -213,7 +228,7 @@ function useStoreValue() {
         }
       }, a.simulate.latencyMs);
     }
-  }, [s.executions, s.failNext]);
+  }, []);
 
   // ---- Mytiv Work commands (WorkCommands): every write goes through applyPatch / revertTask with the token the caller saw
   const patchTask = useCallback((id: string, patch: TaskPatch, expectedVersion: string): PatchResult & { previous?: Task } => {
@@ -269,9 +284,22 @@ function useStoreValue() {
     const inv = taskInvariant(t);
     if (!inv.ok) throw new Error(`createTask: ${inv.reason}`);
     dispatch({ type: "addTask", task: t });
+    latestTasks.current = [t, ...latestTasks.current];
     return t;
   }, [s.tasks]);
-  const removeTask = useCallback((id: string) => dispatch({ type: "removeTask", id }), []);
+  /**
+   * Remove a task — the undo of a create. With `expectedVersion` it is versioned like every other undo: refused when
+   * the task was changed since it was created (someone worked on it), so the undo never deletes their work.
+   */
+  const removeTask = useCallback((id: string, expectedVersion?: string): { ok: true } | { ok: false; refused: string } => {
+    const cur = latestTasks.current.find((t) => t.id === id);
+    if (!cur) return { ok: false, refused: "המשימה כבר לא קיימת." };
+    if (expectedVersion && cur.version !== expectedVersion) return { ok: false, refused: "המשימה עודכנה מאז שנוצרה, ולכן לא נמחקה." };
+    if (latestTasks.current.some((t) => t.parentId === id)) return { ok: false, refused: "נוספו לה תתי־משימות, ולכן לא נמחקה." };
+    dispatch({ type: "removeTask", id });
+    latestTasks.current = latestTasks.current.filter((t) => t.id !== id);
+    return { ok: true };
+  }, []);
 
   const addEntry = (taskId: string, minutes: number, source: TimeEntry["source"]) => {
     const entry: TimeEntry = { id: `te-${Date.now()}-${taskId}`, taskId, personId: VIEWER.id, start: demoIso(), minutes, source, certainty: "known" };
@@ -323,7 +351,8 @@ function useStoreValue() {
   const logTime = useCallback((taskId: string, minutes: number) => {
     const task = s.tasks.find((t) => t.id === taskId);
     const result = addSpent(task, minutes) ?? { ok: false as const, refused: "המשימה לא נמצאה." };
-    const entry = addEntry(taskId, minutes, "manual");
+    // the time entry exists only when the task write went through (no orphan entries for a refused write)
+    const entry = result.ok ? addEntry(taskId, minutes, "manual") : null;
     return { entry, result, previous: task };
   }, [s.tasks, addSpent]);
   const removeTimeEntry = useCallback((id: string) => dispatch({ type: "removeTimeEntry", id }), []);

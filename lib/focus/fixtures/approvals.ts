@@ -165,9 +165,6 @@ export const RECENTLY_DECIDED = [
   { id: "r3", glyph: "✕", text: "מבצע \"שתייה חינם\"", when: "נדחה 27.9", undoable: false },
 ];
 
-/** Stats for the approvals header (handoff D4 chips). */
-export const APPROVAL_STATS = { approvedThisWeek: 5, rejected: 1, waitingOnOthers: 2 };
-
 /** dueAt for queue ordering (risk first, then by when it must be decided). */
 export const APPROVAL_DUE: Record<string, string> = {
   "proposal-noa": at("2026-10-01", "10:00"),

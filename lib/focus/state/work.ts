@@ -1,9 +1,9 @@
-import type { ActiveTimer, BoardColumn, CapabilityState, MyTasksBuckets, Task, TaskPatch, WorkCapabilities, WorkRole, WriteResult } from "@/lib/focus/contracts/work";
+import type { ActiveTimer, BoardColumn, CapabilityMap, MyTasksBuckets, Task, TaskPatch, WorkCapabilities, WorkRole, WriteResult } from "@/lib/focus/contracts/work";
 import { WORK_STATUSES, type Priority, type WorkDisplayStatus, type WorkStatus } from "@/lib/focus/contracts/status";
 import { daysBetween } from "@/lib/focus/format";
 
 /**
- * Pure Mytiv Work rules shared by every view and unit-tested (tests/focus/work.test.ts): buckets, Kanban moves,
+ * Pure Mytiv Work rules shared by every view and unit-tested (tests/focus-work.vitest.ts): buckets, Kanban moves,
  * parent/sub-task and dependency rules, patches with optimistic concurrency, permissions, quick-create parsing,
  * manual time and the timer. The demo store and, later, the pkg1 adapter call these.
  */
@@ -50,8 +50,11 @@ export function displayStatus(t: Task, all: Task[]): WorkDisplayStatus {
   return isBlocked(t, all) || isManuallyBlocked(t) ? "blocked" : t.status;
 }
 /** Why a task shows as blocked, in words: the manual reason, else the open dependency; null when it is not blocked. */
+/** The text of a manual block: its reason, or — for a source status mapped to blocked without one — say so. */
+export const manualBlockText = (t: Task): string => t.blockedReason?.trim() || "סומנה כחסומה במקור, בלי סיבה כתובה.";
+
 export function blockedWhy(t: Task, all: Task[]): string | null {
-  if (isManuallyBlocked(t)) return t.blockedReason?.trim() || "סומנה כחסומה במקור, בלי סיבה כתובה.";
+  if (isManuallyBlocked(t)) return manualBlockText(t);
   const b = openBlockers(t, all);
   return b.length ? `ממתין ל״${b[0].title}״${b.length > 1 ? ` ועוד ${b.length - 1}` : ""}.` : null;
 }
@@ -64,8 +67,9 @@ export function blockInfo(t: Task, all: Task[]): { by: { id: string; title: stri
 }
 
 /**
- * Another domain's item (content card, campaign row, studio card) blocked by a task: blocked exactly while that task
- * is open, with the reason read from the live task — never a copied sentence that outlives the block.
+ * Another domain's item (content card, campaign row, studio card) blocked by a task: returns "תלוי ב״<task title>״"
+ * while that task is open and null once it is done or cancelled — read from the live task on every render, never a
+ * copied sentence that outlives the block.
  */
 export function blockedByTask(taskId: string | undefined, tasks: Task[]): string | null {
   const t = taskId ? tasks.find((x) => x.id === taskId) : undefined;
@@ -91,6 +95,20 @@ export function taskInvariant(t: Task): Gate {
 export function nextVersion(v: string): string {
   const n = Number(/(\d+)$/.exec(v)?.[1] ?? 0);
   return `v${n + 1}`;
+}
+/**
+ * Did only `actor` write task `id` between versions `from` and `to`? `writes` is the write lineage the store keeps
+ * (`${id}@${version}` → the version it replaced + its writer). An open editor adopts its viewer's own writes made
+ * elsewhere (timer, list toggles); a gap or anyone else's write in between is a conflict, never adopted.
+ */
+export function onlyOwnWrites(writes: Record<string, { prev: string; by?: string }>, id: string, from: string, to: string, actor: string): boolean {
+  let v = to;
+  for (let i = 0; i < 1000 && v !== from; i++) {
+    const w = writes[`${id}@${v}`];
+    if (!w || w.by !== actor) return false;
+    v = w.prev;
+  }
+  return v === from;
 }
 export const childrenOf = (t: Task, all: Task[]) => all.filter((x) => x.parentId === t.id);
 /** Tasks that wait for this one (reverse dependency) — "חוסם: …". */
@@ -243,9 +261,11 @@ export type WorkAction = "edit" | "assign" | "changeStatus" | "complete" | "dele
  * With `caps` (the task source's capability map), an action whose capability is not `live` is refused — unless
  * `allowPlanned` (the fixture demo, where planned capabilities run on fixtures, labelled "מתוכנן").
  */
-export function canDo(role: WorkRole, action: WorkAction, caps?: Partial<Record<keyof WorkCapabilities, CapabilityState>>, allowPlanned = false): boolean {
-  const capFor: Partial<Record<WorkAction, keyof WorkCapabilities>> = { assign: "assign", changeStatus: "changeStatus", complete: "changeStatus", comment: "comment", trackTime: "trackTime", create: "create" };
-  const cap = capFor[action];
+/** Which source capability an action needs (actions without one are gated by role only). */
+export const CAPABILITY_FOR: Partial<Record<WorkAction, keyof WorkCapabilities>> = { assign: "assign", changeStatus: "changeStatus", complete: "changeStatus", comment: "comment", trackTime: "trackTime", create: "create" };
+
+export function canDo(role: WorkRole, action: WorkAction, caps?: Partial<CapabilityMap>, allowPlanned = false): boolean {
+  const cap = CAPABILITY_FOR[action];
   if (caps && cap && caps[cap] !== undefined && caps[cap] !== "live" && !(caps[cap] === "planned" && allowPlanned)) return false;
   if (role === "viewer") return action === "comment";
   if (role === "member") return action !== "delete";

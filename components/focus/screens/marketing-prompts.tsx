@@ -98,7 +98,7 @@ export default function MarketingPromptsScreen() {
           <h2 className="f-mk-form__h">יש שינויים שלא נשמרו</h2>
           <p className="f-meta">אם תעברו לפרומפט אחר, השינויים בשדות לא יישמרו כגרסה.</p>
           <div className="f-mk-form__actions">
-            <Button onClick={() => setPending(null)}>חזור ושמור</Button>
+            <Button onClick={() => setPending(null)}>המשך לערוך</Button>
             <Button variant="neutral" onClick={() => { const id = pending!; setPending(null); setDirty(false); setSelectedId(id); }}>עבור בלי לשמור</Button>
           </div>
         </div>

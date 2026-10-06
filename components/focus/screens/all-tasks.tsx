@@ -7,10 +7,10 @@ import { HOURS_SYNC } from "@/lib/focus/fixtures/projects";
 import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
 import { daysBetween, fmtAgo, fmtDayMonth } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
-import { bucketsFor, canComplete, canDo, displayStatus } from "@/lib/focus/state/work";
+import { bucketsFor, canComplete, canDo, displayStatus, type WorkAction } from "@/lib/focus/state/work";
 import { Page, PageHeader } from "@/components/focus/patterns/page";
 import { useDemo } from "@/components/focus/shell/demo-store";
-import { useTaskUndo } from "@/components/focus/shell/task-actions";
+import { useTaskGate, useTaskUndo } from "@/components/focus/shell/task-actions";
 import { TaskDrawerHost } from "@/components/focus/shell/task-drawer-host";
 import { Button, ButtonLink } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
@@ -30,6 +30,7 @@ function Inner() {
   const demo = useDemo();
   const toast = useToast();
   const undo = useTaskUndo();
+  const gate = useTaskGate();
   const { state, now, viewer } = demo;
   const [filter, setFilter] = useState<Filter>("mine");
   const [group, setGroup] = useState<"project" | "owner">("project");
@@ -47,7 +48,10 @@ function Inner() {
   }, {});
 
   /** one write path for the quick actions: the row's token, refusals explained, undo as a compensating write */
-  const write = (t: Task, patch: TaskPatch, title: string, detail: string) => {
+  const write = (t: Task, patch: TaskPatch, title: string, detail: string, action: WorkAction) => {
+    const g = gate(t, action);
+    if (!g.ok) { toast.push({ kind: "error", title: "לא נשמר", detail: g.refused }); return; }
+    if (g.planned) detail = `${detail} · ${g.planned}`;
     const r = demo.patchTask(t.id, patch, t.version);
     if (!r.ok) { toast.push({ kind: "error", title: "לא נשמר", detail: "refused" in r ? r.refused : "המשימה עודכנה בינתיים. רעננו ונסו שוב." }); return; }
     toast.push({ title, detail, undo: { onUndo: undo(r.previous!, r.task.version) } });
@@ -56,7 +60,7 @@ function Inner() {
   const action = (t: Task): ReactNode => {
     if (!canDo(state.role, "edit")) return <Link href={R.task(t.id)} className="f-link">פתח</Link>;
     if (displayStatus(t, state.tasks) === "blocked" && !t.assigneeId) {
-      return <Button variant="link" size="sm" onClick={() => write(t, { assigneeId: viewer.id }, "הוקצה לך", t.title)}>הקצה לי</Button>;
+      return <Button variant="link" size="sm" onClick={() => write(t, { assigneeId: viewer.id }, "הוקצה לך", t.title, "assign")}>הקצה לי</Button>;
     }
     if (t.links.campaignId && t.status === "in_progress") return <Link href={R.designEdit(t.links.campaignId)} className="f-link">פתח בעורך</Link>;
     if (t.links.proposalId) return <Link href={R.proposal(t.links.proposalId)} className="f-link">פתח הצעה</Link>;
@@ -64,12 +68,12 @@ function Inner() {
     if (t.status === "waiting") {
       const tomorrow = new Date(new Date(now).getTime() + 86_400_000).toISOString().slice(0, 10);
       return t.followUp ? <span className="f-meta-sm">מעקב {fmtDayMonth(t.followUp)}</span> : (
-        <Button variant="link" size="sm" onClick={() => write(t, { followUp: tomorrow }, "נקבע מעקב למחר", `מול ${t.waitingFor ?? "הגורם הממתין"} · יופיע בהיום שלי`)}>קבע מעקב</Button>
+        <Button variant="link" size="sm" onClick={() => write(t, { followUp: tomorrow }, "נקבע מעקב למחר", `מול ${t.waitingFor ?? "הגורם הממתין"} · יופיע בהיום שלי`, "edit")}>קבע מעקב</Button>
       );
     }
     const gate = canComplete(t, state.tasks);
     return gate.ok
-      ? <Button variant="link" size="sm" onClick={() => write(t, { status: "done" }, "סומן כהושלם", t.title)}>סמן כהושלם</Button>
+      ? <Button variant="link" size="sm" onClick={() => write(t, { status: "done" }, "סומן כהושלם", t.title, "complete")}>סמן כהושלם</Button>
       : <Link href={R.task(t.id)} className="f-link">פתח</Link>;
   };
 

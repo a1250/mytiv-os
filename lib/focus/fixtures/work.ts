@@ -1,4 +1,4 @@
-import type { ActiveTimer, CapabilityState, Task, TaskSource, TimeEntry, TimeReportData, WorkCapabilities } from "@/lib/focus/contracts/work";
+import type { ActiveTimer, CapabilityMap, Task, TaskSource, TimeEntry, TimeReportData } from "@/lib/focus/contracts/work";
 import { at, DEMO_NOW } from "./clock";
 import { PEOPLE } from "./people";
 
@@ -137,7 +137,7 @@ export const TIME_REPORT_BY: Record<"project" | "client" | "task", TimeReportDat
  * Capabilities per source, as `auto/work-pkg1` implements them today (see docs/focus/mytiv-work-contract.md):
  * live = an endpoint exists; planned = rendered and working in the demo, labelled "מתוכנן", no backend yet.
  */
-export const CAPABILITIES: Record<TaskSource, Record<keyof WorkCapabilities, CapabilityState>> = {
+export const CAPABILITIES: Record<TaskSource, CapabilityMap> = {
   mytiv: { changeStatus: "live", assign: "planned", create: "live", comment: "planned", setDueDate: "live", trackTime: "planned", depend: "planned", checklist: "planned", nest: "planned" },
   clickup: { changeStatus: "live", assign: "live", create: "planned", comment: "planned", setDueDate: "planned", trackTime: "planned", depend: "planned", checklist: "planned", nest: "planned" },
 };

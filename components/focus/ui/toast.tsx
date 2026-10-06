@@ -13,10 +13,14 @@ export type ToastInput = {
   kind?: "success" | "info" | "error";
   title: string;
   detail?: string;
-  undo?: { onUndo: () => void; windowMs?: number; label?: string };
+  /**
+   * `onUndo` returns false when the undo was refused (it explains why itself) — the toast then never claims "בוטל";
+   * a string replaces the default "בוטל." line when the undo had an effect elsewhere worth saying (e.g. a sync revert).
+   */
+  undo?: { onUndo: () => boolean | string | void; windowMs?: number; label?: string };
   action?: { label: string; onClick: () => void };
 };
-type ToastItem = ToastInput & { id: number; window: UndoWindow | null; undone?: boolean };
+type ToastItem = ToastInput & { id: number; window: UndoWindow | null; undone?: string };
 
 const Ctx = createContext<{ push: (t: ToastInput) => number; dismiss: (id: number) => void } | null>(null);
 
@@ -42,7 +46,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={value}>
       {children}
       <div className="f-toasts" aria-live="polite" aria-relevant="additions text">
-        {items.filter((t) => t.kind !== "error").map((t) => <Toast key={t.id} t={t} onClose={() => dismiss(t.id)} onUndone={() => setItems((xs) => xs.map((x) => x.id === t.id ? { ...x, undone: true } : x))} />)}
+        {items.filter((t) => t.kind !== "error").map((t) => <Toast key={t.id} t={t} onClose={() => dismiss(t.id)} onUndone={(text) => setItems((xs) => xs.map((x) => x.id === t.id ? { ...x, undone: text } : x))} />)}
       </div>
       <div className="f-toasts f-toasts--errors" aria-live="assertive">
         {items.filter((t) => t.kind === "error").map((t) => <Toast key={t.id} t={t} onClose={() => dismiss(t.id)} onUndone={() => {}} />)}
@@ -51,7 +55,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function Toast({ t, onClose, onUndone }: { t: ToastItem; onClose: () => void; onUndone: () => void }) {
+function Toast({ t, onClose, onUndone }: { t: ToastItem; onClose: () => void; onUndone: (text: string) => void }) {
   const [now, setNow] = useState(() => Date.now());
   const open = canUndo(t.window, now) && !t.undone;
   useEffect(() => {
@@ -68,13 +72,13 @@ function Toast({ t, onClose, onUndone }: { t: ToastItem; onClose: () => void; on
     <div className={cx("f-toast", t.kind === "error" && "f-toast--error")} role={t.kind === "error" ? "alert" : "status"}>
       <span className="f-toast__glyph" aria-hidden>{glyph}</span>
       <span className="f-toast__body">
-        <span className="f-toast__title">{t.undone ? "בוטל. דבר לא השתנה." : t.title}</span>
+        <span className="f-toast__title">{t.undone ?? t.title}</span>
         {!t.undone && t.detail && <span className="f-toast__detail">{t.detail}</span>}
       </span>
       <span className="f-toast__actions">
         {open && t.undo && (
           // the countdown is visual only: its text changes every 250ms and would be re-announced by the live region
-          <button type="button" className="f-toast__btn f-hit" aria-label={t.undo.label ?? "בטל"} onClick={() => { t.undo!.onUndo(); onUndone(); }}>
+          <button type="button" className="f-toast__btn f-hit" aria-label={t.undo.label ?? "בטל"} onClick={() => { const r = t.undo!.onUndo(); if (r === false) onClose(); else onUndone(typeof r === "string" ? r : "בוטל."); }}>
             {t.undo.label ?? "בטל"} <span className="f-num" aria-hidden>{fmtRemaining(remainingMs(t.window!, now))}</span>
           </button>
         )}

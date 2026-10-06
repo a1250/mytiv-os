@@ -380,3 +380,28 @@ describe("other domains read a task's block live (no copied sentence)", () => {
     expect(STUDIO_ITEMS.filter((s) => s.stage === "blocked" && !s.blockedByTaskId)).toEqual([]);
   });
 });
+
+describe("an open editor adopts only the viewer's own writes (write lineage, round 2)", () => {
+  it("adopts a chain of own writes; any other writer or a gap in between is a conflict", async () => {
+    const { onlyOwnWrites } = await import("@/lib/focus/state/work");
+    const w = { "t@v2": { prev: "v1", by: "me" }, "t@v3": { prev: "v2", by: "me" }, "t@v4": { prev: "v3", by: "other" }, "t@v5": { prev: "v4", by: "me" } };
+    expect(onlyOwnWrites(w, "t", "v1", "v3", "me")).toBe(true);
+    expect(onlyOwnWrites(w, "t", "v1", "v1", "me")).toBe(true);
+    expect(onlyOwnWrites(w, "t", "v1", "v5", "me")).toBe(false); // someone else wrote v4 in between
+    expect(onlyOwnWrites(w, "t", "v4", "v5", "me")).toBe(true);
+    expect(onlyOwnWrites(w, "t", "v1", "v9", "me")).toBe(false); // unknown lineage
+    expect(onlyOwnWrites(w, "x", "v1", "v2", "me")).toBe(false); // per task
+  });
+});
+
+describe("source capability gate (round 2)", () => {
+  it("a planned capability runs only in the demo; a live one for any permitted role", async () => {
+    const { canDo } = await import("@/lib/focus/state/work");
+    const { CAPABILITIES } = await import("@/lib/focus/fixtures/work");
+    expect(canDo("owner", "assign", CAPABILITIES.mytiv, false)).toBe(false);
+    expect(canDo("owner", "assign", CAPABILITIES.mytiv, true)).toBe(true);
+    expect(canDo("owner", "assign", CAPABILITIES.clickup, false)).toBe(true);
+    expect(canDo("viewer", "assign", CAPABILITIES.clickup, true)).toBe(false);
+    expect(canDo("member", "edit", CAPABILITIES.mytiv, false)).toBe(true);
+  });
+});

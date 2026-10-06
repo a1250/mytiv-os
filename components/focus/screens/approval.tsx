@@ -13,10 +13,7 @@ import { ContentReviewPanel } from "@/components/focus/patterns/approval/content
 import { DecisionBlock, type DecisionResult } from "@/components/focus/patterns/approval/decision-block";
 import { PreExecSummary } from "@/components/focus/patterns/approval/pre-exec";
 import { DesignPreview } from "@/components/focus/patterns/studio/design-preview";
-import { savedTotal } from "@/components/focus/patterns/sales/proposal-editor";
-import { useSales } from "@/components/focus/patterns/sales/sales-store";
-import { PROPOSAL_CORPORATE } from "@/lib/focus/fixtures/sales";
-import { fmtMoney } from "@/lib/focus/format";
+import { proposalSendBlock, useSales } from "@/components/focus/patterns/sales/sales-store";
 import { useDemo } from "@/components/focus/shell/demo-store";
 import { FocusBar } from "@/components/focus/shell/focus-bar";
 import { useQueue } from "@/components/focus/shell/use-queue";
@@ -77,10 +74,10 @@ export default function ApprovalScreen({ id }: { id: string }) {
 
   const onDecide = (o: DecisionOutcome, reason: string) => {
     const r = demo.decide(id, o, reason);
-    if (r.ok && o === "defer") { router.push(nextHref ?? R.approvals); return r; }
+    if (r.ok && o === "defer") { const to = nextHref ?? R.approvals; if (attempt(to)) router.push(to); return r; }
     if (r.ok) {
       const what = o === "approve" ? "אושר" : o === "request_changes" ? "נשלח לתיקון" : "נדחה";
-      toast.push({ title: `${what}: ${a.title}`, detail: o === "approve" && reason ? "הנימוק נשמר במוח העסק." : "ההחלטה נרשמה ביומן הפעולות.", undo: a.impact.reversibility.kind !== "none" ? { onUndo: () => q.undo(id, r.decidedAt) } : undefined });
+      toast.push({ title: `${what}: ${a.title}`, detail: o === "approve" && reason ? "הנימוק נשמר במוח העסק." : "ההחלטה נרשמה ביומן הפעולות.", undo: a.impact.reversibility.kind !== "none" ? { onUndo: () => q.undo(id, r.decidedAt, true) } : undefined });
     }
     return r;
   };
@@ -172,13 +169,8 @@ function AiNote({ text }: { text: string }) {
 function SummaryLayout({ a, next, nextHref }: { a: Approval; next: QueueEntry[]; nextHref: string | null }) {
   const demo = useDemo();
   const st = demo.state.executions[a.id] ?? initialExec;
-  // a proposal is sent at the amount that was approved: if the saved draft changed since, the send is blocked
-  const sales = useSales();
-  const approved = a.execution?.payload.amount?.amount;
-  const draftTotal = a.id === PROPOSAL_CORPORATE.approvalId && sales.proposal ? savedTotal(sales.proposal.lines, PROPOSAL_CORPORATE.vatRate) : null;
-  const blockedReason = draftTotal != null && approved != null && draftTotal !== approved
-    ? `ההצעה נערכה אחרי האישור: הסכום בטיוטה ${fmtMoney(draftTotal)}, ואושר ${fmtMoney(approved)}. חזרו להצעה והחזירו אותה לגרסה שאושרה, או אשרו גרסה חדשה.`
-    : undefined;
+  // a proposal is sent at the amount that was approved (the store enforces the same check on submit and retry)
+  const blockedReason = proposalSendBlock(a, useSales().proposal);
   return (
     <div className="f-afocus__grid f-afocus__grid--summary">
       <QueueSide handled={[]} next={next} note="הסדר בתור: סיכון גבוה קודם, ואז לפי מועד היעד." />

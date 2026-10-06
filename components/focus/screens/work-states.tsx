@@ -7,6 +7,7 @@ import { Page, PageHeader } from "@/components/focus/patterns/page";
 import { QuickCreate } from "@/components/focus/patterns/work/quick-create";
 import { WorkStateView } from "@/components/focus/patterns/work/work-states";
 import { useDemo } from "@/components/focus/shell/demo-store";
+import { useCreateUndo } from "@/components/focus/shell/task-actions";
 import { Banner } from "@/components/focus/ui/feedback";
 import { PlannedTag } from "@/components/focus/ui/status";
 import { useToast } from "@/components/focus/ui/toast";
@@ -17,6 +18,7 @@ import { useToast } from "@/components/focus/ui/toast";
  */
 export default function WorkStatesScreen() {
   const demo = useDemo();
+  const undoCreate = useCreateUndo();
   const toast = useToast();
   const [errState, setErrState] = useState<"error" | "loading" | "ready">("error");
   const [failRetry, setFailRetry] = useState(true);
@@ -54,7 +56,7 @@ export default function WorkStatesScreen() {
         <section className="f-panel f-wstates__card f-wstates__card--wide" aria-label="משימה חדשה">
           <h2 className="f-wstates__h">משימה חדשה</h2>
           <QuickCreate now={demo.now} compact people={Object.values(PEOPLE).map((p) => ({ id: p.id, name: p.name }))} clients={Object.values(CLIENTS).map((c) => c.name)}
-            onCreate={(d) => { const t = demo.createTask({ title: d.title, dueDate: d.dueDate, priority: d.priority, assigneeId: d.assigneeId ?? demo.viewer.id }); toast.push({ title: "נוצרה משימה", detail: t.title, undo: { onUndo: () => demo.removeTask(t.id) } }); }} />
+            onCreate={(d) => { const t = demo.createTask({ title: d.title, dueDate: d.dueDate, priority: d.priority, assigneeId: d.assigneeId ?? demo.viewer.id }); toast.push({ title: "נוצרה משימה", detail: t.title, undo: { onUndo: undoCreate(t) } }); }} />
         </section>
         <section className="f-panel f-wstates__card f-wstates__card--wide" aria-label="מתוכנן">
           <h2 className="f-wstates__h">יכולת בהמתנה ל־backend <PlannedTag /></h2>

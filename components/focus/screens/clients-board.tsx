@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "@/components/focus/ui/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ContentItem, ContentStage } from "@/lib/focus/contracts/clients";
 import { BOARD_CLIENT, CONTENT_ITEMS, CONTENT_STAGES } from "@/lib/focus/fixtures/clients";
 import { daysBetween, fmtDayMonth, fmtWeekday } from "@/lib/focus/format";
@@ -27,6 +27,9 @@ export default function ClientsBoardScreen() {
   const { now, state } = useDemo();
   const toast = useToast();
   const [stored, setItems] = useState<ContentItem[]>(CONTENT_ITEMS);
+  // undo runs later (from a toast): it reads the latest items, not the render that made the move
+  const latest = useRef(stored);
+  useEffect(() => { latest.current = stored; }, [stored]);
   // a card waiting for a task is blocked exactly while that task is open; the reason is read from the live task
   const items = stored.map((it) => (it.blockedByTaskId ? { ...it, blockedReason: blockedByTask(it.blockedByTaskId, state.tasks) ?? undefined } : it));
   const [view, setView] = useState<View>("kanban");
@@ -41,9 +44,15 @@ export default function ClientsBoardScreen() {
     if (!it) return { ok: false, reason: "הפריט לא נמצא." };
     if (to === "approved" && it.stage !== "approved") return { ok: false, reason: "רק החלטה בתור האישורים מעבירה ל״מאושר״." };
     if (it.blockedReason && order.indexOf(to) > order.indexOf(it.stage)) return { ok: false, reason: `הפריט חסום: ${it.blockedReason}.` };
-    const prev = stored;
-    setItems(stored.map((x) => (x.id === id ? { ...x, stage: to } : x)));
-    toast.push({ title: `הועבר לעמודה ${title(to)}`, detail: it.title, undo: { onUndo: () => setItems(prev) } });
+    const from = it.stage;
+    setItems((xs) => xs.map((x) => (x.id === id ? { ...x, stage: to } : x)));
+    // undo puts back only this item, and only while it is still where this move left it (other moves are kept)
+    const onUndo = () => {
+      if (latest.current.find((x) => x.id === id)?.stage !== to) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "הפריט הועבר שוב בינתיים." }); return false; }
+      setItems((xs) => xs.map((x) => (x.id === id ? { ...x, stage: from } : x)));
+      return true;
+    };
+    toast.push({ title: `הועבר לעמודה ${title(to)}`, detail: it.title, undo: { onUndo } });
     return { ok: true };
   };
 

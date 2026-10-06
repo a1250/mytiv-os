@@ -15,6 +15,7 @@ import { liveProposal } from "@/components/focus/patterns/sales/proposal-list";
 import { PlannedDialog, ProposalStatusPill, SalesDialog, STAGE } from "@/components/focus/patterns/sales/sales-parts";
 import { addEvent, patchLead, removeEvent, restoreLead, setContacts, useSales } from "@/components/focus/patterns/sales/sales-store";
 import { useDemo, useTicker } from "@/components/focus/shell/demo-store";
+import { useCreateUndo } from "@/components/focus/shell/task-actions";
 import { Button, ButtonLink } from "@/components/focus/ui/button";
 import { TextField } from "@/components/focus/ui/field";
 import { Bdi } from "@/components/focus/ui/misc";
@@ -29,6 +30,7 @@ type Open = null | "stage" | "outreach" | "meeting" | "call" | "task";
 
 export default function SalesLeadScreen() {
   const demo = useDemo();
+  const undoCreate = useCreateUndo();
   const toast = useToast();
   const { now, viewer, state } = demo;
   const sales = useSales();
@@ -83,7 +85,7 @@ export default function SalesLeadScreen() {
   const createTask = (title: string, dueDate: string | null) => {
     const t = demo.createTask({ title, dueDate, priority: "medium", links: { leadId: lead.id }, context: { client: "מכירות", project: lead.name } });
     setOpen(null);
-    toast.push({ title: "המשימה נוצרה", detail: `${title} · מופיעה גם בעבודה שלי`, undo: { onUndo: () => demo.removeTask(t.id) } });
+    toast.push({ title: "המשימה נוצרה", detail: `${title} · מופיעה גם בעבודה שלי`, undo: { onUndo: undoCreate(t) } });
   };
 
   const search = () => demo.startJob({

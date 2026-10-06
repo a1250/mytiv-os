@@ -14,7 +14,7 @@ import { ProjectHeader } from "@/components/focus/patterns/project/project-parts
 import { BlockedTaskPanel, type BlockedDraft, type SyncState } from "@/components/focus/patterns/work/blocked-panel";
 import { TaskListView } from "@/components/focus/patterns/work/task-list";
 import { useDemo } from "@/components/focus/shell/demo-store";
-import { useTaskUndo, useToggleDone } from "@/components/focus/shell/task-actions";
+import { useRevertSync, useTaskGate, useTaskUndo, useToggleDone } from "@/components/focus/shell/task-actions";
 import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { SelectField } from "@/components/focus/ui/field";
@@ -40,6 +40,8 @@ function Inner() {
   const demo = useDemo();
   const toast = useToast();
   const undo = useTaskUndo();
+  const gate = useTaskGate();
+  const revertSync = useRevertSync();
   const router = useFocusRouter();
   const params = useSearchParams();
   const { now, state } = demo;
@@ -69,6 +71,11 @@ function Inner() {
 
   const save = (d: BlockedDraft) => {
     if (!task || !draftBase) return;
+    // role + source capabilities for what this save changes (assignee, comment); planned ones run only in the demo
+    const gates = [d.assigneeId !== task.assigneeId ? gate(task, "assign") : null, d.note.trim() ? gate(task, "comment") : null, gate(task, "edit")].filter((g) => !!g);
+    const no = gates.find((g) => !g.ok);
+    if (no) { toast.push({ kind: "error", title: "לא נשמר", detail: no.refused }); return; }
+    const planned = gates.find((g) => g.planned)?.planned;
     // the token the draft started from: a change made meanwhile (here or elsewhere) is a conflict, never overwritten
     const r = demo.patchTask(task.id, { assigneeId: d.assigneeId, nextAction: d.nextAction, followUp: d.followUp, ...(d.note.trim() ? { addComment: { id: `c-${Date.now()}`, authorId: demo.viewer.id, at: demoIso(), text: d.note.trim() } } : {}) }, draftBase.version);
     if (!r.ok) { toast.push({ kind: "error", title: "לא נשמר", detail: "refused" in r ? r.refused : "המשימה עודכנה בזמן שערכת. השינוי שלך לא נשמר — בדקו את הערכים החדשים ונסו שוב." }); return; }
@@ -78,7 +85,7 @@ function Inner() {
       const fail = state.failNext; if (fail) demo.setFailNext(false);
       demo.startJob({ id: `sync-${task.id}`, kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "שומר אחראי, צעד הבא ותאריך מעקב.", durationMs: 1800, outcome: fail ? "failure" : "success", href: R.projectExecution("umino") });
     }
-    toast.push({ title: task.source === "clickup" ? "נשמר · מסנכרן ל־ClickUp" : "נשמר", detail: "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר.", undo: { onUndo: undo(r.previous!, r.task.version, () => demo.cancelJob(`sync-${task.id}`)) } });
+    toast.push({ title: task.source === "clickup" ? "נשמר · מסנכרן ל־ClickUp" : "נשמר", detail: [task.source === "clickup" ? "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר." : null, planned].filter(Boolean).join(" ") || undefined, undo: { onUndo: undo(r.previous!, r.task.version, () => revertSync(task.id, R.projectExecution("umino"))) } });
   };
 
   const toggleDone = useToggleDone();
@@ -120,7 +127,7 @@ function Inner() {
           <h2 className="f-confirm__h">יש שינויים שלא נשמרו</h2>
           <p className="f-meta">אם תעבור משימה, האחראי, הצעד הבא והתאריך שבחרת לא יישמרו.</p>
           <div className="f-confirm__actions">
-            <Button variant="primary" onClick={() => setPending(null)}>חזור ושמור</Button>
+            <Button variant="primary" onClick={() => setPending(null)}>המשך לערוך</Button>
             <Button variant="neutral" onClick={() => { const id = pending!; setPending(null); setDirty(false); router.replace(`${R.projectExecution("umino")}?task=${id}`, { scroll: false }); }}>עבור בלי לשמור</Button>
           </div>
         </div>

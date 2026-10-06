@@ -3,11 +3,13 @@
 import type { ActiveTimer } from "@/lib/focus/contracts/work";
 import { fmtDuration } from "@/lib/focus/format";
 import { canDo, elapsedOf } from "@/lib/focus/state/work";
+import { CAPABILITIES } from "@/lib/focus/fixtures/work";
 import { Icon } from "@/components/focus/ui/icon";
 import { useToast } from "@/components/focus/ui/toast";
 import { cx } from "@/components/focus/ui/cx";
 import { useDemo, useTicker } from "./demo-store";
 import { useTaskUndo } from "./task-actions";
+import { useIsDemo } from "./scope";
 
 /**
  * TimerBar (Mytiv Work contract): `{ activeTimer, onPause, onResume, onStop }`. Pure view — `TimerBarView`;
@@ -46,8 +48,11 @@ export function TimerBar({ variant = "fixed", note }: { variant?: "fixed" | "inl
   const { state, hydrated, timerPause, timerResume, timerStop, timerRestore } = useDemo();
   const toast = useToast();
   const undo = useTaskUndo();
-  const allowed = canDo(state.role, "trackTime");
+  const isDemo = useIsDemo();
   const t = state.timer;
+  // stopping logs time on the timer's task: role + that task's source capability (planned = demo only)
+  const timerTask = t ? state.tasks.find((x) => x.id === t.taskId) : undefined;
+  const allowed = canDo(state.role, "trackTime", timerTask ? CAPABILITIES[timerTask.source] : undefined, isDemo);
   const now = useTicker(!!t?.running && hydrated, 1000);
   if (!t) return null;
   const elapsed = hydrated ? elapsedOf(t, now) : t.elapsedMs;

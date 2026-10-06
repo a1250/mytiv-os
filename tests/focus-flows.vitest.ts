@@ -165,3 +165,39 @@ describe("theme preference", () => {
     expect(themeAttr("dark")).toBe("dark");
   });
 });
+
+describe("a send that no longer matches its approval is refused — first submit and every retry (round 2)", () => {
+  const why = "הסכום השתנה";
+  it("submit with a block reason starts nothing (even when confirmed)", () => {
+    const confirmed: ExecState = { step: "summary", confirmed: true, attempted: false };
+    expect(execReducer(confirmed, { type: "submit", now: 1, blocked: why })).toBe(confirmed);
+  });
+  it("retry after a failure is checked exactly like the first submit", () => {
+    const failed: ExecState = { step: "failed", at: 2, message: "x" };
+    expect(execReducer(failed, { type: "retry", now: 3, blocked: why })).toBe(failed);
+    expect(execReducer(failed, { type: "retry", now: 3 })).toEqual({ step: "sending", startedAt: 3 });
+  });
+  it("the store and the summary use one guard: blocked once the saved proposal total differs from the approved amount", async () => {
+    const { proposalSendBlock } = await import("@/components/focus/patterns/sales/sales-store");
+    const { PROPOSAL_CORPORATE } = await import("@/lib/focus/fixtures/sales");
+    const a = APPROVALS.find((x) => x.id === PROPOSAL_CORPORATE.approvalId)!;
+    const saved = { lines: PROPOSAL_CORPORATE.lines, notes: "", templateId: "corporate", validityDays: 14 };
+    expect(proposalSendBlock(a, null)).toBeUndefined();
+    expect(proposalSendBlock(a, saved)).toBeUndefined();
+    const edited = { ...saved, lines: saved.lines.map((l, i) => (i === 0 ? { ...l, qty: l.qty + 1 } : l)) };
+    expect(proposalSendBlock(a, edited)).toMatch(/נערכה אחרי האישור/);
+    expect(proposalSendBlock(APPROVALS.find((x) => x.id !== a.id)!, edited)).toBeUndefined();
+  });
+});
+
+describe("an external job interrupted by a reload has an unknown outcome (round 2)", () => {
+  it("send / schedule still running on reload → failed + unknown, never done; internal jobs keep their clock", async () => {
+    const { interruptExternal } = await import("@/lib/focus/state/jobs");
+    const mk = (id: string, kind: Job["kind"]): Job => ({ id, kind, label: id, detail: "", startedAt: 1000, durationMs: 1000, outcome: "success" });
+    const [mail, meta, ai, doneMail] = interruptExternal([mk("m", "send_mail"), mk("s", "schedule_meta"), mk("a", "ai_directions"), { ...mk("d", "send_mail"), startedAt: 0, durationMs: 10 }], 1500);
+    expect(jobStatus(mail, 9999)).toEqual({ state: "failed", at: 1500, unknown: true });
+    expect(jobStatus(meta, 9999)).toEqual({ state: "failed", at: 1500, unknown: true });
+    expect(jobStatus(ai, 9999)).toEqual({ state: "done", at: 2000 });
+    expect(jobStatus(doneMail, 9999).state).toBe("done"); // already confirmed before the reload: stays done
+  });
+});

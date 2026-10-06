@@ -18,7 +18,7 @@ import { Page, PageHeader, ViewOnlyStrip } from "@/components/focus/patterns/pag
 import { StuckPanel } from "@/components/focus/patterns/stuck-panel";
 import { TimeBoard } from "@/components/focus/patterns/time-board";
 import { useDemo } from "@/components/focus/shell/demo-store";
-import { useTaskUndo } from "@/components/focus/shell/task-actions";
+import { useRevertSync, useTaskGate, useTaskUndo } from "@/components/focus/shell/task-actions";
 import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { Banner, EmptyState, LoadableView } from "@/components/focus/ui/feedback";
@@ -42,6 +42,8 @@ export default function CommsTodayManagerScreen() {
   const demo = useDemo();
   const toast = useToast();
   const undo = useTaskUndo();
+  const gate = useTaskGate();
+  const revertSync = useRevertSync();
   const { now, state } = demo;
   const M = MANAGER_TODAY;
   const me = M.person;
@@ -73,10 +75,12 @@ export default function CommsTodayManagerScreen() {
   const assignMe = (it: ManagerItem) => {
     const t = state.tasks.find((x) => x.id === it.taskId);
     if (!t) return;
+    const g = gate(t, "assign");
+    if (!g.ok) { toast.push({ kind: "error", title: "לא הוקצה", detail: g.refused }); return; }
     const r = demo.patchTask(t.id, { assigneeId: me.id }, t.version);
     if (!r.ok) { toast.push({ kind: "error", title: "לא הוקצה", detail: "refused" in r ? r.refused : "המשימה עודכנה במקביל. רענן ונסה שוב." }); return; }
     if (t.source === "clickup") demo.startJob({ id: `sync-${t.id}`, kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "", durationMs: SYNC_MS, outcome: "success", href: R.todayManager });
-    toast.push({ title: `"${t.title}" הוקצתה לך`, detail: t.source === "clickup" ? "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר." : undefined, undo: { onUndo: undo(r.previous!, r.task.version, () => demo.cancelJob(`sync-${t.id}`)) } });
+    toast.push({ title: `"${t.title}" הוקצתה לך`, detail: g.planned ?? (t.source === "clickup" ? "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר." : undefined), undo: { onUndo: undo(r.previous!, r.task.version, () => revertSync(t.id, R.todayManager)) } });
   };
   const sendRemind = (it: ManagerItem) => {
     setConfirmRemind(null);
@@ -102,7 +106,9 @@ export default function CommsTodayManagerScreen() {
             <b className="f-acard__state f-acard__state--done"><span aria-hidden>✓</span> הוקצתה לך</b>
             {t.source === "clickup" && (sync?.state === "running" ? <SystemLine status="processing">מסנכרן ל־ClickUp…</SystemLine>
               : sync?.state === "failed" ? <SystemLine status="failed">ClickUp לא אישר. ההקצאה נשמרה ב־Mytiv.</SystemLine>
-              : <SystemLine status="done">סונכרן ל־ClickUp</SystemLine>)}
+              : sync?.state === "done" ? <SystemLine status="done">סונכרן ל־ClickUp</SystemLine>
+              // no confirmed sync job (e.g. assigned elsewhere, or the job was cancelled): never claim "synced"
+              : <SystemLine status="stale">טרם סונכרן ל־ClickUp</SystemLine>)}
             <Link href={R.task(t.id)} className="f-link f-hit">פתח משימה</Link>
           </div>
         );

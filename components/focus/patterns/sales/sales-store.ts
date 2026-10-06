@@ -2,7 +2,10 @@
 
 import { useSyncExternalStore } from "react";
 import type { ContactSuggestion, Lead, ProposalDraft, TimelineEvent } from "@/lib/focus/contracts/sales";
-import { LEADS } from "@/lib/focus/fixtures/sales";
+import type { Approval } from "@/lib/focus/contracts/approvals";
+import { LEADS, PROPOSAL_CORPORATE } from "@/lib/focus/fixtures/sales";
+import { fmtMoney } from "@/lib/focus/format";
+import { savedTotal } from "./proposal-editor";
 
 /**
  * Sales demo state shared by the sales screens (leads list ↔ lead page ↔ discovery ↔ proposal editor ↔ outreach), so
@@ -46,6 +49,24 @@ function subscribe(fn: () => void) {
 
 export function useSales(): SalesState {
   return useSyncExternalStore(subscribe, snapshot, () => INITIAL);
+}
+
+/** The committed sales state, for code that runs outside render (the send guard in the demo store). */
+export function getSales(): SalesState {
+  return snapshot();
+}
+
+/**
+ * A proposal is sent at the amount that was approved. If the saved draft changed since, the send (and any retry) is
+ * blocked — this is the reason, or undefined when the send may go. Checked by the store on every submit / retry and
+ * shown by the summary screen; one function, so the two can never disagree.
+ */
+export function proposalSendBlock(a: Approval, proposal: SalesState["proposal"]): string | undefined {
+  if (a.id !== PROPOSAL_CORPORATE.approvalId || !proposal) return undefined;
+  const approved = a.execution?.payload.amount?.amount;
+  const draft = savedTotal(proposal.lines, PROPOSAL_CORPORATE.vatRate);
+  if (approved == null || draft === approved) return undefined;
+  return `ההצעה נערכה אחרי האישור: הסכום בטיוטה ${fmtMoney(draft)}, ואושר ${fmtMoney(approved)}. חזרו להצעה והחזירו אותה לגרסה שאושרה, או אשרו גרסה חדשה.`;
 }
 
 export function updateSales(fn: (s: SalesState) => SalesState) {

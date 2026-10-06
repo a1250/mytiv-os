@@ -11,7 +11,7 @@ import { QuickCreate } from "@/components/focus/patterns/work/quick-create";
 import { TaskBoard } from "@/components/focus/patterns/work/task-board";
 import { TaskListView } from "@/components/focus/patterns/work/task-list";
 import { useDemo, useTicker } from "@/components/focus/shell/demo-store";
-import { useBoardMove, useToggleDone } from "@/components/focus/shell/task-actions";
+import { useBoardMove, useCreateUndo, useTaskGate, useToggleDone } from "@/components/focus/shell/task-actions";
 import { TaskDrawerHost } from "@/components/focus/shell/task-drawer-host";
 import { TimerBar } from "@/components/focus/shell/timer-bar";
 import { Banner } from "@/components/focus/ui/feedback";
@@ -27,6 +27,7 @@ type View = "time" | "list" | "board";
 
 function Inner() {
   const demo = useDemo();
+  const undoCreate = useCreateUndo();
   const toast = useToast();
   const params = useSearchParams();
   const { now, viewer, state } = demo;
@@ -44,9 +45,13 @@ function Inner() {
   const buckets = bucketsFor(state.tasks, viewer.id, now);
   const mine = state.tasks.filter((t) => t.assigneeId === viewer.id || t.participantIds.includes(viewer.id));
   const role = state.role;
+  const gate = useTaskGate();
   // the timer is a write (time entries): offered only to roles that may track time
   const timer = canDo(role, "trackTime")
-    ? { activeTaskId: state.timer?.running ? state.timer.taskId : null, onStart: (id: string) => { const r = demo.timerStart(id); if (r?.conflict && r.logged) toast.push({ title: "הטיימר עבר משימה", detail: `הטיימר הקודם נעצר ונרשמו ${r.logged.minutes} דק׳.` }); }, onPause: demo.timerPause }
+    ? { activeTaskId: state.timer?.running ? state.timer.taskId : null, onStart: (id: string) => {
+        const t = state.tasks.find((x) => x.id === id); const g = t ? gate(t, "trackTime") : null;
+        if (!g?.ok) { toast.push({ kind: "error", title: "הטיימר לא הופעל", detail: g?.refused ?? "המשימה לא נמצאה." }); return; }
+        const r = demo.timerStart(id); if (r?.conflict && r.logged) toast.push({ title: "הטיימר עבר משימה", detail: `הטיימר הקודם נעצר ונרשמו ${r.logged.minutes} דק׳.` }); }, onPause: demo.timerPause }
     : undefined;
   const toggleDone = useToggleDone();
   const onMove = useBoardMove();
@@ -71,8 +76,8 @@ function Inner() {
           clients={Object.values(CLIENTS).map((c) => c.name)}
           onCreate={(d, keep) => {
             // "?project=…" (from a project screen) creates the task inside that project
-            const t = demo.createTask({ title: d.title, dueDate: d.dueDate ?? now.slice(0, 10), priority: d.priority, assigneeId: d.assigneeId ?? viewer.id, context: projectId && sibling ? { ...sibling.context } : d.client ? { client: d.client } : {}, ...(projectId ? { links: { projectId } } : {}) });
-            toast.push({ title: "נוצרה משימה", detail: `${t.title}${keep ? " · אפשר להוסיף עוד" : ""}`, undo: { onUndo: () => demo.removeTask(t.id) } });
+            const t = demo.createTask({ title: d.title, dueDate: d.dueDate ?? null, priority: d.priority, assigneeId: d.assigneeId ?? viewer.id, context: projectId && sibling ? { ...sibling.context } : d.client ? { client: d.client } : {}, ...(projectId ? { links: { projectId } } : {}) });
+            toast.push({ title: "נוצרה משימה", detail: `${t.title}${keep ? " · אפשר להוסיף עוד" : ""}`, undo: { onUndo: undoCreate(t) } });
             if (!keep) setCreateOpen(false);
           }}
         /></div>

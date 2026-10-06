@@ -3,7 +3,7 @@
 import Link from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { Approval } from "@/lib/focus/contracts/approvals";
-import { APPROVAL_STATS, RECENTLY_DECIDED, WAITING_ON_OTHERS } from "@/lib/focus/fixtures/approvals";
+import { RECENTLY_DECIDED, WAITING_ON_OTHERS } from "@/lib/focus/fixtures/approvals";
 import { personName } from "@/lib/focus/fixtures/people";
 import { fmtTime, fmtWaiting } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
@@ -44,20 +44,21 @@ export default function ApprovalsListScreen() {
       <PageHeader
         eyebrow={<nav aria-label="נתיב" className="f-crumbs"><Link href={R.today}>היום שלי</Link> <span aria-hidden>›</span> אישורים</nav>}
         title="אישורים" size="page"
-        status={pending.length ? `${q.pending.length} פריטים ממתינים להחלטה שלך.${high.length ? ` ${high.length === 1 ? "אחד מהם" : `${high.length} מהם`} בסיכון גבוה.` : ""}` : "אין פריטים שממתינים לך."}
+        status={pending.length ? `${pending.length} פריטים ממתינים להחלטה שלך${pending.length !== q.pending.length ? ` (בסינון, מתוך ${q.pending.length})` : ""}.${high.length ? ` ${high.length === 1 ? "אחד מהם" : `${high.length} מהם`} בסיכון גבוה.` : ""}` : "אין פריטים שממתינים לך."}
         actions={first ? <ButtonLink variant="strong" size="lg" href={R.approval(first)} className="f-alist__focus">התחל מצב פוקוס · {q.pending.length}</ButtonLink> : undefined}
       />
       <div className="f-alist__filters">
         <Chips label="סינון אישורים" value={filter} onChange={setFilter} items={[
-          { key: "mine", label: "ממתין לי", count: q.pending.length }, { key: "high", label: "סיכון גבוה", count: q.pending.filter((a) => a.risk === "high").length },
+          { key: "mine", label: "ממתין לי", count: pending.length }, { key: "high", label: "סיכון גבוה", count: high.length },
           { key: "others", label: "ממתין לאחרים", count: WAITING_ON_OTHERS.length },
         ]} />
         <SelectField label="פרויקט" labelClassName="f-sr" className="f-alist__select" value={client} onChange={(e) => setClient(e.target.value)} options={[{ value: "all", label: "פרויקט: הכול" }, { value: "c-umino", label: "UMINO" }, { value: "c-gal", label: "גל פילאטיס" }, { value: "sales", label: "מכירות" }]} />
         <SelectField label="סוג" labelClassName="f-sr" className="f-alist__select" value={kind} onChange={(e) => setKind(e.target.value)} options={[{ value: "all", label: "סוג: הכול" }, { value: "proposal_send", label: "שליחה חיצונית" }, { value: "campaign_change", label: "שינוי בקמפיין" }, { value: "content", label: "תוכן" }, { value: "plan", label: "תוכנית" }]} />
         <span className="f-grow" />
         <Chips label="הוחלטו" value={filter} onChange={setFilter} items={[
-          { key: "approved", label: "אושרו · השבוע", count: APPROVAL_STATS.approvedThisWeek + decided.filter((a) => a.status === "approved").length },
-          { key: "rejected", label: "נדחו", count: APPROVAL_STATS.rejected + decided.filter((a) => a.status === "rejected").length },
+          // a count is the number of rows the filter shows — never a fixture total the list cannot show
+          { key: "approved", label: "אושרו", count: decided.filter((a) => a.status === "approved").length },
+          { key: "rejected", label: "נדחו", count: decided.filter((a) => a.status === "rejected").length },
         ]} />
       </div>
 

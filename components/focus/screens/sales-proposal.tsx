@@ -56,7 +56,9 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
   const approvedAmount = approval?.execution?.payload.amount?.amount ?? null;
   const exec = state.executions[d.approvalId];
   const sentAt = exec?.step === "sent" ? exec.at : null;
-  const locked = sentAt != null;
+  // the proposal cannot change while it is being sent or after it was sent (the send carries the approved amount)
+  const sending = exec?.step === "sending";
+  const locked = sentAt != null || sending;
   const allValid = form.lines.every(lineValid);
   const totals = computeTotals(form.lines, d.vatRate);
   const template = PROPOSAL_TEMPLATES.find((t) => t.id === form.templateId) ?? PROPOSAL_TEMPLATES[0];
@@ -123,7 +125,7 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
       <FocusBar exitHref={R.lead(d.leadId)} exitLabel="לליד" exitGlyph="→"
         center={<span className="f-sl-pbar__center">
           <b className="f-sl-pbar__title">הצעה · {template.label} · {d.clientName}</b>
-          <ProposalStatusPill status={locked ? "sent" : "draft"} label={`${locked ? "נשלחה" : "טיוטה"} · גרסה ${d.versions.length}`} />
+          <ProposalStatusPill status={sentAt != null ? "sent" : "draft"} label={`${sentAt != null ? "נשלחה" : sending ? "בשליחה" : "טיוטה"} · גרסה ${d.versions.length}`} />
         </span>}
         end={<span className="f-sl-pbar__end">
           <span className="f-sl-pbar__saved" role="status">{allValid ? `נשמר ${fmtAgo(d.savedAt, now)}` : <b className="f-sl-pbar__unsaved"><span aria-hidden>!</span> לא נשמר · יש שדה לא תקין</b>}</span>
@@ -164,7 +166,7 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
             </div>
             <div className="f-sl-prop__narrow-actions">{plannedButtons}</div>
             <PdfPreview draft={d} lines={form.lines} notes={form.notes} validUntil={validUntil} totals={totals} />
-            <VersionsCard draft={d} now={now} locked={locked} />
+            <VersionsCard draft={d} now={now} locked={sentAt != null} />
           </div>
         </div>
       </div>

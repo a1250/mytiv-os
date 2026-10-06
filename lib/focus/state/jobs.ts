@@ -14,6 +14,11 @@ export type Job = {
   durationMs: number;
   outcome: "success" | "failure";
   cancelledAt?: number;
+  /**
+   * The page closed while this job talked to an external system (send / schedule): whether the action happened there
+   * is unknown. Set on reload for EXTERNAL_JOB_KINDS only; the status is then failed + unknown, never done.
+   */
+  interruptedAt?: number;
   /** step labels shown as a timeline while running */
   steps?: string[];
   href?: string;              // where the result lives
@@ -22,11 +27,16 @@ export type Job = {
 export type JobStatus =
   | { state: "running"; progress: number; step: number }
   | { state: "done"; at: number }
-  | { state: "failed"; at: number }
+  /** `unknown`: interrupted before the target answered — check there before trying again */
+  | { state: "failed"; at: number; unknown?: true }
   | { state: "cancelled"; at: number };
+
+/** Jobs whose effect happens outside Mytiv (a mail sent, a post scheduled at Meta) — an interruption leaves them unknown. */
+export const EXTERNAL_JOB_KINDS: readonly JobKind[] = ["send_mail", "schedule_meta"];
 
 export function jobStatus(j: Job, now: number): JobStatus {
   if (j.cancelledAt) return { state: "cancelled", at: j.cancelledAt };
+  if (j.interruptedAt) return { state: "failed", at: j.interruptedAt, unknown: true };
   const end = j.startedAt + j.durationMs;
   if (now >= end) return j.outcome === "success" ? { state: "done", at: end } : { state: "failed", at: end };
   const progress = Math.min(0.99, Math.max(0, (now - j.startedAt) / j.durationMs));
@@ -34,3 +44,11 @@ export function jobStatus(j: Job, now: number): JobStatus {
   return { state: "running", progress, step: Math.min(steps - 1, Math.floor(progress * steps)) };
 }
 
+
+/**
+ * On reload: an external job still running has an unknown outcome (the page that waited for the answer is gone).
+ * Internal jobs keep running on the clock as before.
+ */
+export function interruptExternal(jobs: Job[], now: number): Job[] {
+  return jobs.map((j) => (!j.cancelledAt && !j.interruptedAt && EXTERNAL_JOB_KINDS.includes(j.kind) && jobStatus(j, now).state === "running" ? { ...j, interruptedAt: now } : j));
+}

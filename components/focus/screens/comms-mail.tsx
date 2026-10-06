@@ -139,12 +139,16 @@ function Inner() {
     if (!thread || !d) return;
     setSendOpen(false);
     // never a second send of the same reply: refused while one is in flight or after Gmail confirmed
-    if (sending || sent) { toast.push({ kind: "error", title: sent ? "התשובה כבר נשלחה" : "התשובה כבר בשליחה", detail: "לא נשלח שוב." }); return; }
+    // the latest committed jobs, not this render's (a double click / a toast-time call must see the first send)
+    const latestJob = d.send?.jobId ? demo.getLatest().jobs.find((x) => x.id === d.send!.jobId && !x.cancelledAt) : undefined;
+    const latest = latestJob ? jobStatus(latestJob, Date.now()) : null;
+    const inFlight = sending || latest?.state === "running", done = sent || latest?.state === "done";
+    if (inFlight || done) { toast.push({ kind: "error", title: done ? "התשובה כבר נשלחה" : "התשובה כבר בשליחה", detail: "לא נשלח שוב." }); return; }
     const fail = state.failNext;
     if (fail) demo.setFailNext(false);
     const cur = committed();
     const jobId = `mail-send-${thread.id}-${Date.now()}`;
-    demo.startJob({ id: jobId, kind: "reconnect", label: `תשובה ל${thread.from.name}`, detail: "", durationMs: SEND_MS, outcome: fail ? "failure" : "success", href: `${R.comms}?thread=${thread.id}` });
+    demo.startJob({ id: jobId, kind: "send_mail", label: `תשובה ל${thread.from.name}`, detail: "", durationMs: SEND_MS, outcome: fail ? "failure" : "success", href: `${R.comms}?thread=${thread.id}` });
     setDrafts((xs) => ({ ...xs, [thread.id]: { ...cur, savedText: text, send: { jobId, text } } }));
   };
 
@@ -213,9 +217,12 @@ function Inner() {
                   ) : null}
                   {base && <DraftLegend id="cm-draft-legend" claims={claims} text={text} />}
                   {sending && <div className="f-cm-reply__state" role="status"><SystemLine status="processing">שולח דרך {MAILBOX.source.label}… דבר עדיין לא סומן כנשלח.</SystemLine></div>}
-                  {sendFailed && (
-                    <Banner kind="error" title="השליחה נכשלה" detail={`${MAILBOX.source.label} לא אישר. הטיוטה נשמרה ולא סומנה כנשלחה.`}
-                      action={<Button variant="secondary" size="sm" onClick={() => setSendOpen(true)}>נסה שוב</Button>} />
+                  {sendFailed && (send.state === "failed" && send.unknown
+                    // interrupted by a reload before Gmail answered: it may have gone out — never offer a blind retry
+                    ? <Banner kind="warning" title="לא ידוע אם התשובה נשלחה" detail={`השליחה נקטעה לפני ש־${MAILBOX.source.label} אישר. בדקו בתיקיית "נשלח" לפני שליחה חוזרת. הטיוטה נשמרה ולא סומנה כנשלחה.`}
+                        action={<Button variant="secondary" size="sm" onClick={() => setSendOpen(true)}>בדקתי · שלח שוב</Button>} />
+                    : <Banner kind="error" title="השליחה נכשלה" detail={`${MAILBOX.source.label} לא אישר. הטיוטה נשמרה ולא סומנה כנשלחה.`}
+                        action={<Button variant="secondary" size="sm" onClick={() => setSendOpen(true)}>נסה שוב</Button>} />
                   )}
                   <div className="f-cm-reply__foot">
                     <Button variant="primary" onClick={() => setSendOpen(true)} disabled={!base || aiRunning || sending}>בדוק ושלח</Button>

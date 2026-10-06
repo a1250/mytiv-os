@@ -10,6 +10,7 @@ import { Page, PageHeader } from "@/components/focus/patterns/page";
 import { liveProposal, ProposalCards, ProposalTable, type ProposalRow } from "@/components/focus/patterns/sales/proposal-list";
 import { PlannedDialog } from "@/components/focus/patterns/sales/sales-parts";
 import { useDemo } from "@/components/focus/shell/demo-store";
+import { useCreateUndo } from "@/components/focus/shell/task-actions";
 import { Button, ButtonLink } from "@/components/focus/ui/button";
 import { EmptyState } from "@/components/focus/ui/feedback";
 import { Chips } from "@/components/focus/ui/tabs";
@@ -30,6 +31,7 @@ const IN: Record<Filter, (p: ProposalSummary) => boolean> = {
 
 export default function SalesProposalsScreen() {
   const demo = useDemo();
+  const undoCreate = useCreateUndo();
   const toast = useToast();
   const { state } = demo;
   const [filter, setFilter] = useState<Filter>("all");
@@ -47,7 +49,7 @@ export default function SalesProposalsScreen() {
   const taskFor = (p: ProposalSummary) => state.tasks.find((t) => t.links.proposalId === p.id && t.id.startsWith("t-new-") && t.status !== "done");
   const createTask = (p: ProposalSummary, title: string) => {
     const t = demo.createTask({ title, dueDate: null, priority: "medium", links: { proposalId: p.id }, context: { client: "מכירות", project: p.client } });
-    toast.push({ title: "המשימה נוצרה", detail: `${title} · מופיעה בעבודה שלי`, undo: { onUndo: () => demo.removeTask(t.id) } });
+    toast.push({ title: "המשימה נוצרה", detail: `${title} · מופיעה בעבודה שלי`, undo: { onUndo: undoCreate(t) } });
   };
 
   const action = (p: ProposalSummary): ReactNode => {

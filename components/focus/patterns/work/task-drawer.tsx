@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "@/components/focus/ui/link";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import type { Priority, WorkStatus } from "@/lib/focus/contracts/status";
-import type { ActiveTimer, CapabilityState, Task, TaskPatch, TimeEntry, WorkCapabilities, WorkRole } from "@/lib/focus/contracts/work";
+import type { ActiveTimer, CapabilityMap, Task, TaskPatch, TimeEntry, WorkRole } from "@/lib/focus/contracts/work";
 import { fmtAgo, fmtDate, fmtDayMonth, fmtDuration, fmtTime } from "@/lib/focus/format";
 import { demoIso } from "@/lib/focus/fixtures/clock";
 import { PEOPLE, PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
 import { R } from "@/lib/focus/routes";
-import { blocking, canComplete, canDepend, canDo, childrenOf, displayStatus, isManuallyBlocked, openBlockers, parseDuration, type WorkAction } from "@/lib/focus/state/work";
+import { blocking, canComplete, canDepend, canDo, childrenOf, displayStatus, isManuallyBlocked, manualBlockText, openBlockers, parseDuration, type WorkAction } from "@/lib/focus/state/work";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
 import { Banner } from "@/components/focus/ui/feedback";
@@ -24,7 +24,7 @@ import { AUTUMN_PROJECT_ID, AUTUMN_PROJECT_ROUTE_ID } from "@/lib/focus/fixtures
  * Sections whose backend does not exist yet carry "מתוכנן" (from the source's capability map).
  */
 export type DrawerProps = {
-  task: Task; all: Task[]; now: string; role: WorkRole; caps: Record<keyof WorkCapabilities, CapabilityState>;
+  task: Task; all: Task[]; now: string; role: WorkRole; caps: CapabilityMap;
   baseVersion: string; viewerId: string;
   /** the fixture demo: planned capabilities run on demo data (labelled "מתוכנן"); elsewhere only live ones write */
   allowPlanned?: boolean;
@@ -77,7 +77,12 @@ export function TaskDrawerBody(p: DrawerProps) {
   const loggedHere = p.entries.filter((e) => e.taskId === t.id).reduce((a, e) => a + e.minutes, 0);
 
   const setDirty = (d: string, s: string, c: string, m: string, b: string = blockDraft) => p.onDirtyChange?.(!!(d.trim() || s.trim() || c.trim() || m.trim() || b.trim()));
-  const closeBlock = () => { setBlocking(false); setBlockDraft(""); setBlockErr(null); setDirty(commentDraft, subDraft, checkDraft, manual, ""); };
+  const statusRef = useRef<HTMLSelectElement>(null);
+  /** `refocus`: the form closed from inside (cancel / saved) — focus goes back to the status select that opened it */
+  const closeBlock = (refocus = false) => {
+    setBlocking(false); setBlockDraft(""); setBlockErr(null); setDirty(commentDraft, subDraft, checkDraft, manual, "");
+    if (refocus) requestAnimationFrame(() => statusRef.current?.focus());
+  };
   const patch = (pt: TaskPatch) => {
     const r = p.onPatch(pt, p.baseVersion);
     if (!r.ok) setError(r.refused ?? null); else setError(null);
@@ -117,7 +122,9 @@ export function TaskDrawerBody(p: DrawerProps) {
           <label className="f-td__field">
             <span className="f-td__fl">סטטוס</span>
             {edit && can("changeStatus") ? (
-              <select className={cx("f-td__pill", `f-td__pill--${manualBlock ? "blocked" : t.status}`)} value={manualBlock ? BLOCK : t.status}
+              // while the reason form is open the select shows "חסום…" (what was picked), not the old status
+              <select ref={statusRef} className={cx("f-td__pill", `f-td__pill--${manualBlock || blocking_ ? "blocked" : t.status}`)} value={manualBlock || blocking_ ? BLOCK : t.status}
+                aria-controls={blocking_ ? `${id}-blockform` : undefined}
                 onChange={(e) => (e.target.value === BLOCK ? setBlocking(true) : (closeBlock(), patch({ status: e.target.value as WorkStatus })))}>
                 {t.status === "unknown" && <option value="unknown">{WORK.unknown.glyph} {WORK.unknown.word}</option>}
                 {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{WORK[s].glyph} {WORK[s].word}</option>)}
@@ -155,15 +162,15 @@ export function TaskDrawerBody(p: DrawerProps) {
 
         {manualBlock && !blocking_ && (
           <div className="f-td__blockwhy">
-            <span><span aria-hidden>{WORK.blocked.glyph}</span> חסום: {t.blockedReason}</span>
+            <span><span aria-hidden>{WORK.blocked.glyph}</span> חסום: {manualBlockText(t)}</span>
             {edit && can("changeStatus") && <Button variant="link" size="sm" onClick={() => patch({ unblock: true })}>הסר חסימה</Button>}
           </div>
         )}
         {blocking_ && (
-          <form className="f-td__blockform" onSubmit={(e) => {
+          <form id={`${id}-blockform`} className="f-td__blockform" aria-label="סיבת החסימה" onSubmit={(e) => {
             e.preventDefault();
             if (!blockDraft.trim()) { setBlockErr("כתבו למה המשימה חסומה. חסימה בלי סיבה לא נשמרת."); return; }
-            if (patch({ block: { reason: blockDraft } })) closeBlock();
+            if (patch({ block: { reason: blockDraft } })) closeBlock(true);
           }}>
             <label htmlFor={`${id}-block`} className="f-field__label">סיבת החסימה <span className="f-field__label-note">(חובה)</span></label>
             <textarea id={`${id}-block`} rows={2} className="f-input" value={blockDraft} aria-required aria-invalid={blockErr ? true : undefined} aria-describedby={blockErr ? `${id}-block-e` : undefined} autoFocus
@@ -171,7 +178,7 @@ export function TaskDrawerBody(p: DrawerProps) {
             {blockErr && <span id={`${id}-block-e`} className="f-field__error" role="alert"><span aria-hidden>!</span>{blockErr}</span>}
             <div className="f-td__blockactions">
               <Button type="submit" variant="primary" size="sm">סמן כחסום</Button>
-              <Button variant="neutral" size="sm" onClick={closeBlock}>ביטול</Button>
+              <Button variant="neutral" size="sm" onClick={() => closeBlock(true)}>ביטול</Button>
             </div>
           </form>
         )}
@@ -368,7 +375,7 @@ function describePatch(p: TaskPatch) {
 }
 function describeTask(t: Task, keys: (keyof TaskPatch)[]) {
   if (keys.includes("assigneeId")) return `אחראי: ${t.assigneeId ? PEOPLE_BY_ID[t.assigneeId]?.name : "ללא"}`;
-  if (keys.includes("block") || keys.includes("unblock")) return t.blockedReason ? `חסום: ${t.blockedReason}` : `סטטוס: ${WORK[t.status].word}`;
+  if (keys.includes("block") || keys.includes("unblock")) return isManuallyBlocked(t) ? `חסום: ${manualBlockText(t)}` : `סטטוס: ${WORK[t.status].word}`;
   if (keys.includes("status")) return `סטטוס: ${WORK[t.status].word}`;
   if (keys.includes("priority")) return `עדיפות: ${PRIORITY[t.priority].word}`;
   if (keys.includes("dueDate")) return `יעד: ${t.dueDate ? fmtDate(t.dueDate) : "—"}`;

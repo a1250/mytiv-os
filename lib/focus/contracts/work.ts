@@ -123,13 +123,22 @@ export type TimeReportData = {
   basis: string;
 };
 
-/** What the current source supports (mirrors pkg1 `TaskSourceCapabilities` + the planned work API). */
+/**
+ * The capability keys a task source may support — the shape of pkg1 `TaskSourceCapabilities` (booleans there, minus
+ * archive/trash). Focus does not read these booleans: it reads a `CapabilityMap` (each key live or planned).
+ */
 export type WorkCapabilities = {
   changeStatus: boolean; assign: boolean; create: boolean; comment: boolean; setDueDate: boolean;
   trackTime: boolean; depend: boolean; checklist: boolean; nest: boolean;
 };
 
-/** Viewer role (pkg1 business membership role). Members edit their own work; viewers only read and comment. */
+/** What Focus reads per task source: each capability live (real backend) or planned (demo only, labelled "מתוכנן"). */
+export type CapabilityMap = Record<keyof WorkCapabilities, CapabilityState>;
+
+/**
+ * Business membership role (pkg1). owner/admin: everything; member: edits work (not delete); viewer: reads and
+ * comments only — the matrix is `canDo` in lib/focus/state/work.ts.
+ */
 export type WorkRole = "owner" | "admin" | "member" | "viewer";
 
 /** Every Mytiv Work view can be in one of these system states besides ready (handoff W6). */
@@ -154,7 +163,8 @@ export type WorkCommands = {
   /** undo = a compensating write back to `previous`, only if the task is still at the token the action produced */
   undoTask(previous: Task, expectedVersion: string): WriteResult;
   createTask(draft: Pick<Task, "title" | "dueDate" | "priority"> & Partial<Task>): Task;
-  logTime(taskId: string, minutes: number): { entry: TimeEntry; result: WriteResult; previous?: Task };
+  /** `entry` is null when the write was refused — no time entry exists without the task write */
+  logTime(taskId: string, minutes: number): { entry: TimeEntry | null; result: WriteResult; previous?: Task };
 };
 
 export type MyTasksData = { buckets: Loadable<MyTasksBuckets>; activeTimer: ActiveTimer | null };

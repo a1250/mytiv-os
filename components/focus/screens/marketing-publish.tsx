@@ -172,7 +172,9 @@ export default function MarketingPublishScreen() {
               <Banner kind="processing" title={plan.meta.pendingLabel} detail={plan.meta.pendingNote} />
             ) : (
               <>
-                {js?.state === "failed" && <Banner kind="error" title={plan.meta.failureTitle} detail={plan.meta.failureDetail} />}
+                {js?.state === "failed" && (js.unknown
+                  ? <Banner kind="warning" title="לא ידוע אם התזמון נקלט ב־Meta" detail="הבקשה נקטעה לפני ש־Meta ענתה. בדקו ב־Meta Business Suite לפני תזמון חוזר, כדי לא לפרסם פעמיים." />
+                  : <Banner kind="error" title={plan.meta.failureTitle} detail={plan.meta.failureDetail} />)}
                 <div className="f-mk-pub__form" ref={dateRef}>
                   <SelectField label="ערוצים" value={form.channel} error={errors.channel} options={plan.channels}
                     onChange={(e) => { setForm({ ...form, channel: e.target.value }); setErrors({ ...errors, channel: undefined }); }} />
@@ -262,7 +264,7 @@ function PublishConfirmBody({ job, clock, title, context, rows, confirmText, onS
   const view: ExecState = !mine ? local
     : mine.state === "running" ? { step: "sending", startedAt: job!.startedAt }
     : mine.state === "done" ? { step: "sent", at: mine.at }
-    : { step: "failed", at: mine.state === "failed" ? mine.at : 0, message: plan.meta.failureDetail };
+    : { step: "failed", at: mine.state === "failed" ? mine.at : 0, message: mine.state === "failed" && mine.unknown ? "הבקשה נקטעה לפני ש־Meta ענתה — לא ידוע אם תוזמן. בדקו ב־Meta לפני ניסיון נוסף." : plan.meta.failureDetail };
   const submit = (now: number) => {
     if (!canExecute(local)) { dispatch({ type: "submit", now }); return; }
     dispatch({ type: "submit", now });
