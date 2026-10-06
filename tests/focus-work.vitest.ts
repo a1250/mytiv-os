@@ -9,7 +9,7 @@ import {
   applyPatch, BOARD_ORDER, blockedWhy, boardColumns, bucketsFor, canComplete, canDepend, canDo, canStart, checkMove, columnOf,
   displayStatus, elapsedOf, isBlocked, minutesToLog, openCount, parseDuration, parseQuickTask, pauseTimer, resumeTimer, startTimer,
   statusForColumn, switchTimer, taskInvariant, type PatchResult,
-  blockInfo, canReopen, isManuallyBlocked, MAX_LOG_MINUTES, revertTask,
+  blockInfo, blockedByTask, canReopen, isManuallyBlocked, MAX_LOG_MINUTES, revertTask,
 } from "@/lib/focus/state/work";
 import type { TaskPatch } from "@/lib/focus/contracts/work";
 
@@ -362,5 +362,21 @@ describe("manual block from the source's status vocabulary (contract §5)", () =
     const open = base({ id: "d2", status: "in_progress", title: "פתוח" });
     const t = base({ id: "t", dependsOn: [{ id: "d1", title: "ישן" }, { id: "d2", title: "פתוח" }] });
     expect(blockInfo(t, [done, open, t])?.by?.title).toBe("פתוח");
+  });
+});
+
+describe("other domains read a task's block live (no copied sentence)", () => {
+  it("a content card / campaign row is blocked exactly while its task is open", () => {
+    const shoot = base({ id: "shoot", title: "צילום", status: "waiting", statusKey: "blocked" });
+    expect(blockedByTask("shoot", [shoot])).toContain("צילום");
+    expect(blockedByTask("shoot", [{ ...shoot, status: "done", statusKey: undefined }])).toBeNull();
+    expect(blockedByTask("missing", [shoot])).toBeNull();
+    expect(blockedByTask(undefined, [shoot])).toBeNull();
+  });
+  it("the fixtures reference the task, not a copied reason", async () => {
+    const { CONTENT_ITEMS } = await import("@/lib/focus/fixtures/clients");
+    const { STUDIO_ITEMS } = await import("@/lib/focus/fixtures/marketing");
+    expect(CONTENT_ITEMS.filter((c) => c.blockedReason)).toEqual([]);
+    expect(STUDIO_ITEMS.filter((s) => s.stage === "blocked" && !s.blockedByTaskId)).toEqual([]);
   });
 });

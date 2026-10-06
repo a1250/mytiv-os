@@ -163,7 +163,7 @@ export const CONTENT_ITEMS: ContentItem[] = [
   { id: "ci-thu-reminder", title: "תזכורת ביום חמישי", format: "סטורי", stage: "idea", ownerId: PEOPLE.dana.id, due: "2026-10-08", origin: "original" },
   { id: "ci-holiday-hours", title: "שעות פתיחה בחג", format: "פוסט", stage: "idea", ownerId: null, due: null, note: "מתוך הזדמנויות", origin: "ai_suggested" },
   { id: "ci-site-banner", title: "באנר לאתר · סתיו", format: "באנר", stage: "planning", ownerId: PEOPLE.yoav.id, due: null, origin: "original" },
-  { id: "ci-carousel", title: "חמש מנות לסתיו", format: "קרוסלה", stage: "production", ownerId: PEOPLE.yoav.id, due: "2026-10-06", origin: "original", blockedReason: "תלוי בצילום מנת הספיישל", href: R.task("t-photo-shoot", "board") },
+  { id: "ci-carousel", title: "חמש מנות לסתיו", format: "קרוסלה", stage: "production", ownerId: PEOPLE.yoav.id, due: "2026-10-06", origin: "original", blockedByTaskId: "t-photo-shoot", href: R.task("t-photo-shoot", "board") },
   { id: "ci-sushi-story", title: "ערבי סושי · גרסה 2", format: "סטורי", stage: "pending_approval", ownerId: PEOPLE.dana.id, due: "2026-10-02", origin: "ai_concept", approvalId: "content-sushi-story", href: R.approval("content-sushi-story") },
   { id: "ci-sushi-post", title: "ערבי סושי", format: "פוסט אנכי", stage: "pending_approval", ownerId: PEOPLE.dana.id, due: "2026-10-02", origin: "ai_concept", approvalId: "content-sushi-story", href: R.approval("content-sushi-story") },
   { id: "ci-autumn-launch", title: "תפריט סתיו · הכרזה", format: "פוסט", stage: "approved", ownerId: PEOPLE.yoav.id, due: null, note: "ממתין לתזמון", origin: "original" },

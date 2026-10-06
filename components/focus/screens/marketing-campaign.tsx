@@ -17,6 +17,7 @@ import { ButtonLink } from "@/components/focus/ui/button";
 import { EmptyState, LoadableView } from "@/components/focus/ui/feedback";
 import { APPROVAL, ApprovalPill, ReadingValue, VerificationTag, WorkStatusTag } from "@/components/focus/ui/status";
 import { Tabs } from "@/components/focus/ui/tabs";
+import { blockedByTask } from "@/lib/focus/state/work";
 
 /**
  * Campaign (handoff E1): goal, audience and message with their certainty, the content plan (list built; Kanban and
@@ -96,7 +97,7 @@ export default function MarketingCampaignScreen() {
                         <tr><th scope="col"><span className="f-sr">תצוגה מקדימה</span></th><th scope="col">תוכן</th><th scope="col">פרסום</th><th scope="col">מצב</th><th scope="col"><span className="f-sr">פעולה</span></th></tr>
                       </thead>
                       <tbody>
-                        {data.map((r) => <PlanRow key={r.id} r={r} status={liveStatus(r)} />)}
+                        {data.map((r) => <PlanRow key={r.id} r={r} status={liveStatus(r)} blocked={r.state.kind === "blocked" ? blockedByTask(r.state.taskId, state.tasks) : null} />)}
                       </tbody>
                     </table>
                   )}
@@ -158,18 +159,19 @@ function BriefCard({ b, approval }: { b: CampaignBrief; approval?: Approval }) {
   );
 }
 
-function PlanRow({ r, status }: { r: ContentPlanRow; status: ApprovalStatus | null }) {
+/** `blocked` = the live reason while the row's task is open (null once it closes → "בהפקה") */
+function PlanRow({ r, status, blocked }: { r: ContentPlanRow; status: ApprovalStatus | null; blocked: string | null }) {
   const idea = r.state.kind === "idea";
   return (
     <tr className={idea ? "f-mk-plan__row f-mk-plan__row--idea" : "f-mk-plan__row"}>
       <td className="f-mk-plan__thumb"><ContentThumb thumb={r.thumb} label={r.title} /></td>
       <td className="f-mk-plan__what">
         <b>{r.title}</b>
-        <span className="f-meta">{idea ? r.channels : `${r.channels} · ${personName(r.ownerId)}${r.version ? ` · גרסה ${r.version}` : ""}${r.state.kind === "blocked" ? ` · חסום ע״י ${r.state.blockedBy}` : ""}`}</span>
+        <span className="f-meta">{idea ? r.channels : `${r.channels} · ${personName(r.ownerId)}${r.version ? ` · גרסה ${r.version}` : ""}${blocked ? ` · ${blocked}` : ""}`}</span>
       </td>
       <td className="f-mk-plan__when"><span className="f-mk-plan__label" aria-hidden>פרסום: </span>{fmtPublish(r.publishAt)}</td>
       <td className="f-mk-plan__state">
-        {r.state.kind === "blocked" ? <WorkStatusTag status="blocked" />
+        {r.state.kind === "blocked" ? (blocked ? <WorkStatusTag status="blocked" /> : <WorkStatusTag status="in_progress" label="בהפקה" />)
           : idea ? <WorkStatusTag status="todo" label="רעיון" />
           : status && <ApprovalPill status={status} size="sm" />}
         {status === "pending" && r.approvalId && <Link href={R.approval(r.approvalId)} className="f-link f-mk-plan__appr">לאישור</Link>}

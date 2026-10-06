@@ -63,6 +63,15 @@ export function blockInfo(t: Task, all: Task[]): { by: { id: string; title: stri
   return { by: b ? { id: b.id, title: b.title } : null, why: blockedWhy(t, all) ?? "" };
 }
 
+/**
+ * Another domain's item (content card, campaign row, studio card) blocked by a task: blocked exactly while that task
+ * is open, with the reason read from the live task — never a copied sentence that outlives the block.
+ */
+export function blockedByTask(taskId: string | undefined, tasks: Task[]): string | null {
+  const t = taskId ? tasks.find((x) => x.id === taskId) : undefined;
+  return t && OPEN(t) ? `תלוי ב״${t.title}״` : null;
+}
+
 const CANONICAL: ReadonlySet<string> = new Set<WorkStatus>(WORK_STATUSES);
 /**
  * Invariant of every stored task (checked on every patch, and over the fixtures in tests): the status is canonical,

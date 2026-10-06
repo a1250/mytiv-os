@@ -13,6 +13,7 @@ import { useDemo } from "@/components/focus/shell/demo-store";
 import { PlannedTag } from "@/components/focus/ui/status";
 import { Tabs } from "@/components/focus/ui/tabs";
 import { useToast } from "@/components/focus/ui/toast";
+import { blockedByTask } from "@/lib/focus/state/work";
 
 /**
  * Content work board · UMINO (handoff H5): Kanban of content items with the keyboard/drag model of the Mytiv Work
@@ -23,9 +24,11 @@ import { useToast } from "@/components/focus/ui/toast";
 type View = "list" | "kanban" | "calendar";
 
 export default function ClientsBoardScreen() {
-  const { now } = useDemo();
+  const { now, state } = useDemo();
   const toast = useToast();
-  const [items, setItems] = useState<ContentItem[]>(CONTENT_ITEMS);
+  const [stored, setItems] = useState<ContentItem[]>(CONTENT_ITEMS);
+  // a card waiting for a task is blocked exactly while that task is open; the reason is read from the live task
+  const items = stored.map((it) => (it.blockedByTaskId ? { ...it, blockedReason: blockedByTask(it.blockedByTaskId, state.tasks) ?? undefined } : it));
   const [view, setView] = useState<View>("kanban");
 
   const stages = CONTENT_STAGES.filter((s) => !s.hideWhenEmpty || items.some((it) => it.stage === s.key));
@@ -38,8 +41,8 @@ export default function ClientsBoardScreen() {
     if (!it) return { ok: false, reason: "הפריט לא נמצא." };
     if (to === "approved" && it.stage !== "approved") return { ok: false, reason: "רק החלטה בתור האישורים מעבירה ל״מאושר״." };
     if (it.blockedReason && order.indexOf(to) > order.indexOf(it.stage)) return { ok: false, reason: `הפריט חסום: ${it.blockedReason}.` };
-    const prev = items;
-    setItems(items.map((x) => (x.id === id ? { ...x, stage: to } : x)));
+    const prev = stored;
+    setItems(stored.map((x) => (x.id === id ? { ...x, stage: to } : x)));
     toast.push({ title: `הועבר לעמודה ${title(to)}`, detail: it.title, undo: { onUndo: () => setItems(prev) } });
     return { ok: true };
   };

@@ -107,7 +107,8 @@ export type ContentThumb = { kind: "design"; designId: string; format: FormatKey
 
 /**
  * A row in the campaign's content plan. State comes from the approval (live, via the demo store) when there is one;
- * otherwise from `state`. `blockedBy` is mandatory for a blocked item ("חסום" always with a reason).
+ * otherwise from `state`. A blocked row names the task it waits for (`taskId`): it is blocked exactly while that task is
+ * open, and shows "בהפקה" once it closes.
  */
 export type ContentPlanRow = {
   id: string;
@@ -118,7 +119,7 @@ export type ContentPlanRow = {
   publishAt: IsoDateTime | IsoDate | null;
   thumb: ContentThumb;
   approvalId?: string;
-  state: { kind: "approval"; status: ApprovalStatus } | { kind: "blocked"; blockedBy: string } | { kind: "idea" };
+  state: { kind: "approval"; status: ApprovalStatus } | { kind: "blocked"; taskId: string } | { kind: "idea" };
   href: string;
 };
 
@@ -155,8 +156,10 @@ export type StudioItem = {
   client: ClientRef;
   format: FormatKey;
   stage: StudioStage;
-  /** written reason when blocked */
+  /** a short line under the title (e.g. why it waits) */
   note?: string;
+  /** a blocked card waits for this task: blocked exactly while it is open */
+  blockedByTaskId?: string;
   ownerId: PersonId;
   updatedAt: IsoDateTime;
   /** a design to render as the thumbnail (lib/focus/fixtures/studio) */

@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/focus/ui/feedback";
 import { SelectField } from "@/components/focus/ui/field";
 import { PlannedTag } from "@/components/focus/ui/status";
 import { Chips } from "@/components/focus/ui/tabs";
+import { blockedByTask } from "@/lib/focus/state/work";
 
 /**
  * Studio home (handoff E2): what to create (formats in plain language → the new-design flow), recent work filtered by
@@ -41,6 +42,8 @@ export default function MarketingStudioHomeScreen() {
   const [client, setClient] = useState("all");
 
   const stageOf = (it: StudioItem): StudioStage => {
+    // a card blocked by a task is blocked exactly while that task is open; then it is a draft again
+    if (it.stage === "blocked" && it.blockedByTaskId && !blockedByTask(it.blockedByTaskId, state.tasks)) return "draft";
     const live = LIVE[it.id];
     if (!live) return it.stage;
     const job = state.jobs.filter((j) => live.jobs.includes(j.id) && !j.cancelledAt).sort((a, b) => b.startedAt - a.startedAt)[0];

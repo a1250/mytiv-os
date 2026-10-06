@@ -151,7 +151,7 @@ export const CAMPAIGN_SUSHI: Campaign = {
   plan: ready([
     { id: "row-story", title: "סטורי · ערב חמישי מתחיל כאן", channels: "Instagram", ownerId: PEOPLE.dana.id, version: 3, publishAt: at("2026-10-02", "18:00"), thumb: { kind: "design", designId: "thursday-sushi", format: "story" }, approvalId: "content-sushi-story", state: { kind: "approval", status: "pending" }, href: R.design("thursday-sushi") },
     { id: "row-post", title: "פוסט אנכי · ערב חמישי מתחיל כאן", channels: "Instagram, Facebook", ownerId: PEOPLE.dana.id, publishAt: at("2026-10-02", "18:00"), thumb: { kind: "design", designId: "thursday-sushi", format: "post" }, approvalId: "content-sushi-story", state: { kind: "approval", status: "pending" }, href: R.design("thursday-sushi") },
-    { id: "row-carousel", title: "קרוסלה · חמש מנות לסתיו", channels: "Instagram", ownerId: PEOPLE.yoav.id, publishAt: "2026-10-06", thumb: { kind: "slides", count: 3 }, state: { kind: "blocked", blockedBy: "צילום מנת הספיישל" }, href: R.task("t-photo-shoot") },
+    { id: "row-carousel", title: "קרוסלה · חמש מנות לסתיו", channels: "Instagram", ownerId: PEOPLE.yoav.id, publishAt: "2026-10-06", thumb: { kind: "slides", count: 3 }, state: { kind: "blocked", taskId: "t-photo-shoot" }, href: R.task("t-photo-shoot") },
     { id: "row-banner", title: "באנר לאתר · תפריט סתיו", channels: "אתר", ownerId: PEOPLE.yoav.id, publishAt: null, thumb: { kind: "wide" }, state: { kind: "approval", status: "draft" }, href: R.studio },
     { id: "row-reminder", title: "סטורי · תזכורת ביום חמישי", channels: "בתוכנית, עדיין לא נוצר", ownerId: PEOPLE.dana.id, publishAt: "2026-10-08", thumb: { kind: "planned" }, state: { kind: "idea" }, href: `${R.studioNew}?campaign=thursday-sushi&format=story` },
   ]),
@@ -173,7 +173,7 @@ const out = (id: string, title: string, client: keyof typeof CLIENTS, format: St
 
 export const STUDIO_ITEMS: StudioItem[] = [
   { id: "s-sushi", title: "סטורי ופוסט · ערבי סושי", client: CLIENTS.umino, format: "story", stage: "pending", ownerId: PEOPLE.dana.id, updatedAt: at("2026-10-01", "07:50"), designId: "thursday-sushi", href: R.design("thursday-sushi") },
-  { id: "s-carousel", title: "חמש מנות לסתיו", client: CLIENTS.umino, format: "carousel", stage: "blocked", note: "ממתין לצילום", ownerId: PEOPLE.yoav.id, updatedAt: at("2026-09-29", "11:20"), thumbLabel: "קרוסלה · 5 שקפים", href: R.task("t-photo-shoot") },
+  { id: "s-carousel", title: "חמש מנות לסתיו", client: CLIENTS.umino, format: "carousel", stage: "blocked", note: "ממתין לצילום", blockedByTaskId: "t-photo-shoot", ownerId: PEOPLE.yoav.id, updatedAt: at("2026-09-29", "11:20"), thumbLabel: "קרוסלה · 5 שקפים", href: R.task("t-photo-shoot") },
   { id: "s-banner", title: "באנר לאתר · סתיו", client: CLIENTS.umino, format: "banner", stage: "draft", ownerId: PEOPLE.yoav.id, updatedAt: at("2026-09-30", "16:00"), thumbLabel: "באנר רחב" },
   { id: "s-trial", title: "פוסט · שיעור ניסיון", client: CLIENTS.gal, format: "post", stage: "draft", ownerId: PEOPLE.dana.id, updatedAt: at("2026-09-30", "12:30"), thumbLabel: "פוסט אנכי" },
   { id: "s-routine", title: "סטורי · חזרה לשגרה", client: CLIENTS.gal, format: "story", stage: "pending", ownerId: PEOPLE.yoav.id, updatedAt: at("2026-09-30", "10:15"), thumbLabel: "סטורי" },

@@ -125,8 +125,10 @@ export type ContentItem = {
   /** a line that replaces the date when it says more ("מתוך הזדמנויות", "ממתין לתזמון") */
   note?: string;
   origin: ContentOrigin;
-  /** a blocked item always carries its reason */
+  /** a blocked item always carries its reason (resolved live from `blockedByTaskId` when the block is a task) */
   blockedReason?: string;
+  /** the task this item waits for: blocked exactly while that task is open (the reason is read from it) */
+  blockedByTaskId?: string;
   approvalId?: string;
   href?: string;
 };

@@ -5,6 +5,9 @@ class H(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **k): super().__init__(*a, directory=ROOT, **k)
     def log_message(self, *a): pass
     def do_POST(self):
+        # only the page this server itself serves may post frames (another site open in the browser cannot)
+        origin = self.headers.get('Origin', '')
+        if origin not in ('http://127.0.0.1:8779', 'http://localhost:8779'): self.send_response(403); self.end_headers(); return
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         name = os.path.basename(q.get('file', [''])[0])
         if not name.endswith('.html'): self.send_response(400); self.end_headers(); return
