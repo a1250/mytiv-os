@@ -1,7 +1,7 @@
 // Accessibility: axe-core (WCAG 2.0/2.1/2.2 A + AA) on every /focus route, in light and dark, desktop and mobile.
 // Usage: PLAYWRIGHT_MODULE=… node scripts/focus/qa/axe.mjs [--json out.json] [--routes /focus,/focus/work]
 import { writeFileSync } from "node:fs";
-import { BASE, axeSource, focusRoutes, playwright, report, settle } from "./lib.mjs";
+import { SITE, axeSource, focusRoutes, playwright, report, settle } from "./lib.mjs";
 
 const { chromium } = playwright();
 const ri = process.argv.indexOf("--routes");
@@ -14,7 +14,7 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["light", 390]]) 
   const ctx = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: theme, reducedMotion: "reduce" });
   const page = await ctx.newPage();
   for (const r of routes) {
-    await page.goto(BASE + r, { waitUntil: "domcontentloaded" });
+    await page.goto(SITE + r, { waitUntil: "domcontentloaded" });
     await settle(page);
     await page.addScriptTag({ content: axe });
     const res = await page.evaluate(async () => {

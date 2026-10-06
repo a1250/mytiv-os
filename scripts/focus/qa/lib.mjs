@@ -7,6 +7,13 @@ import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
 export const BASE = process.env.BASE ?? "http://localhost:3200";
+/**
+ * Focus routes are tenant-scoped (/{businessSlug}/focus/...). QA runs on the fixture demo scope, which exists only in
+ * development / Preview: SITE + "/focus/..." is a page; route lists stay scope-relative ("/focus/...").
+ */
+export const SCOPE = process.env.FOCUS_SCOPE ?? "/_demo";
+export const SITE = BASE + SCOPE;
+export const APP_FOCUS = "app/(focus)/[businessSlug]/focus";
 export const ROOT = new URL("../../../", import.meta.url).pathname;
 
 export function playwright() {
@@ -21,7 +28,7 @@ export function axeSource() {
   return require("node:fs").readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 }
 
-/** Every concrete /focus route from app/focus (dynamic segments expanded from known ids). */
+/** Every concrete scope-relative /focus route from the Focus route tree (dynamic segments expanded from known ids). */
 export function focusRoutes() {
   const out = [];
   const walk = (dir, url) => {
@@ -31,7 +38,7 @@ export function focusRoutes() {
       else if (name === "page.tsx") out.push(url || "/");
     }
   };
-  walk(join(ROOT, "app/focus"), "/focus");
+  walk(join(ROOT, APP_FOCUS), "/focus");
   const expand = {
     "/focus/approvals/[id]": ["proposal-noa", "promo-1plus1", "content-sushi-story", "plan-october"].map((x) => `/focus/approvals/${x}`),
     "/focus/m/[n]": [],

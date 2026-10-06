@@ -4,7 +4,7 @@
 // Usage: PLAYWRIGHT_MODULE=… node scripts/focus/qa/visual.mjs [--json out.json] [--out dir] [--ids D1,W1]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { BASE, ROOT, playwright, settle } from "./lib.mjs";
+import { ROOT, SITE, playwright, settle } from "./lib.mjs";
 
 const { chromium } = playwright();
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
@@ -48,10 +48,10 @@ for (const theme of ["light", "dark"]) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: theme, reducedMotion: "reduce" });
   const page = await ctx.newPage();
   for (const s of screens.filter((x) => x.mode !== "mobile" && (!only || only.includes(x.id)))) {
-    await page.goto(`${BASE}/focus/reference/${s.id}`, { waitUntil: "domcontentloaded" }); await settle(page); await page.addStyleTag({ content: HIDE });
+    await page.goto(`${SITE}/focus/reference/${s.id}`, { waitUntil: "domcontentloaded" }); await settle(page); await page.addStyleTag({ content: HIDE });
     const ref = await page.screenshot({ fullPage: true });
     await page.evaluate(() => { try { sessionStorage.clear(); localStorage.removeItem("mytiv-focus-timer-v1"); } catch {} });
-    await page.goto(BASE + (ROUTE_FIX[s.id] ?? s.route), { waitUntil: "domcontentloaded" }); await settle(page); await page.addStyleTag({ content: HIDE });
+    await page.goto(SITE + (ROUTE_FIX[s.id] ?? s.route), { waitUntil: "domcontentloaded" }); await settle(page); await page.addStyleTag({ content: HIDE });
     const now = await page.screenshot({ fullPage: true });
     const r = await diff(ref, now);
     if (outDir) { writeFileSync(join(outDir, `${s.id}-${theme}-ref.png`), ref); writeFileSync(join(outDir, `${s.id}-${theme}.png`), now); }
@@ -68,11 +68,11 @@ for (const theme of ["light", "dark"]) {
   const page = await ctx.newPage();
   for (const [id, targets] of Object.entries(mobileTargets)) {
     if (only && !only.includes(id)) continue;
-    await ref.goto(`${BASE}/focus/reference/${id}`, { waitUntil: "domcontentloaded" }); await settle(ref);
+    await ref.goto(`${SITE}/focus/reference/${id}`, { waitUntil: "domcontentloaded" }); await settle(ref);
     const boxes = await ref.evaluate(() => [...document.querySelectorAll("div")].filter((d) => { const r = d.getBoundingClientRect(); return Math.round(r.width) === 390 && Math.round(r.height) === 844; }).map((d) => { const r = d.getBoundingClientRect(); return { x: r.x + scrollX, y: r.y + scrollY }; }));
     for (let k = 0; k < targets.length && k < boxes.length; k++) {
       const a = await ref.screenshot({ clip: { x: boxes[k].x, y: boxes[k].y + 50, width: 390, height: 794 }, fullPage: true });
-      await page.goto(BASE + targets[k], { waitUntil: "domcontentloaded" }); await settle(page); await page.addStyleTag({ content: HIDE });
+      await page.goto(SITE + targets[k], { waitUntil: "domcontentloaded" }); await settle(page); await page.addStyleTag({ content: HIDE });
       const b = await page.screenshot();
       const r = await diff(a, b);
       if (outDir) { writeFileSync(join(outDir, `${id}${k ? "b" : ""}-${theme}-ref.png`), a); writeFileSync(join(outDir, `${id}${k ? "b" : ""}-${theme}.png`), b); }

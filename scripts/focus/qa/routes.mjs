@@ -3,7 +3,7 @@
 // Usage: PLAYWRIGHT_MODULE=… node scripts/focus/qa/routes.mjs [--json out.json]
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { BASE, ROOT, WIDTHS, focusRoutes, playwright, report, settle } from "./lib.mjs";
+import { APP_FOCUS, BASE, ROOT, SCOPE, SITE, WIDTHS, focusRoutes, playwright, report, settle } from "./lib.mjs";
 
 const { chromium } = playwright();
 const rows = [];
@@ -11,7 +11,7 @@ const routes = focusRoutes();
 
 // static: product pages must not import components/focus/reference
 const walk = (d) => readdirSync(d).flatMap((n) => { const p = join(d, n); return statSync(p).isDirectory() ? walk(p) : [p]; });
-for (const f of walk(join(ROOT, "app/focus")).filter((f) => f.endsWith(".tsx") && !f.includes("/app/focus/reference/"))) {
+for (const f of walk(join(ROOT, APP_FOCUS)).filter((f) => f.endsWith(".tsx") && !f.includes("/focus/reference/"))) {
   const src = readFileSync(f, "utf8");
   if (src.includes("components/focus/reference")) rows.push({ ok: false, name: `no reference import ${f.replace(ROOT, "")}` });
 }
@@ -31,7 +31,7 @@ for (const w of WIDTHS) {
     page.removeAllListeners("console"); page.removeAllListeners("pageerror");
     page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().slice(0, 160)); });
     page.on("pageerror", (e) => errors.push(e.message.slice(0, 160)));
-    const res = await page.goto(BASE + r, { waitUntil: "domcontentloaded" });
+    const res = await page.goto(SITE + r, { waitUntil: "domcontentloaded" });
     await settle(page);
     const info = await page.evaluate(() => {
       const doc = document.documentElement;
@@ -53,6 +53,9 @@ for (const h of [...links].sort()) {
   const res = await ctx.request.get(BASE + h, { maxRedirects: 3 }).catch(() => null);
   if (!res || res.status() >= 400) rows.push({ ok: false, name: `link ${h}`, detail: res ? `HTTP ${res.status()}` : "no response" });
 }
+// tenant containment: every internal link a Focus page renders stays inside the scope it was rendered for
+const escaped = [...links].filter((h) => !(h === `${SCOPE}/focus` || h.startsWith(`${SCOPE}/focus/`) || h.startsWith(`${SCOPE}/focus?`)) && !h.startsWith("/_next/") && !h.startsWith("/favicon"));
+rows.push({ ok: escaped.length === 0, name: "every Focus link stays inside its scope", detail: escaped.length ? escaped.slice(0, 5).join(", ") : `${SCOPE}/focus/…` });
 rows.push({ ok: true, name: `${links.size} distinct internal links checked` });
 await browser.close();
 const i = process.argv.indexOf("--json");

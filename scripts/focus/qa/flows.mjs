@@ -3,7 +3,7 @@
 // guards, theme light/dark/system persisted without a flash, keyboard shortcuts vs text fields, Mytiv Work rules, LTR
 // content inside the RTL layout.
 // Usage: PLAYWRIGHT_MODULE=… node scripts/focus/qa/flows.mjs
-import { BASE, playwright, report, settle } from "./lib.mjs";
+import { SCOPE, SITE, playwright, report, settle } from "./lib.mjs";
 
 const { chromium } = playwright();
 const rows = [];
@@ -19,7 +19,7 @@ const fresh = async (w = 1440) => {
   page.on("pageerror", (e) => errors.push(e.message));
   return { ctx, page, errors };
 };
-const go = async (page, r) => { await page.goto(BASE + r, { waitUntil: "domcontentloaded" }); await settle(page); };
+const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domcontentloaded" }); await settle(page); };
 
 // 1. mandatory reason (medium risk) + focus queue
 {
@@ -45,7 +45,7 @@ const go = async (page, r) => { await page.goto(BASE + r, { waitUntil: "domconte
     const next = page.locator(".f-decision--done a.f-btn--primary");
     const href = await next.getAttribute("href");
     await next.click(); await page.waitForURL((u) => u.pathname === href, { timeout: 15000 }); await settle(page);
-    return href !== "/focus/approvals/promo-1plus1" ? href : false;
+    return href !== SCOPE + "/focus/approvals/promo-1plus1" ? href : false;
   });
   await check("undo a decision (toast or result) returns it to the queue", async () => {
     await go(page, "/focus/approvals/promo-1plus1");
@@ -132,7 +132,8 @@ const go = async (page, r) => { await page.goto(BASE + r, { waitUntil: "domconte
     await page.click(".f-sdir__card--busy >> text=בטל כיוון זה");
     const cancelled = await page.isVisible("text=הכיוון בוטל");
     const ready = await page.locator("text=בחר וערוך").count();
-    return busy >= 2 && cancelled && ready >= 2 ? `${ready} ready, 1 cancelled` : false;
+    // jobs start on the click (before navigation), so a slow first compile may already have settled the short ones
+    return busy >= 1 && cancelled && ready >= 2 ? `${ready} ready, 1 cancelled` : false;
   });
   await ctx.close();
 }

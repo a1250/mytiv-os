@@ -2,7 +2,7 @@
 // every stop has an accessible name, the skip link comes first, and the main action is reachable. Plus menus, the
 // command palette and dialogs: open with the keyboard, Esc closes, focus returns to the opener.
 // Usage: PLAYWRIGHT_MODULE=… node scripts/focus/qa/keyboard.mjs [--routes /focus,/focus/work]
-import { BASE, focusRoutes, playwright, report, settle } from "./lib.mjs";
+import { SITE, focusRoutes, playwright, report, settle } from "./lib.mjs";
 
 const { chromium } = playwright();
 const ri = process.argv.indexOf("--routes");
@@ -38,7 +38,7 @@ const focusInfo = () => page.evaluate(() => {
 });
 
 for (const r of routes) {
-  await page.goto(BASE + r, { waitUntil: "domcontentloaded" });
+  await page.goto(SITE + r, { waitUntil: "domcontentloaded" });
   await settle(page);
   const problems = [];
   const seen = [];
@@ -63,7 +63,7 @@ for (const r of routes) {
 }
 
 // menus, palette, dialog: keyboard open, Esc closes, focus returns
-await page.goto(BASE + "/focus", { waitUntil: "domcontentloaded" }); await settle(page);
+await page.goto(SITE + "/focus", { waitUntil: "domcontentloaded" }); await settle(page);
 {
   await page.focus(".f-topbar .f-avatar-btn");
   await page.keyboard.press("Enter");
@@ -85,15 +85,15 @@ await page.goto(BASE + "/focus", { waitUntil: "domcontentloaded" }); await settl
   rows.push({ ok: open && focused && closed, name: "command palette: '/' opens with focus in the field, arrows move, Esc closes" });
 }
 {
-  await page.goto(BASE + "/focus/approvals", { waitUntil: "domcontentloaded" }); await settle(page);
+  await page.goto(SITE + "/focus/approvals", { waitUntil: "domcontentloaded" }); await settle(page);
   const tablist = page.locator(".f-alist__filters .f-chip").first();
   await tablist.focus();
   await page.keyboard.press("Enter");
   rows.push({ ok: await page.evaluate(() => document.activeElement?.getAttribute("aria-pressed") === "true"), name: "filter chips are buttons with aria-pressed" });
 }
 {
-  await page.goto(BASE + "/focus/projects/umino", { waitUntil: "domcontentloaded" }); await settle(page);
-  await page.goto(BASE + "/focus/work", { waitUntil: "domcontentloaded" }); await settle(page);
+  await page.goto(SITE + "/focus/projects/umino", { waitUntil: "domcontentloaded" }); await settle(page);
+  await page.goto(SITE + "/focus/work", { waitUntil: "domcontentloaded" }); await settle(page);
   await page.focus(".f-wmy__views [role=tab][aria-selected=true]");
   await page.keyboard.press("ArrowLeft");
   const moved = await page.evaluate(() => document.activeElement?.textContent);
