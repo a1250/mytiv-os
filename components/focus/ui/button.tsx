@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from "react";
 import { Icon, type IconName } from "./icon";
 import { cx } from "./cx";

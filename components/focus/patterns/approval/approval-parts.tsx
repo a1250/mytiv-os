@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { ReactNode } from "react";
 import type { ChangeRow, Reversibility } from "@/lib/focus/contracts/approvals";
 import type { Fact } from "@/lib/focus/contracts/common";

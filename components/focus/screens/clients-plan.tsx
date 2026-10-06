@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { PlanField, PlanItem } from "@/lib/focus/contracts/clients";
 import type { Fact } from "@/lib/focus/contracts/common";

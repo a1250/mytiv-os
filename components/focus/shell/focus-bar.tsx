@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { MouseEvent, ReactNode } from "react";
 import { SegmentProgress } from "@/components/focus/ui/misc";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/focus/ui/icon";
@@ -10,10 +10,12 @@ import { NOTIFICATIONS } from "@/lib/focus/fixtures/comms";
 import { CLIENTS, VIEWER } from "@/lib/focus/fixtures/people";
 import { R } from "@/lib/focus/routes";
 import { SCREENS } from "@/lib/focus/screens";
+import { unscopedPath } from "@/lib/focus/scope";
 import { plainShortcut } from "@/lib/focus/state/keyboard";
 import { CommandPalette } from "./command-palette";
 import { useDemo } from "./demo-store";
 import { Menu, MenuLink } from "./menu";
+import { useFocusScope, useIsDemo } from "./scope";
 import { THEME_OPTIONS, useTheme } from "./theme";
 
 /**
@@ -85,6 +87,7 @@ function ThemeChoice({ close }: { close: () => void }) {
 }
 
 function AvatarMenu() {
+  const demo = useIsDemo();
   return (
     <Menu label="חשבון" buttonLabel={`חשבון · ${VIEWER.name}`} buttonClassName="f-avatar-btn" buttonContent={<span className="f-avatar" aria-hidden>{VIEWER.initial}</span>}>
       {(close) => (
@@ -93,7 +96,7 @@ function AvatarMenu() {
           <ThemeChoice close={close} />
           <div className="f-menu__sep" role="separator" />
           <MenuLink href={R.settingsUsers} onSelect={close}>משתמשים והרשאות</MenuLink>
-          <MenuLink href={R.screens} onSelect={close}>מפת מסכים (אב טיפוס)</MenuLink>
+          {demo && <MenuLink href={R.screens} onSelect={close}>מפת מסכים (אב טיפוס)</MenuLink>}
         </>
       )}
     </Menu>
@@ -125,7 +128,8 @@ function ScopeSwitcher({ path }: { path: string }) {
 }
 
 export function FocusTopBar() {
-  const path = usePathname();
+  // active state works on the scope-relative path ("/focus/..."), whatever business the URL is scoped to
+  const path = unscopedPath(useFocusScope().base, usePathname());
   const active = navKeyFor(path);
   const items = active === "settings" ? [...NAV, SETTINGS] : NAV;
   const { pendingApprovals, unread } = useCounts();
@@ -204,6 +208,8 @@ function BottomItem({ href, icon, label, current }: { href: string; icon: "sun" 
 }
 
 /** Prototype-only affordance: reach every screen (incl. focus modes and device previews). */
+/** Prototype-only affordance: rendered in the demo scope (development / Preview), never for a business. */
 export function ScreenMapButton() {
+  if (!useIsDemo()) return null;
   return <Link href={R.screens} className="f-screenmap">מפת מסכים</Link>;
 }

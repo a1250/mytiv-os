@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link, { useFocusRouter } from "@/components/focus/ui/link";
 import { useEffect, useId, useState, type MouseEvent } from "react";
 import type { ReviewItem, ReviewItemKind, ReviewSection } from "@/lib/focus/contracts/reports";
 import { WEEKLY_REVIEW } from "@/lib/focus/fixtures/reports";
@@ -41,7 +40,7 @@ function Item({ it, numbered }: { it: ReviewItem; numbered?: number }) {
 export default function ReportsWeeklyScreen() {
   const demo = useDemo();
   const toast = useToast();
-  const router = useRouter();
+  const router = useFocusRouter();
   const rv = WEEKLY_REVIEW;
   const titleId = useId();
   const leaveId = useId();

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { ReactNode, SelectHTMLAttributes } from "react";
 import type { PortfolioProject, PortfolioRisk } from "@/lib/focus/contracts/clients";
 import type { HoursUse } from "@/lib/focus/contracts/projects";

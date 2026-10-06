@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { TimeColumn } from "@/lib/focus/contracts/today";
 import { AGENDA, RESUME, STUCK, TODAY_METRICS, TODAY_PROJECTS } from "@/lib/focus/fixtures/today";
 import { fmtLongDate, fmtShortLongDate, fmtWaiting } from "@/lib/focus/format";

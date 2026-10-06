@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useFocusRouter } from "@/components/focus/ui/link";
 import { useMemo, useState } from "react";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { Icon } from "@/components/focus/ui/icon";
@@ -25,7 +25,7 @@ const INDEX: Hit[] = [
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
-  const router = useRouter();
+  const router = useFocusRouter();
   const hits = useMemo(() => {
     const s = q.trim();
     return (s ? INDEX.filter((h) => `${h.title} ${h.meta ?? ""}`.includes(s)) : INDEX.filter((h) => h.group !== "מסכים")).slice(0, 8);

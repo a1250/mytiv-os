@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { ContactSuggestion, Lead, LeadDetail, LeadStage, TimelineEvent, TimelineKind } from "@/lib/focus/contracts/sales";
 import type { JobStatus } from "@/lib/focus/state/jobs";

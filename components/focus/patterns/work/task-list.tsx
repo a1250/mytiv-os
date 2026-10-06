@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { Fragment } from "react";
 import type { Task } from "@/lib/focus/contracts/work";
 import type { WorkDisplayStatus } from "@/lib/focus/contracts/status";

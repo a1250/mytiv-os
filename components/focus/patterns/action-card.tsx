@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { KeyboardEvent, ReactNode } from "react";
 import type { RiskLevel } from "@/lib/focus/contracts/status";
 import { plainShortcut } from "@/lib/focus/state/keyboard";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { Suspense, useState } from "react";
 import { PROJECT_UMINO } from "@/lib/focus/fixtures/projects";
 import { PEOPLE } from "@/lib/focus/fixtures/people";

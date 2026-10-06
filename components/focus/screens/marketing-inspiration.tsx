@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useState, type FormEvent } from "react";
 import type { InspirationItem, Moodboard } from "@/lib/focus/contracts/marketing";
 import { INSPIRATION, INSPIRATION_FILTERS, INSPIRATION_NOTE, MOODBOARDS } from "@/lib/focus/fixtures/marketing";

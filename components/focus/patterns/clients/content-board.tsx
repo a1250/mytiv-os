@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { ContentItem, ContentStage } from "@/lib/focus/contracts/clients";
 import { fmtDayMonth } from "@/lib/focus/format";

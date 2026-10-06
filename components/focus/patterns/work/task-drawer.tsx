@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useId, useState, type ReactNode } from "react";
 import type { Priority, WorkStatus } from "@/lib/focus/contracts/status";
 import type { ActiveTimer, CapabilityState, Task, TaskPatch, TimeEntry, WorkCapabilities, WorkRole } from "@/lib/focus/contracts/work";

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link, { useFocusRouter } from "@/components/focus/ui/link";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import type { MailFilter, MailLink, MailThread, ReplyDraft } from "@/lib/focus/contracts/comms";
 import { dataOf } from "@/lib/focus/contracts/loadable";
@@ -46,7 +46,7 @@ const initialDraft = (t: MailThread): DraftLocal => ({ base: t.draft, text: t.dr
 function Inner() {
   const demo = useDemo();
   const toast = useToast();
-  const router = useRouter();
+  const router = useFocusRouter();
   const params = useSearchParams();
   const { now, state } = demo;
   const threads = dataOf(MAILBOX.threads) ?? [];

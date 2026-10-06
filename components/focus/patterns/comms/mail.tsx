@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useId, useState, type ReactNode } from "react";
 import type { DraftClaim, MailFilter, MailThread } from "@/lib/focus/contracts/comms";
 import { daysBetween, fmtDayMonth, fmtTime } from "@/lib/focus/format";

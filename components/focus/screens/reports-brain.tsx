@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { BrainFact, FactContentState } from "@/lib/focus/contracts/reports";
 import { BRAIN_CLIENT, BRAIN_FACTS, BRAIN_SECTIONS } from "@/lib/focus/fixtures/reports";

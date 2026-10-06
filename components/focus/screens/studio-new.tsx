@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link, { useFocusRouter } from "@/components/focus/ui/link";
 import { useEffect, useState } from "react";
 import type { Brief, FormatKey } from "@/lib/focus/contracts/studio";
 import { BRIEF_THURSDAY, DIRECTIONS, FORMATS } from "@/lib/focus/fixtures/studio";
@@ -25,7 +24,7 @@ export const STEPS = ["מטרה", "פורמט", "בריף", "כיוונים", "�
 export default function StudioNewScreen() {
   const demo = useDemo();
   const toast = useToast();
-  const router = useRouter();
+  const router = useFocusRouter();
   const stored = demo.state.drafts[BRIEF_KEY] as Brief | undefined;
   const [b, setB] = useState<Brief>(stored ?? BRIEF_THURSDAY);
   const [editFormats, setEditFormats] = useState(false);

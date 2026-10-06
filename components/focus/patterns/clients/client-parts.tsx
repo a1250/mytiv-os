@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { ReactNode } from "react";
 import type { BrainSummary, ClientConnection, ClientContact, ClientProfile, PortfolioProject } from "@/lib/focus/contracts/clients";
 import type { Loadable } from "@/lib/focus/contracts/loadable";

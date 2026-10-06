@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useFocusRouter } from "@/components/focus/ui/link";
 import { useEffect, useState } from "react";
 import type { Task, TaskPatch } from "@/lib/focus/contracts/work";
 import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
@@ -10,6 +11,7 @@ import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { useToast } from "@/components/focus/ui/toast";
 import { elapsedOf } from "@/lib/focus/state/work";
+import { useIsDemo } from "./scope";
 import { TaskDrawerBody, TaskDrawerHead } from "@/components/focus/patterns/work/task-drawer";
 import { useDemo, useTicker } from "./demo-store";
 
@@ -20,10 +22,11 @@ import { useDemo, useTicker } from "./demo-store";
  */
 export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
   const params = useSearchParams();
-  const router = useRouter();
+  const router = useFocusRouter();
   const path = usePathname();
   const demo = useDemo();
   const toast = useToast();
+  const isDemo = useIsDemo();
   const taskId = params.get("task") ?? defaultTaskId ?? null;
   const task = demo.state.tasks.find((t) => t.id === taskId) ?? null;
   const [base, setBase] = useState<{ id: string; version: number } | null>(null);
@@ -114,13 +117,16 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
         entries={demo.state.timeEntries}
         onLogTime={(m) => { const r = demo.logTime(task.id, m); toast.push({ title: `נרשמו ${m} דק׳ ידנית`, detail: task.title, undo: { onUndo: () => { demo.removeTimeEntry(r.entry.id); if (r.previous) demo.restoreTask(r.previous); } } }); }}
         onDuplicate={() => {
-          const copy = demo.createTask({ ...task, id: `t-copy-${Date.now()}`, title: `${task.title} (עותק)`, status: "todo", comments: [], activity: [], version: 1, dependsOn: [], spentMinutes: 0 });
+          // a copy starts fresh: open, unblocked (no block reason without a waiting status), no history
+          const { blockedReason: _blocked, ...rest } = task;
+          void _blocked;
+          const copy = demo.createTask({ ...rest, id: `t-copy-${Date.now()}`, title: `${task.title} (עותק)`, status: "todo", comments: [], activity: [], version: 1, dependsOn: [], spentMinutes: 0 });
           toast.push({ title: "נוצר עותק", detail: copy.title, undo: { onUndo: () => demo.removeTask(copy.id) } });
         }}
         onClose={() => close()}
         onDirtyChange={setDirty}
       />
-      {process.env.NODE_ENV !== "production" && (
+      {isDemo && (
         <div className="f-td__demo">
           <button type="button" className="f-link" onClick={() => demo.simulateRemoteEdit(task.id, { assigneeId: task.assigneeId === "u-dana" ? "u-yoav" : "u-dana" })}>דמו: מישהו אחר עורך את המשימה עכשיו</button>
         </div>

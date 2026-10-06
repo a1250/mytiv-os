@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useRef, useState, type KeyboardEvent } from "react";
 import type { BoardColumn, Task } from "@/lib/focus/contracts/work";
 import { fmtDayMonth } from "@/lib/focus/format";

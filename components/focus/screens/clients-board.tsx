@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { ContentItem, ContentStage } from "@/lib/focus/contracts/clients";
 import { BOARD_CLIENT, CONTENT_ITEMS, CONTENT_STAGES } from "@/lib/focus/fixtures/clients";

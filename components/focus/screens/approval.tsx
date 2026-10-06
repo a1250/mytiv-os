@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useFocusRouter } from "@/components/focus/ui/link";
 import { useCallback, useEffect, useState } from "react";
 import type { Approval, DecisionOutcome } from "@/lib/focus/contracts/approvals";
 import { designById } from "@/lib/focus/fixtures/studio";
@@ -31,7 +31,7 @@ import { useToast } from "@/components/focus/ui/toast";
 export default function ApprovalScreen({ id }: { id: string }) {
   const demo = useDemo();
   const toast = useToast();
-  const router = useRouter();
+  const router = useFocusRouter();
   const q = useQueue();
   const a = demo.approval(id)!;
   const ordered = q.ordered;

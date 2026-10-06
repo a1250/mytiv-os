@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { TimeReportGroup } from "@/lib/focus/contracts/work";
 import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";

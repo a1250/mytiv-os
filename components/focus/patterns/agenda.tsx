@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { DayAgenda, ResumeItem } from "@/lib/focus/contracts/today";
 import type { Loadable } from "@/lib/focus/contracts/loadable";
 import { fmtAgo, fmtTime } from "@/lib/focus/format";

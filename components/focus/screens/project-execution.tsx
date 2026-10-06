@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { HOURS_SYNC, PROJECT_UMINO } from "@/lib/focus/fixtures/projects";
 import { demoIso } from "@/lib/focus/fixtures/clock";
-import Link from "next/link";
+import Link, { useFocusRouter } from "@/components/focus/ui/link";
 import { PEOPLE } from "@/lib/focus/fixtures/people";
 import { fmtAgo, fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
@@ -36,7 +36,7 @@ const GROUPS = [
 function Inner() {
   const demo = useDemo();
   const toast = useToast();
-  const router = useRouter();
+  const router = useFocusRouter();
   const params = useSearchParams();
   const { now, state } = demo;
   const selected = params.get("task") ?? "t-photo-shoot";

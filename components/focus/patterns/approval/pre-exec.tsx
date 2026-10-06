@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useEffect, useRef } from "react";
 import type { ExternalAction } from "@/lib/focus/contracts/approvals";
 import type { ExecState } from "@/lib/focus/state/execution";

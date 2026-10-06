@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useEffect, useReducer, useState } from "react";
 import { contrastRatio } from "@/lib/focus/color";
 import { designById } from "@/lib/focus/fixtures/studio";

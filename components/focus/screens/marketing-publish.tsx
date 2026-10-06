@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { PUBLISH_SUSHI } from "@/lib/focus/fixtures/marketing";
 import { personName } from "@/lib/focus/fixtures/people";

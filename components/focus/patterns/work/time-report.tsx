@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { TimeReportData, TimeReportGroup, TimeReportRow } from "@/lib/focus/contracts/work";
 import { fmtDayMonth, formatNumber } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";

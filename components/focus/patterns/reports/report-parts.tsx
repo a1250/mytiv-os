@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useId, useState, type ReactNode } from "react";
 import type { Reading } from "@/lib/focus/contracts/common";
 import type { ChartBar, SourceDetail } from "@/lib/focus/contracts/reports";

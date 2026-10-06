@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { Brief, FormatKey } from "@/lib/focus/contracts/studio";
 import { BRIEF_THURSDAY, designById, DIRECTIONS, FORMATS } from "@/lib/focus/fixtures/studio";

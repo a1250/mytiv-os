@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link, { useFocusRouter } from "@/components/focus/ui/link";
 import { useEffect, useState } from "react";
 import type { Brief, Direction, FormatVariant } from "@/lib/focus/contracts/studio";
 import { BRIEF_THURSDAY, designById, DIRECTIONS } from "@/lib/focus/fixtures/studio";
@@ -31,7 +30,7 @@ function variantFor(base: FormatVariant, d: Direction, brief: Brief): FormatVari
 export default function StudioDirectionsScreen() {
   const demo = useDemo();
   const toast = useToast();
-  const router = useRouter();
+  const router = useFocusRouter();
   const brief = (demo.state.drafts[BRIEF_KEY] as Brief | undefined) ?? BRIEF_THURSDAY;
   const design = designById("thursday-sushi")!;
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);

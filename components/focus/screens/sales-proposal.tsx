@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useFocusRouter } from "@/components/focus/ui/link";
 import { useEffect, useState, type MouseEvent } from "react";
 import { PROPOSAL_CORPORATE, PROPOSAL_TEMPLATES, VALIDITY_OPTIONS } from "@/lib/focus/fixtures/sales";
 import { fmtAgo, fmtDate, fmtMoney, fmtTime } from "@/lib/focus/format";
@@ -46,7 +46,7 @@ export default function SalesProposalScreen() {
 function Editor({ saved }: { saved: SalesState["proposal"] }) {
   const demo = useDemo();
   const toast = useToast();
-  const router = useRouter();
+  const router = useFocusRouter();
   const { now, state } = demo;
   const [form, setForm] = useState<Form>(() => (saved ? { ...saved, lines: toDraft(saved.lines) } : fixtureForm()));
   const [touched, setTouched] = useState<Set<string>>(() => new Set());

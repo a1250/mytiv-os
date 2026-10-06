@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useEffect, useRef, useState } from "react";
 import type { OutreachPurpose, OutreachTone } from "@/lib/focus/contracts/sales";
 import { OUTREACH } from "@/lib/focus/fixtures/sales";

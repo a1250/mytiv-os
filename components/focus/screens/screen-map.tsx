@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useScopedHref } from "@/components/focus/ui/link";
 import { useState } from "react";
 import { MOBILE_TARGETS, SCREENS } from "@/lib/focus/screens";
 import { Page, PageHeader } from "@/components/focus/patterns/page";
@@ -28,6 +28,7 @@ const MODE = { app: "מסך באפליקציה", focus: "מצב פוקוס", mob
 export function ScreenMap() {
   const demo = useDemo();
   const toast = useToast();
+  const scoped = useScopedHref();
   const [group, setGroup] = useState<(typeof GROUPS)[number]["key"]>("D");
   const [phone, setPhone] = useState<string | null>(null);
   const g = GROUPS.find((x) => x.key === group)!;
@@ -77,7 +78,7 @@ export function ScreenMap() {
                     {targets.map((t) => (
                       <div key={t} className="f-phone">
                         <div className="f-phone__status" aria-hidden><span>8:10</span><span className="f-phone__notch" /><span>100%</span></div>
-                        <iframe className="f-phone__screen" src={t} title={`${s.title} · תצוגת טלפון`} />
+                        <iframe className="f-phone__screen" src={scoped(t)} title={`${s.title} · תצוגת טלפון`} />
                       </div>
                     ))}
                   </div>

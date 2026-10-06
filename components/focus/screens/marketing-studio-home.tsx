@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { StudioFilter, StudioItem, StudioStage } from "@/lib/focus/contracts/marketing";
 import { RECENT_ASSETS, START_FROM, STUDIO_ITEMS } from "@/lib/focus/fixtures/marketing";

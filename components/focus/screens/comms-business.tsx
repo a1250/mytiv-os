@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useId, useState } from "react";
 import type { BusinessSettings } from "@/lib/focus/contracts/settings";
 import { AI_CAPABILITIES, AI_CHECK_MS, AI_PROVIDERS, BRAND_KITS, BUSINESS, LANGUAGES, SETTINGS_NAV, TIME_ZONES } from "@/lib/focus/fixtures/settings";

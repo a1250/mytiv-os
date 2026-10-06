@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { ProjectHealth, ProjectSummary } from "@/lib/focus/contracts/projects";
 import { fmtDayMonth } from "@/lib/focus/format";
 import { personName } from "@/lib/focus/fixtures/people";

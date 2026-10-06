@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { cx } from "./cx";
 

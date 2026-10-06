@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ContentUnderReview, DecisionCheck, DecisionOutcome } from "@/lib/focus/contracts/approvals";
 import { Button } from "@/components/focus/ui/button";

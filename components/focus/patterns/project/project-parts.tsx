@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { ReactNode } from "react";
 import type { Metric } from "@/lib/focus/contracts/common";
 import type { Loadable } from "@/lib/focus/contracts/loadable";

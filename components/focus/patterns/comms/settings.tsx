@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { ReactNode } from "react";
 import type { AccountRole, Permission, PermissionRow, SettingsNavItem, SettingsSection } from "@/lib/focus/contracts/settings";
 import { cx } from "@/components/focus/ui/cx";

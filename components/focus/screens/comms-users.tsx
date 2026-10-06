@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { AccountRole, UserAccount } from "@/lib/focus/contracts/settings";
 import { PERMISSION_LEGEND, PERMISSION_WORD, PERMISSIONS, ROLE_LABEL, SETTINGS_NAV, USERS } from "@/lib/focus/fixtures/settings";

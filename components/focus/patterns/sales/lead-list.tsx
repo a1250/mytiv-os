@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { Lead } from "@/lib/focus/contracts/sales";
 import { personName } from "@/lib/focus/fixtures/people";
 import { daysBetween, fmtDayMonth, fmtTime } from "@/lib/focus/format";

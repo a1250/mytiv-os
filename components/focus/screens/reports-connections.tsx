@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { Connection } from "@/lib/focus/contracts/reports";
 import type { WorkRole } from "@/lib/focus/contracts/work";

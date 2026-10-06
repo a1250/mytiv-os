@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { Loadable } from "@/lib/focus/contracts/loadable";
 import type { StuckItem } from "@/lib/focus/contracts/today";
 import { LoadableView } from "@/components/focus/ui/feedback";

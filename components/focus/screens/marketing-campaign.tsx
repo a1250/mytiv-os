@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { Approval } from "@/lib/focus/contracts/approvals";
 import type { CampaignBrief, ContentPlanRow } from "@/lib/focus/contracts/marketing";

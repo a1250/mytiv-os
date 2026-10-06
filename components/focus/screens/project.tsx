@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { HOURS_SYNC, MEDIA_BUDGET, PROJECT_UMINO } from "@/lib/focus/fixtures/projects";
 import { R } from "@/lib/focus/routes";
 import { BlockersCard, DecisionsCard, HoursRing, Milestones, NextActionHero, ProjectHeader, ResultsCard } from "@/components/focus/patterns/project/project-parts";

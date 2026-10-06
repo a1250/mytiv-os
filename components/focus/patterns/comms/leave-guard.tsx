@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useFocusRouter } from "@/components/focus/ui/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
@@ -10,7 +10,7 @@ import { Dialog } from "@/components/focus/ui/dialog";
  * and an in-app link click is held until the user chooses — stay, leave without saving, or save and leave.
  */
 export function useLeaveGuard(dirty: boolean) {
-  const router = useRouter();
+  const router = useFocusRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   useEffect(() => {
     if (!dirty) return;

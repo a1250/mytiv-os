@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import { Suspense, useState, type ReactNode } from "react";
 import type { Task } from "@/lib/focus/contracts/work";
 import { HOURS_SYNC } from "@/lib/focus/fixtures/projects";

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link, { useFocusRouter } from "@/components/focus/ui/link";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
 import type { MilestoneDraft, NewProjectDraft, SessionProject } from "@/lib/focus/contracts/clients";
 import { DELIVERABLE_SUGGESTIONS, EMPTY_DRAFT, WIZARD_CLIENTS, WIZARD_OWNERS, WIZARD_STEPS, WIZARD_TEAM } from "@/lib/focus/fixtures/clients";
@@ -40,7 +40,7 @@ function stepSummary(i: number, d: NewProjectDraft): string {
 }
 
 function Inner() {
-  const router = useRouter();
+  const router = useFocusRouter();
   const toast = useToast();
   const params = useSearchParams();
   const [initial] = useState<NewProjectDraft>(() => {

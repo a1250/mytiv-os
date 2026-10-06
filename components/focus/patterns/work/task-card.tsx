@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/focus/ui/link";
 import type { Priority } from "@/lib/focus/contracts/status";
 import type { Task } from "@/lib/focus/contracts/work";
 import { daysBetween, fmtDayMonth, fmtDays } from "@/lib/focus/format";

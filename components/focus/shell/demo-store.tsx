@@ -231,6 +231,8 @@ function useStoreValue() {
       evidence: [], activity: [{ id: "a0", at: demoIso(), actorId: VIEWER.id, text: "נוצרה ביצירה מהירה", tone: "done" }],
       source: "mytiv", state: "live", version: 1, updatedAt: demoIso(), parentId: null, ...draft,
     };
+    // the same stored-task invariant as every patch: no non-canonical status, no block reason off a waiting task
+    if (!taskInvariant(t).ok) throw new Error(`createTask: ${(taskInvariant(t) as { reason: string }).reason}`);
     dispatch({ type: "addTask", task: t });
     return t;
   }, []);
