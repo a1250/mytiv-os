@@ -9,6 +9,7 @@ import { APPROVALS } from "@/lib/focus/fixtures/approvals";
 import { TASKS } from "@/lib/focus/fixtures/work";
 import { R } from "@/lib/focus/routes";
 import { SCREENS } from "@/lib/focus/screens";
+import { useNavGuardAttempt } from "./nav-guard";
 
 /**
  * Search & ask (handoff §6.5): one field over screens, approvals and tasks (fixtures), ↑/↓ + Enter, Esc closes.
@@ -30,7 +31,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const s = q.trim();
     return (s ? INDEX.filter((h) => `${h.title} ${h.meta ?? ""}`.includes(s)) : INDEX.filter((h) => h.group !== "מסכים")).slice(0, 8);
   }, [q]);
-  const go = (h: Hit) => { onClose(); setQ(""); router.push(h.href); };
+  // a screen with unsaved changes holds the navigation and asks first (the palette is not a link)
+  const attempt = useNavGuardAttempt();
+  const go = (h: Hit) => { onClose(); setQ(""); if (attempt(h.href)) router.push(h.href); };
   return (
     <Dialog open={open} onClose={() => { onClose(); setQ(""); }} label="חיפוש ופקודות" className="f-palette" initialFocus="input">
       <div className="f-palette__head">

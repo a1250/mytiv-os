@@ -10,7 +10,7 @@ import { CLIENTS } from "@/lib/focus/fixtures/people";
 import { fmtAgo, fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { jobStatus, type JobStatus } from "@/lib/focus/state/jobs";
-import { useLeaveGuard, LeaveDialog } from "@/components/focus/patterns/comms/leave-guard";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 import { ClaimList, DraftEditor, DraftLegend, MessageBody, MessageHeader, SendReviewDialog, ThreadList } from "@/components/focus/patterns/comms/mail";
 import { useDemo } from "@/components/focus/shell/demo-store";
 import { Button } from "@/components/focus/ui/button";
@@ -102,7 +102,6 @@ function Inner() {
   const baseline = d ? d.savedText ?? d.base?.text ?? "" : "";
   const dirty = !!thread && !sent && text !== baseline && (text.length > 0 || baseline.length > 0);
 
-  const guard = useLeaveGuard(dirty);
   const put = (patch: Partial<DraftLocal>) => { if (thread && d) setDrafts((xs) => ({ ...xs, [thread.id]: { ...d, ...patch } })); };
   /** fold a finished AI result into the draft before any further change */
   const committed = (): DraftLocal => (d && aiApplied ? { ...d, base: d.ai!.draft, text: d.ai!.draft.text, ai: undefined } : d!);
@@ -122,6 +121,8 @@ function Inner() {
     setDrafts((xs) => ({ ...xs, [thread.id]: next }));
     toast.push({ title: "הטיוטה נשמרה", detail: "נשמרה ב־Mytiv בלבד. לא נשלחה לאף אחד.", undo: { onUndo: () => setDrafts((xs) => { const c = { ...xs }; if (prev) c[thread.id] = prev; else delete c[thread.id]; return c; }) } });
   };
+  // unsaved changes: every way out asks first, with "save and leave" — see NavGuardProvider
+  useNavGuard({ dirty, what: "שינויים בטיוטת התשובה לא יישמרו.", onSaveAndLeave: () => { saveDraft(); } });
 
   const regenerate = () => {
     if (!thread || !d) return;
@@ -288,10 +289,6 @@ function Inner() {
         </form>
       </Dialog>
 
-      <LeaveDialog
-        open={!!guard.pendingHref} what="שינויים בטיוטת התשובה לא יישמרו."
-        onStay={guard.stay} onLeave={guard.leave} onSaveAndLeave={() => { saveDraft(); guard.leave(); }}
-      />
     </div>
   );
 }

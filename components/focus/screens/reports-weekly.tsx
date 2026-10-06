@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useFocusRouter } from "@/components/focus/ui/link";
-import { useEffect, useId, useState, type MouseEvent } from "react";
+import { useId, useState, type MouseEvent } from "react";
 import type { ReviewItem, ReviewItemKind, ReviewSection } from "@/lib/focus/contracts/reports";
 import { WEEKLY_REVIEW } from "@/lib/focus/fixtures/reports";
 import { personName } from "@/lib/focus/fixtures/people";
@@ -15,6 +15,7 @@ import { Dialog } from "@/components/focus/ui/dialog";
 import { TextAreaField } from "@/components/focus/ui/field";
 import { ApprovalPill, OriginTag, SYSTEM, VerificationTag, WORK } from "@/components/focus/ui/status";
 import { useToast } from "@/components/focus/ui/toast";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * סקירה שבועית (handoff G3) — focus mode. Every data line links to its source item; AI sections are marked and stay
@@ -54,12 +55,8 @@ export default function ReportsWeeklyScreen() {
   const [leaveTo, setLeaveTo] = useState<string | null>(null);
   const dirty = editing && draft.trim() !== summary;
 
-  useEffect(() => {
-    if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); };
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [dirty]);
+  // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
+  useNavGuard({ dirty: dirty, what: "העריכה של התקציר המנהלי לא תישמר." });
 
   const guard = (href: string) => (e: MouseEvent<HTMLAnchorElement>) => {
     if (!dirty) return;

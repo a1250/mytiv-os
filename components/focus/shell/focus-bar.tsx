@@ -1,5 +1,5 @@
 import Link from "@/components/focus/ui/link";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { SegmentProgress } from "@/components/focus/ui/misc";
 
 /**
@@ -7,18 +7,15 @@ import { SegmentProgress } from "@/components/focus/ui/misc";
  * "Exit" is always available; what was decided is kept, what was not stays in the queue.
  */
 export function FocusBar({
-  exitHref, exitLabel = "צא ממצב פוקוס", exitGlyph = "✕", progress, center, end, skipHref, skipLabel = "דלג לבא ←", onNavigate,
+  exitHref, exitLabel = "צא ממצב פוקוס", exitGlyph = "✕", progress, center, end, skipHref, skipLabel = "דלג לבא ←",
 }: {
   exitHref: string; exitLabel?: string; exitGlyph?: string;
   progress?: { index: number; total: number; done: number; label: string };
   center?: ReactNode; end?: ReactNode; skipHref?: string | null; skipLabel?: string;
-  /** return false to stop the navigation (e.g. unsaved changes — the caller asks first) */
-  onNavigate?: (href: string) => boolean;
 }) {
-  const guard = (href: string) => (e: MouseEvent) => { if (onNavigate && !onNavigate(href)) e.preventDefault(); };
   return (
     <div className="f-focusbar" role="banner">
-      <Link href={exitHref} className="f-focusbar__exit" aria-label={exitLabel} onClick={guard(exitHref)}>
+      <Link href={exitHref} className="f-focusbar__exit" aria-label={exitLabel}>
         <span aria-hidden className="f-focusbar__glyph">{exitGlyph}</span><span aria-hidden className="f-focusbar__back">→</span><span className="f-focusbar__exit-text">&nbsp;{exitLabel}</span>
       </Link>
       {center}
@@ -33,7 +30,7 @@ export function FocusBar({
         </>
       )}
       {end}
-      {skipHref && <Link href={skipHref} className="f-focusbar__skip f-hit" onClick={guard(skipHref)}>{skipLabel}</Link>}
+      {skipHref && <Link href={skipHref} className="f-focusbar__skip f-hit">{skipLabel}</Link>}
     </div>
   );
 }

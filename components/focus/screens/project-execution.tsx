@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { HOURS_SYNC, PROJECT_UMINO } from "@/lib/focus/fixtures/projects";
 import { demoIso } from "@/lib/focus/fixtures/clock";
 import Link, { useFocusRouter } from "@/components/focus/ui/link";
@@ -22,6 +22,7 @@ import { PlannedTag } from "@/components/focus/ui/status";
 import { NavTabs } from "@/components/focus/ui/tabs";
 import { useToast } from "@/components/focus/ui/toast";
 import { AUTUMN_PROJECT_ID } from "@/lib/focus/fixtures/work";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * Project › execution (handoff D3, prototype flow 2): tasks grouped by status with dependencies, and the selected task
@@ -57,12 +58,8 @@ function Inner() {
   const refreshJob = state.jobs.find((j) => j.id === "refresh-clickup");
   const refreshing = refreshJob && !refreshJob.cancelledAt && jobStatus(refreshJob, state.clock).state === "running";
 
-  useEffect(() => {
-    if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [dirty]);
+  // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
+  useNavGuard({ dirty: dirty, what: "האחראי, הצעד הבא והתאריך שבחרת לא יישמרו." });
 
   // the token the panel's draft is based on: set when a task is selected, adopted while there is no draft
   const [draftBase, setDraftBase] = useState<{ id: string; version: string } | null>(null);

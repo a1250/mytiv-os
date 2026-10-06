@@ -1,8 +1,8 @@
 "use client";
 
-import Link, { useFocusRouter } from "@/components/focus/ui/link";
+import Link from "@/components/focus/ui/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import type { MilestoneDraft, NewProjectDraft, SessionProject } from "@/lib/focus/contracts/clients";
 import { DELIVERABLE_SUGGESTIONS, EMPTY_DRAFT, WIZARD_CLIENTS, WIZARD_OWNERS, WIZARD_STEPS, WIZARD_TEAM } from "@/lib/focus/fixtures/clients";
 import { CLIENTS, PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
@@ -11,17 +11,17 @@ import { R } from "@/lib/focus/routes";
 import { addSessionProject, removeSessionProject } from "@/components/focus/patterns/clients/session-projects";
 import { MilestoneRows, PeopleChips, StepRail, TextChips, validateStep, type WizardErrors } from "@/components/focus/patterns/clients/wizard-parts";
 import { Button, ButtonLink } from "@/components/focus/ui/button";
-import { Dialog } from "@/components/focus/ui/dialog";
 import { Banner } from "@/components/focus/ui/feedback";
 import { Checkbox, SelectField, TextAreaField, TextField } from "@/components/focus/ui/field";
 import { Icon } from "@/components/focus/ui/icon";
 import { PlannedTag } from "@/components/focus/ui/status";
 import { useToast } from "@/components/focus/ui/toast";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * New project wizard (handoff H3) — focus mode (no global nav). Six steps; "המשך" validates the current step and every
- * error replaces its field's help text; "חזרה" keeps every value; leaving with unsaved input asks first (dialog for the
- * close button, the browser prompt for reload/close). The last step creates the project in this browser session only
+ * error replaces its field's help text; "חזרה" keeps every value; leaving with unsaved input asks first (the shared
+ * NavGuard dialog for links, search and Back; the browser prompt for reload/close). The last step creates the project in this browser session only
  * and says so — nothing is sent to a server.
  */
 const LAST = WIZARD_STEPS.length - 1;
@@ -40,7 +40,6 @@ function stepSummary(i: number, d: NewProjectDraft): string {
 }
 
 function Inner() {
-  const router = useFocusRouter();
   const toast = useToast();
   const params = useSearchParams();
   const [initial] = useState<NewProjectDraft>(() => {
@@ -53,7 +52,6 @@ function Inner() {
   const [reached, setReached] = useState(0);
   const [errors, setErrors] = useState<WizardErrors>({});
   const [created, setCreated] = useState<SessionProject | null>(null);
-  const [leaving, setLeaving] = useState(false);
   const seq = useRef(0);
   const moved = useRef(false);
   const headRef = useRef<HTMLHeadingElement>(null);
@@ -61,12 +59,8 @@ function Inner() {
 
   const dirty = !created && JSON.stringify(d) !== JSON.stringify(initial);
 
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
+  useNavGuard({ dirty: dirty, what: "מה שמילאת לא נשמר בשום מקום. אם תצא, הפרטים יימחקו." });
 
   useEffect(() => {
     if (!moved.current) return;
@@ -119,7 +113,6 @@ function Inner() {
 
   const restart = () => { moved.current = true; setD(EMPTY_DRAFT); setStep(0); setReached(0); setErrors({}); setCreated(null); };
 
-  const onClose = (e: MouseEvent<HTMLAnchorElement>) => { if (dirty) { e.preventDefault(); setLeaving(true); } };
 
   const cur = WIZARD_STEPS[step];
   const nextLabel = step === LAST ? "צור פרויקט" : `המשך: ${WIZARD_STEPS[step + 1].title}`;
@@ -127,7 +120,7 @@ function Inner() {
   return (
     <div className="f-focusmode f-cl-wiz">
       <header className="f-cl-wiz__bar">
-        <Link href={R.projects} onClick={onClose} className="f-btn f-btn--neutral f-cl-wiz__close"><Icon name="x" size={16} />סגור</Link>
+        <Link href={R.projects} className="f-btn f-btn--neutral f-cl-wiz__close"><Icon name="x" size={16} />סגור</Link>
         <h1 className="f-cl-wiz__h1">פרויקט חדש</h1>
         <span className="f-grow" />
         <span className="f-cl-wiz__save" aria-live="polite">{created ? "נשמר בדמו · לא בשרת" : dirty ? "יש שינויים שלא נשמרו · נשמר רק בסיום" : "עוד לא מולא דבר"}</span>
@@ -236,17 +229,6 @@ function Inner() {
           <Button type="submit" form="f-cl-wiz-form" variant="primary" size="lg">{nextLabel} {step < LAST && <span aria-hidden>←</span>}</Button>
         </div>
       )}
-
-      <Dialog open={leaving} onClose={() => setLeaving(false)} labelledBy="f-cl-leave-title" initialFocus=".f-cl-leave__stay">
-        <div className="f-cl-leave">
-          <h2 id="f-cl-leave-title" className="f-cl-leave__title">לצאת בלי ליצור את הפרויקט?</h2>
-          <p className="f-cl-leave__text">מה שמילאת לא נשמר בשום מקום. אם תצא, הפרטים יימחקו.</p>
-          <div className="f-cl-leave__actions">
-            <Button variant="primary" className="f-cl-leave__stay" onClick={() => setLeaving(false)}>המשך למלא</Button>
-            <Button variant="neutral" onClick={() => { setLeaving(false); setD(initial); router.push(R.projects); }}>צא ומחק את הפרטים</Button>
-          </div>
-        </div>
-      </Dialog>
     </div>
   );
 }

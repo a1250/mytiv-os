@@ -17,6 +17,7 @@ import { Checkbox, SelectField, TextAreaField, TextField } from "@/components/fo
 import { SystemLine } from "@/components/focus/ui/status";
 import { Chips } from "@/components/focus/ui/tabs";
 import { useToast } from "@/components/focus/ui/toast";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * Prompt builder & library (handoff H12): search, owner filter and category that really filter; a prompt's fields
@@ -119,12 +120,8 @@ function PromptWorkspace({ p, onDirty, onSave, handledJob, onHandled }: {
   const dirty = !sameDraft(draft, draftOf(p));
 
   useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
-  useEffect(() => {
-    if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [dirty]);
+  // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
+  useNavGuard({ dirty: dirty, what: "השינויים בפרומפט לא יישמרו כגרסה." });
 
   const jobId = `improve-${p.id}`;
   const job = demo.state.jobs.find((j) => j.id === jobId && !j.cancelledAt);

@@ -2,7 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { useFocusRouter } from "@/components/focus/ui/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Task, TaskPatch } from "@/lib/focus/contracts/work";
 import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
 import { CAPABILITIES } from "@/lib/focus/fixtures/work";
@@ -15,6 +15,7 @@ import { useIsDemo } from "./scope";
 import { useTaskUndo } from "./task-actions";
 import { TaskDrawerBody, TaskDrawerHead } from "@/components/focus/patterns/work/task-drawer";
 import { useDemo, useTicker } from "./demo-store";
+import { useNavGuard } from "./nav-guard";
 
 /**
  * Opens the TaskDrawer for `?task=<id>` on any Mytiv Work route, wires it to the demo store (patch with the version
@@ -51,13 +52,8 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
     router.replace(q.size ? `${path}?${q}` : path, { scroll: false });
   };
 
-  // warn before leaving the page with an unsaved draft
-  useEffect(() => {
-    if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); };
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [dirty]);
+  // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
+  useNavGuard({ dirty: dirty, what: "יש טקסט שלא נשמר במשימה (תגובה, תת־משימה או זמן)." });
 
   if (!task || !base) return null;
   const version = base.version;

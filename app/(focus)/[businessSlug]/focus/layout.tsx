@@ -17,6 +17,7 @@ import { fixturesAllowed, requireBusinessScope } from "@/lib/focus/scope";
 import { getFocusScope } from "@/lib/focus/scope.server";
 import { DemoStoreProvider } from "@/components/focus/shell/demo-store";
 import { FocusNotConnected } from "@/components/focus/shell/not-connected";
+import { NavGuardProvider } from "@/components/focus/shell/nav-guard";
 import { FocusScopeProvider } from "@/components/focus/shell/scope";
 import { ThemeScript } from "@/components/focus/shell/theme";
 import { FocusTopBar, ScreenMapButton } from "@/components/focus/shell/top-bar";
@@ -55,9 +56,11 @@ export default async function FocusLayout({ children, params }: { children: Reac
         {fixturesAllowed(scope) ? (
           <DemoStoreProvider>
             <ToastProvider>
-              <FocusTopBar />
-              <main id="main" tabIndex={-1} className="f-main">{children}</main>
-              <ScreenMapButton />
+              <NavGuardProvider>
+                <FocusTopBar />
+                <main id="main" tabIndex={-1} className="f-main">{children}</main>
+                <ScreenMapButton />
+              </NavGuardProvider>
             </ToastProvider>
           </DemoStoreProvider>
         ) : (

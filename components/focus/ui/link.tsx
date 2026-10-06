@@ -4,6 +4,7 @@ import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, type ComponentProps } from "react";
 import { scopedHref } from "@/lib/focus/scope";
+import { useNavGuardEntry } from "@/components/focus/shell/nav-guard";
 import { useFocusScope } from "@/components/focus/shell/scope";
 
 /**
@@ -28,14 +29,20 @@ export default function Link({ href, ...rest }: ComponentProps<typeof NextLink>)
   return <NextLink {...rest} href={resolve(base, href)} />;
 }
 
-/** next/navigation's router with Focus paths resolved against the scope (push / replace / prefetch). */
+/**
+ * next/navigation's router with Focus paths resolved against the scope (push / replace / prefetch). A push made while
+ * the unsaved-changes guard entry is on top of history replaces that entry (the user already confirmed), so Back
+ * from the destination returns to the page instead of to a duplicate of it.
+ */
 export function useFocusRouter() {
   const router = useRouter();
   const { base } = useFocusScope();
+  const consumeGuardEntry = useNavGuardEntry();
   return useMemo(() => ({
     ...router,
-    push: (href: string, options?: Parameters<typeof router.push>[1]) => router.push(scopedHref(base, href), options),
-    replace: (href: string, options?: Parameters<typeof router.replace>[1]) => router.replace(scopedHref(base, href), options),
+    push: (href: string, options?: Parameters<typeof router.push>[1]) => (consumeGuardEntry?.() ? router.replace : router.push)(scopedHref(base, href), options),
+    // a replace over the guard entry turns it into the destination: it must not be "removed" again by stepping back
+    replace: (href: string, options?: Parameters<typeof router.replace>[1]) => { consumeGuardEntry?.(); router.replace(scopedHref(base, href), options); },
     prefetch: (href: string, options?: Parameters<typeof router.prefetch>[1]) => router.prefetch(scopedHref(base, href), options),
-  }), [router, base]);
+  }), [router, base, consumeGuardEntry]);
 }

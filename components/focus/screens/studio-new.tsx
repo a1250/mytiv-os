@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useFocusRouter } from "@/components/focus/ui/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Brief, FormatKey } from "@/lib/focus/contracts/studio";
 import { BRIEF_THURSDAY, DIRECTIONS, FORMATS } from "@/lib/focus/fixtures/studio";
 import { R } from "@/lib/focus/routes";
@@ -12,6 +12,7 @@ import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { SelectField, TextField } from "@/components/focus/ui/field";
 import { useToast } from "@/components/focus/ui/toast";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * New content · brief (handoff E3, prototype flow 4). Goal and formats come from the campaign and can be changed
@@ -41,12 +42,8 @@ export default function StudioNewScreen() {
     setB((x) => ({ ...x, message: x.message || BRIEF_THURSDAY.message, secondary: x.secondary || BRIEF_THURSDAY.secondary, cta: x.cta || BRIEF_THURSDAY.cta }));
   }
 
-  useEffect(() => {
-    if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [dirty]);
+  // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
+  useNavGuard({ dirty: dirty, what: "השינויים בבריף שעוד לא נשמרו יאבדו." });
 
   const set = (p: Partial<Brief>) => { setB((x) => ({ ...x, ...p })); setErrors({}); };
   const save = () => { demo.setDraft(BRIEF_KEY, b); toast.push({ title: "הבריף נשמר", detail: "אפשר לחזור אליו מהסטודיו." }); };

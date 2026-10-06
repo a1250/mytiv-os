@@ -7,7 +7,7 @@ import { AI_CAPABILITIES, AI_CHECK_MS, AI_PROVIDERS, BRAND_KITS, BUSINESS, LANGU
 import { fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { jobStatus } from "@/lib/focus/state/jobs";
-import { LeaveDialog, useLeaveGuard } from "@/components/focus/patterns/comms/leave-guard";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 import { SettingsFrame, SettingsNav } from "@/components/focus/patterns/comms/settings";
 import { PageHeader } from "@/components/focus/patterns/page";
 import { useDemo } from "@/components/focus/shell/demo-store";
@@ -53,7 +53,6 @@ export default function CommsBusinessScreen() {
   const [checks, setChecks] = useState(0);
   const colorId = useId();
   const dirty = !same(v, saved);
-  const guard = useLeaveGuard(dirty);
 
   const set = <K extends keyof BusinessSettings>(k: K, val: BusinessSettings[K]) => {
     setV((x) => ({ ...x, [k]: val }));
@@ -74,6 +73,8 @@ export default function CommsBusinessScreen() {
     toast.push({ title: "ההגדרות נשמרו", detail: "חלות מעכשיו על הצעות מחיר, דוחות ותוכן חדש.", undo: { onUndo: () => { setSaved(prev); setV(prev); } } });
     return true;
   };
+  // unsaved changes: every way out asks first, with "save and leave" — see NavGuardProvider
+  useNavGuard({ dirty, what: "שינויים בהגדרות העסק וה־AI לא יישמרו.", onSaveAndLeave: () => save() });
 
   const checkJobId = `ai-check-${checks}`;
   const checkJob = state.jobs.find((j) => j.id === checkJobId);
@@ -200,10 +201,6 @@ export default function CommsBusinessScreen() {
         </form>
       </SettingsFrame>
 
-      <LeaveDialog
-        open={!!guard.pendingHref} what="שינויים בהגדרות העסק וה־AI לא יישמרו."
-        onStay={guard.stay} onLeave={guard.leave} onSaveAndLeave={() => { if (save()) guard.leave(); else guard.stay(); }}
-      />
     </div>
   );
 }

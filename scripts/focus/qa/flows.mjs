@@ -17,6 +17,8 @@ const fresh = async (w = 1440) => {
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  // a dirty screen from the previous check raises beforeunload on goto: accept it (Playwright would dismiss = abort)
+  page.on("dialog", (d) => d.accept().catch(() => {}));
   return { ctx, page, errors };
 };
 const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domcontentloaded" }); await settle(page); };
@@ -141,11 +143,52 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
 // 5. unsaved-change guards
 {
   const { ctx, page } = await fresh();
+  const leaveDialog = "dialog[open] #nav-leave-title";
   await check("leaving focus mode with a typed reason asks first", async () => {
     await go(page, "/focus/approvals/plan-october");
     await page.fill(".f-decision__input", "טיוטה");
     await page.click(".f-focusbar__exit");
-    return (await page.isVisible("dialog[open] .f-confirm")) && page.url().includes("plan-october");
+    return (await page.isVisible(leaveDialog)) && page.url().includes("plan-october");
+  });
+  await check("search (⌘K) does not bypass the guard: stay keeps the draft", async () => {
+    await go(page, "/focus/approvals/plan-october");
+    await page.fill(".f-decision__input", "נימוק בעבודה");
+    await page.locator("body").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press("Control+k");
+    await page.waitForSelector(".f-palette__input");
+    await page.fill(".f-palette__input", "לידים");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(leaveDialog, { timeout: 3000 });
+    const held = page.url().includes("plan-october");
+    await page.click("dialog[open] .f-nav-leave__stay");
+    return held && (await page.inputValue(".f-decision__input")) === "נימוק בעבודה" ? "held, draft kept" : false;
+  });
+  await check("browser Back with an unsaved reason asks; stay keeps the page, leave goes back", async () => {
+    await go(page, "/focus/approvals");
+    await page.click("a[href$='/approvals/plan-october'] >> nth=0");
+    await page.waitForURL("**/approvals/plan-october");
+    await page.waitForSelector(".f-decision__input");
+    await page.fill(".f-decision__input", "טיוטה ל־Back");
+    await page.waitForTimeout(150);
+    await page.goBack();
+    await page.waitForSelector(leaveDialog, { timeout: 3000 });
+    const stayedOnPage = page.url().includes("plan-october");
+    await page.click("dialog[open] .f-nav-leave__stay");
+    const kept = (await page.inputValue(".f-decision__input")) === "טיוטה ל־Back";
+    await page.goBack();
+    await page.waitForSelector(leaveDialog, { timeout: 3000 });
+    await page.click("dialog[open] >> text=צא בלי לשמור");
+    await page.waitForURL((u) => u.pathname.endsWith("/focus/approvals"), { timeout: 5000 });
+    return stayedOnPage && kept ? "held twice, then left to the list" : false;
+  });
+  await check("an in-page link on a dirty screen asks first (studio brief 'חזרה')", async () => {
+    await go(page, "/focus/studio/new");
+    await page.getByLabel("טקסט משני").fill("שינוי בבריף");
+    // keyboard activation of the link (Enter dispatches the click the guard intercepts)
+    await page.focus(".f-snew__foot a");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(leaveDialog, { timeout: 3000 });
+    return (await page.isVisible(leaveDialog)) && page.url().includes("/studio/new");
   });
   await check("closing the task drawer with a draft comment asks first", async () => {
     await go(page, "/focus/work/list?task=t-post45");

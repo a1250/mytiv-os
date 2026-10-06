@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "@/components/focus/ui/link";
-import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
+import { useReducer, useRef, useState, type ReactNode } from "react";
 import { PUBLISH_SUSHI } from "@/lib/focus/fixtures/marketing";
 import { personName } from "@/lib/focus/fixtures/people";
 import { designById } from "@/lib/focus/fixtures/studio";
@@ -19,6 +19,7 @@ import { Dialog } from "@/components/focus/ui/dialog";
 import { SelectField, TextField } from "@/components/focus/ui/field";
 import { Bdi } from "@/components/focus/ui/misc";
 import { APPROVAL, ApprovalPill, OriginTag } from "@/components/focus/ui/status";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * Export & publish after approval (handoff E7). Downloads are planned (never a fake file). Scheduling is an external
@@ -68,13 +69,8 @@ export default function MarketingPublishScreen() {
   const dateRef = useRef<HTMLDivElement>(null);
   const dirty = form.channel !== initial.channel || form.date !== initial.date || form.time !== initial.time;
 
-  // unsaved schedule edits are guarded before leaving the page
-  useEffect(() => {
-    if (!dirty || js) return;
-    const h = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [dirty, js]);
+  // unsaved schedule edits: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
+  useNavGuard({ dirty: dirty && !js, what: "השינויים בתזמון לא יישמרו." });
 
   const channelLabel = plan.channels.find((c) => c.value === form.channel)?.label ?? "";
   const at = `${form.date}T${form.time}:00+03:00`;

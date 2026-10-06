@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import type { BriefField } from "@/lib/focus/contracts/marketing";
 import { BRIEF_GAL } from "@/lib/focus/fixtures/marketing";
 import { fmtDayMonth, fmtTime } from "@/lib/focus/format";
@@ -11,6 +11,7 @@ import { Button, ButtonLink } from "@/components/focus/ui/button";
 import { TextField } from "@/components/focus/ui/field";
 import { OriginTag, VerificationTag } from "@/components/focus/ui/status";
 import { useToast } from "@/components/focus/ui/toast";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * Brief analysis (handoff H11): the original brief with what was extracted highlighted, the stated facts (confirmed by
@@ -119,12 +120,8 @@ function StatedForm({ fields, onSave, onCancel }: { fields: BriefField[]; onSave
   const [draft, setDraft] = useState(fields);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const dirty = draft.some((f, i) => f.value !== fields[i].value);
-  useEffect(() => {
-    if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [dirty]);
+  // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
+  useNavGuard({ dirty: dirty, what: "התיקונים במידע מהבריף לא יישמרו." });
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};

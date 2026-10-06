@@ -18,6 +18,7 @@ import { Bdi } from "@/components/focus/ui/misc";
 import { OriginTag, PlannedTag, SystemLine, VerificationTag } from "@/components/focus/ui/status";
 import { Chips } from "@/components/focus/ui/tabs";
 import { useToast } from "@/components/focus/ui/toast";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * Outreach with fact check (handoff F4). The draft is fully editable; claims without a source and a weekday that does
@@ -69,12 +70,8 @@ function Outreach({ saved }: { saved: SalesState["outreach"] }) {
 
   /** leaving asks first only when there is text that is neither saved here nor the untouched generated draft */
   const dirty = !isSaved && (text !== generated || subject !== o.subjects[purpose]);
-  useEffect(() => {
-    if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [dirty]);
+  // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
+  useNavGuard({ dirty: dirty, what: "הטיוטה של הפנייה לא תישמר." });
 
   const pick = (p: OutreachPurpose, t: OutreachTone) => {
     setPurpose(p); setTone(t);

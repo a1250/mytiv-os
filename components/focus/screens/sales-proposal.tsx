@@ -1,12 +1,11 @@
 "use client";
 
-import { useFocusRouter } from "@/components/focus/ui/link";
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useState } from "react";
 import { PROPOSAL_CORPORATE, PROPOSAL_TEMPLATES, VALIDITY_OPTIONS } from "@/lib/focus/fixtures/sales";
 import { fmtAgo, fmtDate, fmtMoney, fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { computeTotals, fromDraft, lineValid, LineItems, PdfPreview, toDraft, TotalsBox, VersionsCard, type LineDraft } from "@/components/focus/patterns/sales/proposal-editor";
-import { fmtAmount, PlannedDialog, ProposalStatusPill, SalesDialog } from "@/components/focus/patterns/sales/sales-parts";
+import { fmtAmount, PlannedDialog, ProposalStatusPill } from "@/components/focus/patterns/sales/sales-parts";
 import { saveProposal, useSales, type SalesState } from "@/components/focus/patterns/sales/sales-store";
 import { useDemo } from "@/components/focus/shell/demo-store";
 import { FocusBar } from "@/components/focus/shell/focus-bar";
@@ -15,6 +14,7 @@ import { Banner, SkeletonCard } from "@/components/focus/ui/feedback";
 import { ReadOnlyValue, SelectField, TextAreaField } from "@/components/focus/ui/field";
 import { PlannedTag } from "@/components/focus/ui/status";
 import { useToast } from "@/components/focus/ui/toast";
+import { useNavGuard } from "@/components/focus/shell/nav-guard";
 
 /**
  * Proposal editor with PDF preview (handoff F3). Quantity × unit price recompute subtotal / VAT 18% / total live; every
@@ -46,12 +46,10 @@ export default function SalesProposalScreen() {
 function Editor({ saved }: { saved: SalesState["proposal"] }) {
   const demo = useDemo();
   const toast = useToast();
-  const router = useFocusRouter();
   const { now, state } = demo;
   const [form, setForm] = useState<Form>(() => (saved ? { ...saved, lines: toDraft(saved.lines) } : fixtureForm()));
   const [touched, setTouched] = useState<Set<string>>(() => new Set());
   const [focusId, setFocusId] = useState<string | null>(null);
-  const [leaving, setLeaving] = useState<string | null>(null);
   const [planned, setPlanned] = useState<null | "pdf" | "ai">(null);
 
   const approval = demo.approval(d.approvalId);
@@ -79,22 +77,9 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
   useEffect(() => {
     if (focusId) document.querySelector<HTMLInputElement>(`[data-line="${focusId}"] input`)?.focus();
   }, [focusId]);
-  useEffect(() => {
-    if (allValid) return;
-    const h = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [allValid]);
+  // unsaved changes: every way out asks first (links, search, Back, closing the tab) — see NavGuardProvider
+  useNavGuard({ dirty: !allValid, what: "יש שדה לא תקין, ולכן השינויים האחרונים לא נשמרו. אם תצא עכשיו, ההצעה תישאר כפי שנשמרה לאחרונה." });
 
-  // leaving with an unsaved (invalid) field asks first
-  const guard = (e: MouseEvent<HTMLDivElement>) => {
-    if (allValid) return;
-    const a = (e.target as HTMLElement).closest("a");
-    const href = a?.getAttribute("href");
-    if (!href || !href.startsWith("/")) return;
-    e.preventDefault();
-    setLeaving(href);
-  };
 
   const changeTemplate = (id: string) => {
     const t = PROPOSAL_TEMPLATES.find((x) => x.id === id);
@@ -134,7 +119,7 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
   );
 
   return (
-    <div className="f-focusmode f-sl-prop" onClickCapture={guard}>
+    <div className="f-focusmode f-sl-prop">
       <FocusBar exitHref={R.lead(d.leadId)} exitLabel="לליד" exitGlyph="→"
         center={<span className="f-sl-pbar__center">
           <b className="f-sl-pbar__title">הצעה · {template.label} · {d.clientName}</b>
@@ -192,13 +177,6 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
         meanwhile="גוף המייל בסיכום השליחה נכתב ונערך ע״י דנה. אפשר לנסח פנייה עם בדיקת עובדות במסך הפניות היזומות.">
         <ButtonLink variant="secondary" href={R.outreach}>לפניות יזומות</ButtonLink>
       </PlannedDialog>
-      <SalesDialog open={!!leaving} onClose={() => setLeaving(null)} id="sl-leave" title="יש שינויים שלא נשמרו"
-        actions={<>
-          <Button variant="primary" onClick={() => setLeaving(null)}>חזור ותקן</Button>
-          <Button variant="neutral" onClick={() => { const href = leaving!; setLeaving(null); router.push(href); }}>צא בלי לשמור</Button>
-        </>}>
-        <p className="f-sl-dlg__text">יש שדה לא תקין, ולכן השינויים האחרונים לא נשמרו. אם תצא עכשיו, ההצעה תישאר כפי שנשמרה לאחרונה.</p>
-      </SalesDialog>
     </div>
   );
 }
