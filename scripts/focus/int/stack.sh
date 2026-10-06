@@ -27,14 +27,19 @@ if [ "${1:-}" = "db" ]; then
   PW="$(node -e "console.log(require('crypto').randomBytes(18).toString('base64url'))")"
   printf '%s' "$PW" > "$SECRETS/int-password"; chmod 600 "$SECRETS/int-password"
   STAGING_PASSWORD="$PW" node scripts/staging/seed-staging.mjs | $P -d "$INT_DB" >/dev/null
+  # business A ("mytiv") is connected to the local Gmail stand-in (scripts/focus/int/gmail-mock.mjs)
+  SECRETS_MASTER_KEY="${SECRETS_MASTER_KEY:-$(printf '0%.0s' {1..64})}" node --import tsx scripts/focus/int/seed-google.mjs aaaaaaaa-0000-4000-8000-00000000000a | $P -d "$INT_DB" >/dev/null
   echo "seeded fixtures (password in $SECRETS/int-password)"
 elif [ "${1:-}" = "serve" ]; then
   : "${ITEST_PG_MODULE:?set ITEST_PG_MODULE}"
   export AUTH_SECRET="${AUTH_SECRET:-$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")}"
   export SECRETS_MASTER_KEY="${SECRETS_MASTER_KEY:-$(printf '0%.0s' {1..64})}"
-  SQLPORT="${INT_SQL_PORT:-4444}"
+  SQLPORT="${INT_SQL_PORT:-4444}"; GMAILPORT="${INT_GMAIL_PORT:-4545}"
   node scripts/focus/int/neon-local-sql.mjs "$SQLPORT" & SQLPID=$!
-  trap 'kill $SQLPID 2>/dev/null' EXIT
+  node scripts/focus/int/gmail-mock.mjs "$GMAILPORT" & GMAILPID=$!
+  trap 'kill $SQLPID $GMAILPID 2>/dev/null' EXIT
+  export GMAIL_API_BASE_LOCAL="http://127.0.0.1:$GMAILPORT/gmail/v1/users/me"
+  export EXTERNAL_PROVIDER_TIMEOUT_MS="${EXTERNAL_PROVIDER_TIMEOUT_MS:-2500}"
   export NEON_LOCAL_SQL_ENDPOINT="http://127.0.0.1:$SQLPORT/sql"
   npx next dev -p "${2:-3300}"
 else
