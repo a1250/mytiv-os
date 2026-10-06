@@ -40,7 +40,7 @@ export function BlockedTaskPanel({
   return (
     <section className="f-bpanel f-panel" aria-labelledby={`${id}-h`}>
       <div className="f-bpanel__meta"><span className="f-meta-sm">משימה · מקור: <SourceDot source={task.source} /></span></div>
-      <h2 id={`${id}-h`} className="f-bpanel__title">{task.title}</h2>
+      <h2 id={`${id}-h`} className="f-bpanel__title" tabIndex={-1}>{task.title}</h2>
       <div className="f-bpanel__chips">
         <WorkStatusTag status={displayStatus(task, all)} size="xs" />
         <span className={cx("f-risk", "f-risk--xs", `f-risk--${PRIORITY[task.priority].tone}`)}>עדיפות {PRIORITY[task.priority].word}</span>

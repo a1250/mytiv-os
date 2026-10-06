@@ -105,10 +105,11 @@ function Toast({ t, onClose, onUndone }: { t: ToastItem; onClose: () => void; on
           // the countdown is visual only: its text changes every 250ms and would be re-announced by the live region
           <button type="button" className="f-toast__btn f-hit" aria-label={t.undo.label ?? "בטל"} onClick={(e) => {
             const hadFocus = document.activeElement === e.currentTarget;
+            const modal = e.currentTarget.closest("dialog");
             const r = t.undo!.onUndo();
             if (r === false) onClose(); else onUndone(typeof r === "string" ? r : "בוטל.");
             // the undo button goes away: keep keyboard focus in a sensible place (this toast's close, or the page)
-            if (hadFocus) requestAnimationFrame(() => (r === false ? document.getElementById("main") : closeRef.current)?.focus());
+            if (hadFocus) requestAnimationFrame(() => (r === false ? (modal?.querySelector<HTMLElement>("button, a[href], input, select, textarea") ?? document.getElementById("main")) : closeRef.current)?.focus());
           }}>
             {t.undo.label ?? "בטל"} <span className="f-num" aria-hidden>{fmtRemaining(remainingMs(t.window!, now))}</span>
           </button>

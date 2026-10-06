@@ -86,8 +86,8 @@ function Inner() {
     if (!r.ok) { toast.push({ kind: "error", title: "לא נשמר", detail: "refused" in r ? r.refused : "המשימה עודכנה בזמן שערכת. השינוי שלך לא נשמר — בדקו את הערכים החדשים ונסו שוב." }); return; }
     setDraftBase({ id: task.id, version: r.task.version });
     setDirty(false);
-    // the panel remounts on its new token: keep keyboard focus on its save button, not <body>
-    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLElement>(".f-bpanel button[type=submit]")?.focus()));
+    // the panel remounts on its new token (its save button may then be disabled): keep keyboard focus in the panel
+    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLElement>(".f-bpanel__title")?.focus()));
     if (task.source === "clickup") {
       const fail = state.failNext; if (fail) demo.setFailNext(false);
       demo.startJob({ id: syncJobId(task.id, r.task.version), kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "שומר אחראי, צעד הבא ותאריך מעקב.", durationMs: 1800, outcome: fail ? "failure" : "success", href: R.projectExecution("umino") });

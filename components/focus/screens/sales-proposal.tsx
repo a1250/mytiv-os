@@ -51,6 +51,10 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
   // undo toasts run later: they read the form that is current then, not the render that made them
   const formNow = useRef(form);
   useEffect(() => { formNow.current = form; }, [form]);
+  // the stored proposal changed outside this editor (an undo from a toast of an earlier visit): show what is stored —
+  // derived during render ("storing information from previous renders"), so the page never edits a stale copy
+  const [seen, setSeen] = useState(saved);
+  if (saved !== seen) { setSeen(saved); setForm(saved ? { ...saved, lines: toDraft(saved.lines) } : fixtureForm()); }
   const [touched, setTouched] = useState<Set<string>>(() => new Set());
   const [focusId, setFocusId] = useState<string | null>(null);
   const [planned, setPlanned] = useState<null | "pdf" | "ai">(null);
@@ -76,7 +80,11 @@ function Editor({ saved }: { saved: SalesState["proposal"] }) {
   /** every valid state is saved at once (the draft never holds a number that does not parse) */
   const commit = (next: Form) => {
     setForm(next);
-    if (next.lines.every(lineValid)) saveProposal({ lines: fromDraft(next.lines), notes: next.notes, templateId: next.templateId, validityDays: next.validityDays });
+    if (next.lines.every(lineValid)) {
+      const p = { lines: fromDraft(next.lines), notes: next.notes, templateId: next.templateId, validityDays: next.validityDays };
+      setSeen(p); // our own save is not an outside change
+      saveProposal(p);
+    }
   };
 
   useEffect(() => {

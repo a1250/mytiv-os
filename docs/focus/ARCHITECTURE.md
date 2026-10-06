@@ -86,8 +86,8 @@ the selected task, closing a form) — never a second leave dialog.
 - **Styling**: class names `f-<block>__<elem>--<mod>` in the area's CSS file. Colours only via tokens (`var(--f-…)`
   in `app/(focus)/[businessSlug]/focus/focus.css`); the theme attribute lives on `.focus-app` (no hydration mismatch).
   Inline styles only for data-driven geometry/brand colours.
-- **Announcements**: a banner or failed line that appears after an action is announced (errors as alerts, the rest
-  politely); one that is part of the page as loaded opts out (`live={false}`), so nothing is read on every load; a
+- **Announcements**: a banner or failed line that appears after an action is announced (errors assertively, the rest
+  politely) through a live region — never `role=alert`, which screen readers also read on every page load; a
   toast is announced once by its container; drawer writes without a toast are confirmed by one status line; a result
   that receives focus (pre-execution sent / failed) is read from there, not also as a live region.
 - **Status language**: never render a glyph or a status colour by hand — use the status components (symbol + word).

@@ -17,14 +17,14 @@ const BANNER_GLYPH: Record<BannerKind, string> = {
 };
 
 /**
- * A banner that appears after an action is announced (an error as an alert, anything else politely). `live={false}`
- * for a banner that is part of the page as loaded (an alert there would be read on every load) or that receives
- * focus itself (read from there, once).
+ * A banner that appears after an action is announced (an error assertively, anything else politely), and one that is
+ * part of the page as loaded is not read out (a live region's initial content is not announced; `role=alert` would
+ * be). `live={false}` for a banner that receives focus itself (read from there, once).
  */
 export function Banner({ kind, title, detail, action, className, live = true }: { kind: BannerKind; title: ReactNode; detail?: ReactNode; action?: ReactNode; className?: string; live?: boolean }) {
-  const role = !live ? undefined : kind === "error" ? "alert" : "status";
+  // an error is assertive, but as a live region — not role=alert, which screen readers also read when the page loads
   return (
-    <div role={role} className={cx("f-banner", `f-banner--${kind}`, className)}>
+    <div role={live ? "status" : undefined} aria-live={live && kind === "error" ? "assertive" : undefined} className={cx("f-banner", `f-banner--${kind}`, className)}>
       <span className="f-banner__glyph" aria-hidden><span className={kind === "processing" ? "f-spin" : undefined}>{BANNER_GLYPH[kind]}</span></span>
       <span className="f-banner__body">
         <span className="f-banner__title">{title}</span>
