@@ -137,7 +137,7 @@ export function FocusTopBar() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || plainShortcut(e, ["/"])) { e.preventDefault(); setSearch(true); }
+      if (((e.key === "k" || e.code === "KeyK") && (e.metaKey || e.ctrlKey)) || plainShortcut(e, ["/"])) { e.preventDefault(); setSearch(true); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

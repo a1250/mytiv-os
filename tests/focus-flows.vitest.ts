@@ -125,6 +125,24 @@ describe("keyboard shortcuts never fire while typing", () => {
     expect(plainShortcut({ key: "a", metaKey: true, target: body }, ["a"])).toBe(false);
     expect(plainShortcut({ key: "b", target: body }, ["a"])).toBe(false);
   });
+  it("letter shortcuts also work on a Hebrew layout (physical key), still never in a field or with a modifier", () => {
+    expect(plainShortcut({ key: "ש", code: "KeyA", target: body }, ["a", "A"])).toBe(true);
+    expect(plainShortcut({ key: "ר", code: "KeyR", target: body }, ["r", "R"])).toBe(true);
+    expect(plainShortcut({ key: "ש", code: "KeyA", target: field }, ["a"])).toBe(false);
+    expect(plainShortcut({ key: "ש", code: "KeyA", ctrlKey: true, target: body }, ["a"])).toBe(false);
+    expect(plainShortcut({ key: "ב", code: "KeyB", target: body }, ["a"])).toBe(false);
+    expect(plainShortcut({ key: "/", code: "Slash", target: body }, ["/"])).toBe(true);
+  });
+});
+
+describe("a saved proposal is sent only at the approved amount", () => {
+  it("computes the saved total with integer agorot + VAT (matches the approved 8,750)", async () => {
+    const { savedTotal } = await import("@/components/focus/patterns/sales/proposal-editor");
+    const { PROPOSAL_CORPORATE } = await import("@/lib/focus/fixtures/sales");
+    expect(savedTotal(PROPOSAL_CORPORATE.lines, PROPOSAL_CORPORATE.vatRate)).toBe(8750);
+    const edited = PROPOSAL_CORPORATE.lines.map((l, i) => (i === 0 ? { ...l, qty: l.qty + 1 } : l));
+    expect(savedTotal(edited, PROPOSAL_CORPORATE.vatRate)).not.toBe(8750);
+  });
 });
 
 describe("theme preference", () => {

@@ -11,9 +11,13 @@ export function isTypingTarget(target: KeyTarget): boolean {
   return !!target?.closest?.(TYPING_SELECTOR);
 }
 
-/** A plain single-key shortcut: no modifier held and not typing. */
-export function plainShortcut(e: { key: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; target?: unknown }, keys: string[]): boolean {
+/**
+ * A plain single-key shortcut: no modifier held and not typing. A letter shortcut also matches the physical key
+ * (`e.code`, "KeyA"), so it works on a Hebrew (or any non-Latin) keyboard layout where `e.key` is "ש".
+ */
+export function plainShortcut(e: { key: string; code?: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; target?: unknown }, keys: string[]): boolean {
   if (e.metaKey || e.ctrlKey || e.altKey) return false;
   if (isTypingTarget(e.target as KeyTarget)) return false;
-  return keys.includes(e.key);
+  if (keys.includes(e.key)) return true;
+  return !!e.code && keys.some((k) => /^[a-zA-Z]$/.test(k) && e.code === `Key${k.toUpperCase()}`);
 }

@@ -13,6 +13,10 @@ import { ContentReviewPanel } from "@/components/focus/patterns/approval/content
 import { DecisionBlock, type DecisionResult } from "@/components/focus/patterns/approval/decision-block";
 import { PreExecSummary } from "@/components/focus/patterns/approval/pre-exec";
 import { DesignPreview } from "@/components/focus/patterns/studio/design-preview";
+import { savedTotal } from "@/components/focus/patterns/sales/proposal-editor";
+import { useSales } from "@/components/focus/patterns/sales/sales-store";
+import { PROPOSAL_CORPORATE } from "@/lib/focus/fixtures/sales";
+import { fmtMoney } from "@/lib/focus/format";
 import { useDemo } from "@/components/focus/shell/demo-store";
 import { FocusBar } from "@/components/focus/shell/focus-bar";
 import { useQueue } from "@/components/focus/shell/use-queue";
@@ -186,6 +190,13 @@ function AiNote({ text }: { text: string }) {
 function SummaryLayout({ a, next, nextHref }: { a: Approval; next: QueueEntry[]; nextHref: string | null }) {
   const demo = useDemo();
   const st = demo.state.executions[a.id] ?? initialExec;
+  // a proposal is sent at the amount that was approved: if the saved draft changed since, the send is blocked
+  const sales = useSales();
+  const approved = a.execution?.payload.amount?.amount;
+  const draftTotal = a.id === PROPOSAL_CORPORATE.approvalId && sales.proposal ? savedTotal(sales.proposal.lines, PROPOSAL_CORPORATE.vatRate) : null;
+  const blockedReason = draftTotal != null && approved != null && draftTotal !== approved
+    ? `ההצעה נערכה אחרי האישור: הסכום בטיוטה ${fmtMoney(draftTotal)}, ואושר ${fmtMoney(approved)}. חזרו להצעה והחזירו אותה לגרסה שאושרה, או אשרו גרסה חדשה.`
+    : undefined;
   return (
     <div className="f-afocus__grid f-afocus__grid--summary">
       <QueueSide handled={[]} next={next} note="הסדר בתור: סיכון גבוה קודם, ואז לפי מועד היעד." />
@@ -198,6 +209,7 @@ function SummaryLayout({ a, next, nextHref }: { a: Approval; next: QueueEntry[];
         onToggle={() => demo.exec(a.id, { type: "toggleConfirm" })}
         onSubmit={() => demo.exec(a.id, { type: "submit", now: Date.now() })}
         onRetry={() => demo.exec(a.id, { type: "retry", now: Date.now() })}
+        blockedReason={blockedReason}
         backHref={R.proposal("corporate-hosting")}
         activityHref={R.activity}
         nextHref={nextHref}

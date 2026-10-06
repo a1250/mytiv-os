@@ -54,7 +54,7 @@ export function ContentReviewPanel({
         <h2 id={`${id}-h`} className="f-review__h">ההחלטה שלך</h2>
         <p className="f-meta">סיכון נמוך: אפשר לאשר בלי נימוק. בקשת תיקון או דחייה דורשות נימוק.</p>
         <div className="f-review__actions">
-          <Button variant="primary" size="lg" onClick={() => decide("approve")} aria-keyshortcuts="A">אשר</Button>
+          <Button variant="primary" size="lg" onClick={() => decide("approve")}>אשר</Button>
           <Button variant="secondary" size="lg" onClick={() => setMode("changes")}>בקש תיקון</Button>
         </div>
       </section>

@@ -41,6 +41,12 @@ export function lineAgorot(l: LineDraft): number | null {
 
 export type Totals = { subtotal: number; vat: number; total: number } | null;
 
+/** Total (incl. VAT) of a *saved* proposal draft — same integer-agorot arithmetic as `computeTotals`. */
+export function savedTotal(lines: { qty: number; unit: number }[], vatRate: number): number {
+  const sub = lines.reduce((a, l) => a + l.qty * Math.round(l.unit * 100), 0);
+  return Math.round((sub + Math.round(sub * vatRate)) / 100);
+}
+
 export function computeTotals(lines: LineDraft[], vatRate: number): Totals {
   const parts = lines.map(lineAgorot);
   if (parts.some((p) => p == null)) return null;

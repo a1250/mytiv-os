@@ -136,7 +136,7 @@ export default function ApprovalsListScreen() {
             <h2 className="f-aside-card__h f-aside-card__h--lg">הוחלט לאחרונה</h2>
             {decided.map((a) => (
               <p key={a.id} className="f-alist__dec"><span aria-hidden>{a.status === "approved" ? "✓" : a.status === "changes_requested" ? "↺" : "✕"}</span> {a.title} · {a.status === "approved" ? "אושר" : a.status === "changes_requested" ? "נשלח לתיקון" : "נדחה"}
-                {a.impact.reversibility.kind !== "none" && <> · <button type="button" className="f-link" onClick={() => q.undo(a.id)}>בטל</button></>}</p>
+                {a.impact.reversibility.kind !== "none" && <> · <button type="button" className="f-link f-hit" onClick={() => q.undo(a.id, demo.state.decisions[a.id]?.decidedAt)}>בטל</button></>}</p>
             ))}
             {RECENTLY_DECIDED.map((r) => <p key={r.id} className="f-alist__dec"><span aria-hidden>{r.glyph}</span> {r.text} · {r.when}</p>)}
             <Link href={R.activity} className="f-link">ליומן הפעולות</Link>

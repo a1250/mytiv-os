@@ -30,11 +30,13 @@ export function StepTrail({ steps, current }: { steps: string[]; current: number
 }
 
 export function PreExecSummary({
-  action, title, context, impact, state, onToggle, onSubmit, onRetry, backHref, activityHref, nextHref, mobile, headingLevel = 1,
+  action, title, context, impact, state, onToggle, onSubmit, onRetry, backHref, activityHref, nextHref, mobile, headingLevel = 1, blockedReason,
 }: {
   action: ExternalAction; title: string; context: string; impact: string; state: ExecState;
   onToggle: () => void; onSubmit: () => void; onRetry: () => void; backHref: string; activityHref: string; nextHref: string | null; mobile?: boolean;
   headingLevel?: 1 | 2;
+  /** the action cannot be sent right now (e.g. the thing being sent changed since it was approved) — says why */
+  blockedReason?: string;
 }) {
   const H = headingLevel === 1 ? "h1" : "h2";
   const resultRef = useRef<HTMLDivElement>(null);
@@ -80,6 +82,9 @@ export function PreExecSummary({
             </li>
           ))}
         </ul>
+        {state.step === "summary" && blockedReason && (
+          <p className="f-field__error f-pre__notice" role="alert"><span aria-hidden>!</span>{blockedReason}</p>
+        )}
         {state.step === "summary" && state.notice && (
           <p className="f-field__error f-pre__notice" role="alert"><span aria-hidden>!</span>{state.notice}</p>
         )}
@@ -115,8 +120,8 @@ export function PreExecSummary({
               className="f-pre__final"
               loading={sending}
               loadingLabel={action.pendingLabel}
-              aria-disabled={!canExecute(state) && !sending ? true : undefined}
-              onClick={() => { if (!sending) onSubmit(); }}
+              aria-disabled={(!canExecute(state) || !!blockedReason) && !sending ? true : undefined}
+              onClick={() => { if (!sending && !blockedReason) onSubmit(); }}
             >
               {action.finalLabel}
             </Button>

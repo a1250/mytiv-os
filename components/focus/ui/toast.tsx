@@ -73,8 +73,9 @@ function Toast({ t, onClose, onUndone }: { t: ToastItem; onClose: () => void; on
       </span>
       <span className="f-toast__actions">
         {open && t.undo && (
-          <button type="button" className="f-toast__btn f-hit" onClick={() => { t.undo!.onUndo(); onUndone(); }}>
-            {t.undo.label ?? "בטל"} <span className="f-num" aria-label={`נותרו ${Math.ceil(remainingMs(t.window!, now) / 1000)} שניות`}>{fmtRemaining(remainingMs(t.window!, now))}</span>
+          // the countdown is visual only: its text changes every 250ms and would be re-announced by the live region
+          <button type="button" className="f-toast__btn f-hit" aria-label={t.undo.label ?? "בטל"} onClick={() => { t.undo!.onUndo(); onUndone(); }}>
+            {t.undo.label ?? "בטל"} <span className="f-num" aria-hidden>{fmtRemaining(remainingMs(t.window!, now))}</span>
           </button>
         )}
         {t.action && <button type="button" className="f-toast__btn f-hit" onClick={t.action.onClick}>{t.action.label}</button>}
