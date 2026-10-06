@@ -13,7 +13,7 @@ import { SourceDot, WORK } from "@/components/focus/ui/status";
 import { PriorityPill } from "./task-card";
 
 /**
- * TaskBoard (Kanban) — contract `{ columns, onMove(taskId, toColumn) }`. Keyboard (handoff): focus a card's handle,
+ * TaskBoard (Kanban) — contract `{ columns, onMove(taskId, toColumn, expectedVersion) }`. Keyboard (handoff): focus a card's handle,
  * Space picks it up, ←/→ move it between columns (RTL-aware), Space/Enter drops, Esc cancels. Every move is announced.
  * Mouse: drag the card. The rules (dependencies, open children) are checked by onMove, which may refuse with a reason.
  */
@@ -27,7 +27,8 @@ export const COLUMN_TITLES: Record<BoardColumn, { title: string; dot: string }> 
 export function TaskBoard({
   tasks, all, onMove, timerTaskId, timerLabel, canEdit = true,
 }: {
-  tasks: Task[]; all: Task[]; onMove: (taskId: string, to: BoardColumn) => { ok: boolean; reason?: string };
+  /** `expectedVersion` = the token of the card as rendered (the move is refused as a conflict if it moved on) */
+  tasks: Task[]; all: Task[]; onMove: (taskId: string, to: BoardColumn, expectedVersion: string) => { ok: boolean; reason?: string };
   timerTaskId?: string | null; timerLabel?: string; canEdit?: boolean;
 }) {
   const [picked, setPicked] = useState<{ id: string; from: BoardColumn; to: BoardColumn } | null>(null);
@@ -40,7 +41,8 @@ export function TaskBoard({
   const columns = BOARD_ORDER.map((c) => ({ key: c, tasks: tasks.filter((t) => colOf(t) === c) }));
 
   const commit = (id: string, to: BoardColumn, title: string) => {
-    const r = onMove(id, to);
+    const t = tasks.find((x) => x.id === id);
+    const r = t ? onMove(id, to, t.version) : { ok: false, reason: "המשימה לא נמצאה." };
     setAnnounce(r.ok ? `"${title}" הועברה ל${COLUMN_TITLES[to].title}.` : `לא ניתן להעביר: ${r.reason}`);
     requestAnimationFrame(() => handles.current[id]?.focus());
   };

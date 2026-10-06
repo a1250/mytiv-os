@@ -15,7 +15,7 @@ type Seed = Partial<Task> & Pick<Task, "id" | "title" | "status" | "priority">;
 const task = (s: Seed): Task => ({
   notes: "", assigneeId: PEOPLE.ron.id, participantIds: [], startDate: null, dueDate: null, estimateMinutes: null, spentMinutes: 0,
   subtasks: [], checklist: [], dependsOn: [], links: {}, context: {}, comments: [], evidence: [], activity: [], source: "mytiv",
-  state: "live", version: 1, updatedAt: at("2026-09-30", "17:00"), parentId: null, ...s,
+  state: "live", version: "v1", updatedAt: at("2026-09-30", "17:00"), parentId: null, ...s,
 });
 
 export const TASKS: Task[] = [
@@ -34,7 +34,7 @@ export const TASKS: Task[] = [
     participantIds: [PEOPLE.dana.id, PEOPLE.ron.id], startDate: "2026-10-03", dueDate: "2026-10-06", estimateMinutes: 240, spentMinutes: 0,
     links: { ...P_AUTUMN, campaignId: "thursday-sushi" }, context: { ...C_AUTUMN }, parentId: "t-content",
     notes: "גרסה אנכית לפיד לפי מדריך המותג של UMINO. להשתמש בצילום מנת הספיישל ברגע שיאושר. טקסט ראשי + הנעה לפעולה \"הזמינו שולחן\".",
-    dependsOn: [{ id: "t-photo-shoot", title: "צילום מנת הספיישל", status: "blocked" }],
+    dependsOn: [{ id: "t-photo-shoot", title: "צילום מנת הספיישל" }],
     subtasks: [{ id: "p1", title: "גרסת טקסט ראשית", done: false }, { id: "p2", title: "התאמת צבעי מותג", done: false }],
     checklist: [
       { id: "k1", label: "טקסט בתוך אזור בטוח", checked: true }, { id: "k2", label: "ניגודיות תקינה", checked: true },
@@ -47,7 +47,7 @@ export const TASKS: Task[] = [
       { id: "a3", at: at("2026-09-27", "14:02"), actorId: PEOPLE.dana.id, text: "אחראי שונה ליואב" },
       { id: "a4", at: at("2026-09-25", "11:30"), actorId: PEOPLE.dana.id, text: "נוצרה מתוך הפרויקט", tone: "done" },
     ],
-    updatedAt: at("2026-10-01", "08:06"), version: 4,
+    updatedAt: at("2026-10-01", "08:06"), version: "v4", updatedBy: PEOPLE.dana.id,
   }),
   task({
     id: "t-carousel-text", title: "לכתוב טקסט נלווה לקרוסלה", status: "in_progress", priority: "low", dueDate: "2026-10-01",
@@ -57,7 +57,7 @@ export const TASKS: Task[] = [
   }),
   task({
     // a manual block: canonical "waiting" + the written reason (pkg1: business key "blocked" under category waiting)
-    id: "t-photo-shoot", title: "צילום מנת הספיישל", status: "waiting", priority: "high", assigneeId: null, dueDate: "2026-10-03",
+    id: "t-photo-shoot", title: "צילום מנת הספיישל", status: "waiting", statusKey: "blocked", priority: "high", assigneeId: null, dueDate: "2026-10-03",
     links: P_AUTUMN, context: C_AUTUMN, waitingFor: "צלם חיצוני", estimateMinutes: 360, spentMinutes: null, source: "clickup",
     blockedReason: "ממתין לצלם חיצוני. לא נקבע מועד.", nextAction: "לתאם צילום עם הצלם עד 3.10", followUp: null,
     notes: "ממתין לצלם חיצוני. לא נקבע מועד.", updatedAt: at("2026-09-19", "10:00"),

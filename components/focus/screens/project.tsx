@@ -32,7 +32,7 @@ export default function ProjectScreen() {
         <div className="f-proj__grid">
           {p.nextAction && <NextActionHero next={p.nextAction} />}
           <HoursRing
-            spent={p.hours.spent} budget={p.hours.budget ?? 0} sourceLabel={HOURS_SYNC.source} updatedAt={HOURS_SYNC.at} now={now}
+            spent={p.hours.spent} budget={p.hours.budget} sourceLabel={HOURS_SYNC.source} updatedAt={HOURS_SYNC.at} now={now}
             extra={<span className="f-hours__media">תקציב מדיה: <span className="f-value--unavailable f-hours__na">— {MEDIA_BUDGET.reason}</span></span>}
           />
           <BlockersCard blockers={p.blockers} />

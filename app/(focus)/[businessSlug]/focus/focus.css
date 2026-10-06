@@ -5,7 +5,7 @@
  * Tokens live on :root while a .focus-app is mounted, so the legacy dark app (globals.css) is untouched and the page
  * background follows the theme. Every colour is written once with light-dark(): the theme is chosen by color-scheme —
  *   system (default)  → follows prefers-color-scheme
- *   data-f-theme=light|dark on <html> → forced (set before first paint by the inline script in app/focus/layout.tsx)
+ *   data-f-theme=light|dark on .focus-app → forced (set before first paint by ThemeScript in the Focus layout)
  * Shadows are composed from colour tokens so they switch too (dark: shadow → 1px line, per the handoff).
  */
 :root:has(.focus-app) {
@@ -70,8 +70,8 @@
 
   background: var(--f-bg);
 }
-:root[data-f-theme="light"]:has(.focus-app) { color-scheme: light; }
-:root[data-f-theme="dark"]:has(.focus-app) { color-scheme: dark; }
+:root:has(.focus-app[data-f-theme="light"]) { color-scheme: light; }
+:root:has(.focus-app[data-f-theme="dark"]) { color-scheme: dark; }
 
 /* The legacy globals.css paints <body> dark; while Focus is mounted it owns the page background. */
 body:has(.focus-app) { background: var(--f-bg); }

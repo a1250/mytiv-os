@@ -31,8 +31,8 @@ export type TaskCardProps = {
   task: Task; now: string; size?: "sm" | "md"; view?: "list" | "board";
   timer?: { activeTaskId: string | null; onStart: (id: string) => void; onPause: () => void };
   blockerTitle?: string;
-  /** derived by the caller (`displayStatus` / the "blocked" bucket) — "blocked" is never a stored status */
-  blocked?: boolean;
+  /** derived by the caller (`blockInfo`) — "blocked" is never a stored status; null/undefined = not blocked */
+  block?: { by: { id: string; title: string } | null; why: string } | null;
   /** force the one-line shape (secondary cards in "היום שלי") */
   compact?: boolean;
 };
@@ -40,7 +40,7 @@ export type TaskCardProps = {
 /** Decide which card shape a task gets (rich when there is a next step, sub-task progress, a running state or a block). */
 export function TaskCard(props: TaskCardProps) {
   const { task: t } = props;
-  if (props.blocked) return <BlockedTaskCard {...props} />;
+  if (props.block) return <BlockedTaskCard {...props} />;
   if (t.status === "waiting") return <WaitingTaskCard {...props} />;
   if (props.compact) return <PlainTaskCard {...props} />;
   if (t.nextAction || t.subtasks.length || t.status === "in_progress") return <RichTaskCard {...props} />;
@@ -112,8 +112,8 @@ export function PlainTaskCard({ task: t, now, size = "md", view }: TaskCardProps
   );
 }
 
-export function BlockedTaskCard({ task: t, size = "md", view }: TaskCardProps) {
-  const dep = t.dependsOn[0];
+export function BlockedTaskCard({ task: t, size = "md", view, block }: TaskCardProps) {
+  const dep = block?.by;
   return (
     <article className={cx("f-tcard", "f-tcard--blocked", `f-tcard--${size}`)}>
       {size === "md" ? (
@@ -125,7 +125,7 @@ export function BlockedTaskCard({ task: t, size = "md", view }: TaskCardProps) {
           <Icon name="link" size={size === "sm" ? 13 : 14} className="f-tcard__depicon" />
           <span>חסום {size === "sm" ? "ע״י" : "על ידי"} {size === "sm" ? dep.title : <b>{dep.title}</b>}</span>
         </Link>
-      ) : t.blockedReason ? <span className="f-tcard__meta">{t.blockedReason}</span> : t.waitingFor ? <span className="f-tcard__meta">ממתין ל: {t.waitingFor}</span> : null}
+      ) : block?.why ? <span className="f-tcard__meta">{block.why}</span> : null}
     </article>
   );
 }

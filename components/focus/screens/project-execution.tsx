@@ -8,12 +8,13 @@ import Link, { useFocusRouter } from "@/components/focus/ui/link";
 import { PEOPLE } from "@/lib/focus/fixtures/people";
 import { fmtAgo, fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
-import { canComplete, canDo, type Gate } from "@/lib/focus/state/work";
+import { canDo } from "@/lib/focus/state/work";
 import { jobStatus } from "@/lib/focus/state/jobs";
 import { ProjectHeader } from "@/components/focus/patterns/project/project-parts";
 import { BlockedTaskPanel, type BlockedDraft, type SyncState } from "@/components/focus/patterns/work/blocked-panel";
 import { TaskListView } from "@/components/focus/patterns/work/task-list";
 import { useDemo } from "@/components/focus/shell/demo-store";
+import { useTaskUndo, useToggleDone } from "@/components/focus/shell/task-actions";
 import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { SelectField } from "@/components/focus/ui/field";
@@ -36,6 +37,7 @@ const GROUPS = [
 function Inner() {
   const demo = useDemo();
   const toast = useToast();
+  const undo = useTaskUndo();
   const router = useFocusRouter();
   const params = useSearchParams();
   const { now, state } = demo;
@@ -61,27 +63,27 @@ function Inner() {
     return () => window.removeEventListener("beforeunload", h);
   }, [dirty]);
 
+  // the token the panel's draft is based on: set when a task is selected, adopted while there is no draft
+  const [draftBase, setDraftBase] = useState<{ id: string; version: string } | null>(null);
+  if (task && (draftBase?.id !== task.id || (!dirty && draftBase.version !== task.version))) setDraftBase({ id: task.id, version: task.version });
+
   const select = (id: string) => { if (dirty) { setPending(id); return; } router.replace(`${R.projectExecution("umino")}?task=${id}`, { scroll: false }); };
 
   const save = (d: BlockedDraft) => {
-    if (!task) return;
-    const r = demo.patchTask(task.id, { assigneeId: d.assigneeId, nextAction: d.nextAction, followUp: d.followUp, ...(d.note.trim() ? { addComment: { id: `c-${Date.now()}`, authorId: demo.viewer.id, at: demoIso(), text: d.note.trim() } } : {}) }, task.version);
-    if (!r.ok) { toast.push({ kind: "error", title: "לא נשמר", detail: "refused" in r ? r.refused : "המשימה עודכנה במקביל. רענן ונסה שוב." }); return; }
+    if (!task || !draftBase) return;
+    // the token the draft started from: a change made meanwhile (here or elsewhere) is a conflict, never overwritten
+    const r = demo.patchTask(task.id, { assigneeId: d.assigneeId, nextAction: d.nextAction, followUp: d.followUp, ...(d.note.trim() ? { addComment: { id: `c-${Date.now()}`, authorId: demo.viewer.id, at: demoIso(), text: d.note.trim() } } : {}) }, draftBase.version);
+    if (!r.ok) { toast.push({ kind: "error", title: "לא נשמר", detail: "refused" in r ? r.refused : "המשימה עודכנה בזמן שערכת. השינוי שלך לא נשמר — בדקו את הערכים החדשים ונסו שוב." }); return; }
+    setDraftBase({ id: task.id, version: r.task.version });
     setDirty(false);
     if (task.source === "clickup") {
       const fail = state.failNext; if (fail) demo.setFailNext(false);
       demo.startJob({ id: `sync-${task.id}`, kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "שומר אחראי, צעד הבא ותאריך מעקב.", durationMs: 1800, outcome: fail ? "failure" : "success", href: R.projectExecution("umino") });
     }
-    toast.push({ title: task.source === "clickup" ? "נשמר · מסנכרן ל־ClickUp" : "נשמר", detail: "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר.", undo: { onUndo: () => { demo.cancelJob(`sync-${task.id}`); demo.restoreTask({ ...r.previous!, version: r.task.version + 1 }); } } });
+    toast.push({ title: task.source === "clickup" ? "נשמר · מסנכרן ל־ClickUp" : "נשמר", detail: "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר.", undo: { onUndo: undo(r.previous!, r.task.version, () => demo.cancelJob(`sync-${task.id}`)) } });
   };
 
-  const toggleDone = (id: string) => {
-    const t = state.tasks.find((x) => x.id === id)!;
-    const gate: Gate = t.status === "done" ? { ok: true } : canComplete(t, state.tasks);
-    if (!gate.ok) { toast.push({ kind: "error", title: "לא ניתן לסמן כבוצע", detail: gate.reason }); return; }
-    const r = demo.patchTask(id, { status: t.status === "done" ? "todo" : "done" }, t.version);
-    if (r.ok) toast.push({ title: r.task.status === "done" ? "סומן כבוצע" : "נפתח מחדש", detail: t.title, undo: { onUndo: () => demo.restoreTask({ ...r.previous!, version: r.task.version + 1 }) } });
-  };
+  const toggleDone = useToggleDone();
 
   return (
     <div className="f-proj f-exec">
@@ -103,12 +105,14 @@ function Inner() {
             <span className="f-meta-sm">{refreshing ? "מרענן מ־ClickUp…" : `סונכרן ${refreshJob ? "עכשיו" : fmtAgo(HOURS_SYNC.at, now)}`}</span>
             <Button variant="quiet" size="sm" disabled={!!refreshing} onClick={() => demo.startJob({ id: "refresh-clickup", kind: "sync_clickup", label: "מרענן מ־ClickUp", detail: "", durationMs: 1200, outcome: "success" })}>רענן</Button>
           </div>
-          <TaskListView tasks={tasks} all={state.tasks} now={now} expandedIds={[]} onToggleExpand={() => {}} onToggleDone={(t) => toggleDone(t.id)} selectedId={selected} canEdit={canDo(state.role, "complete")}
+          <TaskListView tasks={tasks} all={state.tasks} now={now} expandedIds={[]} onToggleExpand={() => {}} onToggleDone={toggleDone} selectedId={selected} canEdit={canDo(state.role, "complete")}
             groupBy="status" groupOrder={GROUPS.map((g) => ({ ...g, collapsed: g.collapsed && !showDone }))} columns={["assignee", "due", "dependency"]} onOpen={(t) => select(t.id)} />
           <Button variant="quiet" size="sm" onClick={() => setShowDone(!showDone)}>{showDone ? "הסתר שהושלמו" : `הצג ${project.filter((t) => t.status === "done").length} שהושלמו`}</Button>
         </div>
         {task && (
-          <BlockedTaskPanel key={task.id + task.version} task={task} all={state.tasks} now={now} viewerId={demo.viewer.id} sync={sync}
+          // keyed by the adopted draft token: it only moves while the panel is clean (or on save), so a draft is never
+          // discarded by a remount and a clean panel shows the new values
+          <BlockedTaskPanel key={`${task.id}:${draftBase?.version ?? task.version}`} task={task} all={state.tasks} now={now} viewerId={demo.viewer.id} sync={sync}
             canEdit={canDo(state.role, "edit")} onSave={save} onDirtyChange={onDirty}
             onRetry={() => demo.startJob({ id: `sync-${task.id}`, kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "", durationMs: 1500, outcome: "success" })} />
         )}

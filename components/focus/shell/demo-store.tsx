@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import type { Approval, Decision, DecisionCheck, DecisionOutcome } from "@/lib/focus/contracts/approvals";
-import type { ActiveTimer, BoardColumn, Task, TaskPatch, TimeEntry, WorkRole } from "@/lib/focus/contracts/work";
+import type { ActiveTimer, BoardColumn, Task, TaskPatch, TimeEntry, WorkCommands, WorkRole } from "@/lib/focus/contracts/work";
 import { APPROVALS } from "@/lib/focus/fixtures/approvals";
 import { DEMO_NOW, demoIso } from "@/lib/focus/fixtures/clock";
 import { VIEWER } from "@/lib/focus/fixtures/people";
@@ -10,7 +10,7 @@ import { ACTIVE_TIMER, TASKS, TIME_ENTRIES } from "@/lib/focus/fixtures/work";
 import { checkDecision } from "@/lib/focus/state/approvals";
 import { execReducer, initialExec, type ExecEvent, type ExecState } from "@/lib/focus/state/execution";
 import { jobStatus, type Job } from "@/lib/focus/state/jobs";
-import { applyPatch, checkMove, minutesToLog, pauseTimer, resumeTimer, statusForColumn, switchTimer, taskInvariant, type PatchResult } from "@/lib/focus/state/work";
+import { applyPatch, checkMove, elapsedOf, minutesToLog, nextVersion, pauseTimer, resumeTimer, revertTask, statusForColumn, switchTimer, taskInvariant, type PatchResult } from "@/lib/focus/state/work";
 
 /**
  * Demo store — the temporary stand-in for the backend. It holds every stateful flow on fixtures so screens behave for
@@ -121,6 +121,8 @@ function useStoreValue() {
   const [s, dispatch] = useReducer(reducer, initial);
   const hydrated = s.hydrated;
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const latestTasks = useRef(s.tasks);
+  useEffect(() => { latestTasks.current = s.tasks; }, [s.tasks]);
 
   // hydrate after mount (server render = fixtures, so no hydration mismatch)
   useEffect(() => {
@@ -196,32 +198,44 @@ function useStoreValue() {
     }
   }, [s.executions, s.failNext]);
 
-  const patchTask = useCallback((id: string, patch: TaskPatch, expectedVersion: number): PatchResult & { previous?: Task } => {
+  // ---- Mytiv Work commands (WorkCommands): every write goes through applyPatch / revertTask with the token the caller saw
+  const patchTask = useCallback((id: string, patch: TaskPatch, expectedVersion: string): PatchResult & { previous?: Task } => {
     const cur = s.tasks.find((t) => t.id === id);
     if (!cur) return { ok: false, refused: "המשימה לא נמצאה." };
-    const r = applyPatch(cur, patch, expectedVersion, demoIso(), s.tasks);
+    const r = applyPatch(cur, patch, expectedVersion, demoIso(), s.tasks, VIEWER.id);
     if (r.ok) dispatch({ type: "replaceTask", task: r.task });
     return { ...r, previous: cur };
   }, [s.tasks]);
 
-  const restoreTask = useCallback((task: Task) => dispatch({ type: "replaceTask", task }), []);
+  /**
+   * Undo = compensating write: refused if the task moved on since the undone action, or if the rules forbid it now.
+   * Undo runs later (from a toast), so it checks the latest committed tasks, not the ones of the render that made it.
+   */
+  const undoTask = useCallback((previous: Task, expectedVersion: string): PatchResult => {
+    const tasks = latestTasks.current;
+    const cur = tasks.find((t) => t.id === previous.id);
+    if (!cur) return { ok: false, refused: "המשימה לא נמצאה." };
+    const r = revertTask(cur, previous, expectedVersion, demoIso(), tasks, VIEWER.id);
+    if (r.ok) { dispatch({ type: "replaceTask", task: r.task }); latestTasks.current = tasks.map((t) => (t.id === r.task.id ? r.task : t)); }
+    return r;
+  }, []);
 
-  /** Demo: another person edits the task meanwhile (bumps the version) — exercises the version-conflict state. */
-  const simulateRemoteEdit = useCallback((id: string, patch: Partial<Task>) => {
+  /** Demo: another person edits the task meanwhile (new token, named writer) — exercises the version-conflict state. */
+  const simulateRemoteEdit = useCallback((id: string, patch: Partial<Task>, by: Task["updatedBy"] = "u-dana") => {
     const cur = s.tasks.find((t) => t.id === id);
-    if (cur) dispatch({ type: "replaceTask", task: { ...cur, ...patch, version: cur.version + 1, updatedAt: demoIso() } });
+    if (cur) dispatch({ type: "replaceTask", task: { ...cur, ...patch, version: nextVersion(cur.version), updatedAt: demoIso(), updatedBy: by } });
   }, [s.tasks]);
 
-  const moveTask = useCallback((id: string, to: BoardColumn): { ok: true; previous: Task } | { ok: false; reason: string } => {
+  /** Kanban move with the token the board rendered; the same write path (and rules) as the drawer. */
+  const moveTask = useCallback((id: string, to: BoardColumn, expectedVersion: string): PatchResult & { previous?: Task } => {
     const cur = s.tasks.find((t) => t.id === id);
-    if (!cur) return { ok: false, reason: "המשימה לא נמצאה." };
+    if (!cur) return { ok: false, refused: "המשימה לא נמצאה." };
+    if (cur.version !== expectedVersion) return { ok: false, conflict: cur };
     const gate = checkMove(cur, to, s.tasks);
-    if (!gate.ok) return gate;
-    // the same write path as the drawer: applyPatch keeps the stored-task invariant (e.g. leaving "waiting" drops a block reason)
-    const r = applyPatch(cur, { status: statusForColumn(cur, to) }, cur.version, demoIso(), s.tasks);
-    if (!r.ok) return { ok: false, reason: "refused" in r ? r.refused : "המשימה עודכנה בינתיים. נסו שוב." };
-    dispatch({ type: "replaceTask", task: r.task });
-    return { ok: true, previous: cur };
+    if (!gate.ok) return { ok: false, refused: gate.reason };
+    const r = applyPatch(cur, { status: statusForColumn(to) }, expectedVersion, demoIso(), s.tasks, VIEWER.id);
+    if (r.ok) dispatch({ type: "replaceTask", task: r.task });
+    return { ...r, previous: cur };
   }, [s.tasks]);
 
   const createTask = useCallback((draft: Pick<Task, "title" | "dueDate" | "priority"> & Partial<Task>) => {
@@ -229,13 +243,17 @@ function useStoreValue() {
       id: `t-new-${Date.now()}`, notes: "", status: "todo", assigneeId: VIEWER.id, participantIds: [], startDate: null,
       estimateMinutes: null, spentMinutes: 0, subtasks: [], checklist: [], dependsOn: [], links: {}, context: {}, comments: [],
       evidence: [], activity: [{ id: "a0", at: demoIso(), actorId: VIEWER.id, text: "נוצרה ביצירה מהירה", tone: "done" }],
-      source: "mytiv", state: "live", version: 1, updatedAt: demoIso(), parentId: null, ...draft,
+      source: "mytiv", state: "live", parentId: null, ...draft, version: "v1", updatedAt: demoIso(), updatedBy: VIEWER.id,
     };
-    // the same stored-task invariant as every patch: no non-canonical status, no block reason off a waiting task
-    if (!taskInvariant(t).ok) throw new Error(`createTask: ${(taskInvariant(t) as { reason: string }).reason}`);
+    // the same stored-task invariant as every write: canonical status, no block reason off a waiting task,
+    // and no open child under a done parent
+    const parent = t.parentId ? s.tasks.find((x) => x.id === t.parentId) : undefined;
+    if (parent?.status === "done" && t.status !== "done") t.parentId = null;
+    const inv = taskInvariant(t);
+    if (!inv.ok) throw new Error(`createTask: ${inv.reason}`);
     dispatch({ type: "addTask", task: t });
     return t;
-  }, []);
+  }, [s.tasks]);
   const removeTask = useCallback((id: string) => dispatch({ type: "removeTask", id }), []);
 
   const addEntry = (taskId: string, minutes: number, source: TimeEntry["source"]) => {
@@ -243,46 +261,54 @@ function useStoreValue() {
     dispatch({ type: "timeEntry", entry });
     return entry;
   };
-  const bumpSpent = (task: Task | undefined, minutes: number) => {
-    if (task && task.spentMinutes != null) dispatch({ type: "replaceTask", task: { ...task, spentMinutes: task.spentMinutes + minutes, version: task.version + 1 } });
-  };
+  /** Logged time is a write like any other (new token, actor) — so it never shows up as someone else's conflict. */
+  const addSpent = useCallback((task: Task | undefined, minutes: number): PatchResult | null => {
+    if (!task) return null;
+    const r = applyPatch(task, { logMinutes: minutes }, task.version, demoIso(), s.tasks, VIEWER.id);
+    if (r.ok) dispatch({ type: "replaceTask", task: r.task });
+    return r;
+  }, [s.tasks]);
 
   /** One timer per person: starting another task stops and logs the running one first (switchTimer). */
   const timerStart = useCallback((taskId: string) => {
     const t = s.tasks.find((x) => x.id === taskId);
     if (!t) return null;
     const r = switchTimer(s.timer, t, new Date().toISOString());
-    if (r.logged && r.logged.minutes > 0) {
+    const prevTask = r.logged ? s.tasks.find((x) => x.id === r.logged!.taskId) : undefined;
+    if (r.logged && r.logged.minutes > 0 && prevTask) {
       addEntry(r.logged.taskId, r.logged.minutes, "timer");
-      bumpSpent(s.tasks.find((x) => x.id === r.logged!.taskId), r.logged.minutes);
+      addSpent(prevTask, r.logged.minutes);
     }
     dispatch({ type: "timer", timer: r.next, log: r.logged ? { ...r.logged, at: Date.now() } : undefined });
     return r;
-  }, [s.tasks, s.timer]);
+  }, [s.tasks, s.timer, addSpent]);
   const timerPause = useCallback(() => { if (s.timer) dispatch({ type: "timer", timer: pauseTimer(s.timer, Date.now()) }); }, [s.timer]);
   const timerResume = useCallback(() => { if (s.timer) dispatch({ type: "timer", timer: resumeTimer(s.timer, new Date().toISOString()) }); }, [s.timer]);
   const timerStop = useCallback(() => {
     if (!s.timer) return null;
-    const minutes = minutesToLog(s.timer, Date.now());
+    const stoppedAt = Date.now();
     const stopped = s.timer;
+    const elapsedMs = elapsedOf(stopped, stoppedAt);
     const task = s.tasks.find((t) => t.id === stopped.taskId);
+    // a timer that outlived its task (e.g. one created in a closed tab) logs nothing — no orphan time entries
+    const minutes = task ? minutesToLog(stopped, stoppedAt) : 0;
     const entry = minutes > 0 ? addEntry(stopped.taskId, minutes, "timer") : null;
-    if (minutes > 0) bumpSpent(task, minutes);
-    dispatch({ type: "timer", timer: null, log: { taskId: stopped.taskId, minutes, at: Date.now() } });
-    return { stopped, minutes, task, entry };
-  }, [s.timer, s.tasks]);
-  const timerRestore = useCallback((t: ActiveTimer, task?: Task, entryId?: string) => {
-    dispatch({ type: "timer", timer: { ...t, startedAt: new Date().toISOString() } });
-    if (task) dispatch({ type: "replaceTask", task });
+    const write = minutes > 0 ? addSpent(task, minutes) : null;
+    dispatch({ type: "timer", timer: null, log: { taskId: stopped.taskId, minutes, at: stoppedAt } });
+    return { stopped, elapsedMs, minutes, task, entry, write, orphan: !task };
+  }, [s.timer, s.tasks, addSpent]);
+  /** Undo a stop: the timer resumes paused at the time it had when stopped (the gap is not counted), the entry goes. */
+  const timerRestore = useCallback((t: ActiveTimer, elapsedMs: number, entryId?: string) => {
+    dispatch({ type: "timer", timer: { ...t, running: false, elapsedMs, startedAt: new Date().toISOString() } });
     if (entryId) dispatch({ type: "removeTimeEntry", id: entryId });
   }, []);
   /** Manual time (validated by parseDuration in the caller). */
   const logTime = useCallback((taskId: string, minutes: number) => {
     const task = s.tasks.find((t) => t.id === taskId);
+    const result = addSpent(task, minutes) ?? { ok: false as const, refused: "המשימה לא נמצאה." };
     const entry = addEntry(taskId, minutes, "manual");
-    bumpSpent(task, minutes);
-    return { entry, previous: task };
-  }, [s.tasks]);
+    return { entry, result, previous: task };
+  }, [s.tasks, addSpent]);
   const removeTimeEntry = useCallback((id: string) => dispatch({ type: "removeTimeEntry", id }), []);
 
   const startJob = useCallback((job: Omit<Job, "startedAt">) => {
@@ -309,12 +335,11 @@ function useStoreValue() {
   return useMemo(() => ({
     hydrated, now: DEMO_NOW, viewer: VIEWER, state: s,
     approval, decide, undoDecision, exec, ...stable,
-    patchTask, restoreTask, moveTask, createTask, removeTask, simulateRemoteEdit,
-    timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry,
-
+    ...({ patchTask, moveTask, undoTask, createTask, logTime } satisfies WorkCommands),
+    removeTask, simulateRemoteEdit,
+    timerStart, timerPause, timerResume, timerStop, timerRestore, removeTimeEntry,
     startJob, cancelJob,
-
-  }), [hydrated, s, stable, approval, decide, undoDecision, exec, patchTask, restoreTask, moveTask, createTask, removeTask, simulateRemoteEdit, timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry, startJob, cancelJob]);
+  }), [hydrated, s, stable, approval, decide, undoDecision, exec, patchTask, undoTask, moveTask, createTask, removeTask, simulateRemoteEdit, timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry, startJob, cancelJob]);
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

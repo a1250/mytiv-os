@@ -1,4 +1,4 @@
-import type { ActiveTimer, BoardColumn, MyTasksBuckets, Task, TaskPatch, WorkCapabilities, WorkRole } from "@/lib/focus/contracts/work";
+import type { ActiveTimer, BoardColumn, CapabilityState, MyTasksBuckets, Task, TaskPatch, WorkCapabilities, WorkRole, WriteResult } from "@/lib/focus/contracts/work";
 import { WORK_STATUSES, type Priority, type WorkDisplayStatus, type WorkStatus } from "@/lib/focus/contracts/status";
 import { daysBetween } from "@/lib/focus/format";
 
@@ -39,8 +39,11 @@ export type Gate = { ok: true } | { ok: false; reason: string };
 export const openBlockers = (t: Task, all: Task[]) =>
   t.dependsOn.map((d) => all.find((x) => x.id === d.id)).filter((d): d is Task => !!d && OPEN(d));
 export const isBlocked = (t: Task, all: Task[]) => openBlockers(t, all).length > 0;
-/** A manual block: status `waiting` + a written reason (pkg1: business status key `blocked` under category `waiting`). */
-export const isManuallyBlocked = (t: Task) => t.status === "waiting" && !!t.blockedReason?.trim();
+/**
+ * A manual block: status `waiting` + the business key `blocked` (pkg1: a status key under category `waiting`) and/or
+ * a written reason. Focus always writes both; a source row may carry the key without a reason (no column yet).
+ */
+export const isManuallyBlocked = (t: Task) => t.status === "waiting" && (t.statusKey === "blocked" || !!t.blockedReason?.trim());
 /** What the UI shows. "blocked" is derived — from an open dependency or a manual block — and never stored. */
 export function displayStatus(t: Task, all: Task[]): WorkDisplayStatus {
   if (!OPEN(t) || t.status === "unknown") return t.status;
@@ -48,9 +51,16 @@ export function displayStatus(t: Task, all: Task[]): WorkDisplayStatus {
 }
 /** Why a task shows as blocked, in words: the manual reason, else the open dependency; null when it is not blocked. */
 export function blockedWhy(t: Task, all: Task[]): string | null {
-  if (isManuallyBlocked(t)) return t.blockedReason!.trim();
+  if (isManuallyBlocked(t)) return t.blockedReason?.trim() || "סומנה כחסומה במקור, בלי סיבה כתובה.";
   const b = openBlockers(t, all);
   return b.length ? `ממתין ל״${b[0].title}״${b.length > 1 ? ` ועוד ${b.length - 1}` : ""}.` : null;
+}
+
+/** For cards: what blocks the task — the first open dependency, or the manual reason; null when not blocked. */
+export function blockInfo(t: Task, all: Task[]): { by: { id: string; title: string } | null; why: string } | null {
+  if (displayStatus(t, all) !== "blocked") return null;
+  const b = openBlockers(t, all)[0];
+  return { by: b ? { id: b.id, title: b.title } : null, why: blockedWhy(t, all) ?? "" };
 }
 
 const CANONICAL: ReadonlySet<string> = new Set<WorkStatus>(WORK_STATUSES);
@@ -61,7 +71,17 @@ const CANONICAL: ReadonlySet<string> = new Set<WorkStatus>(WORK_STATUSES);
 export function taskInvariant(t: Task): Gate {
   if (!CANONICAL.has(t.status)) return { ok: false, reason: `"${t.status}" אינו סטטוס שנשמר. חסימה נגזרת מתלות פתוחה או מסיבה כתובה.` };
   if (t.blockedReason !== undefined && (t.status !== "waiting" || !t.blockedReason.trim())) return { ok: false, reason: "סיבת חסימה קיימת רק במשימה ממתינה ואינה ריקה." };
+  if (t.statusKey === "blocked" && t.status !== "waiting") return { ok: false, reason: "המפתח \"חסום\" קיים רק תחת הסטטוס \"ממתין\"." };
   return { ok: true };
+}
+
+/**
+ * Server stand-in: mint the next opaque concurrency token. Only the write path (applyPatch / revertTask, i.e. the
+ * demo store today, the backend later) calls this — UI code never computes a token.
+ */
+export function nextVersion(v: string): string {
+  const n = Number(/(\d+)$/.exec(v)?.[1] ?? 0);
+  return `v${n + 1}`;
 }
 export const childrenOf = (t: Task, all: Task[]) => all.filter((x) => x.parentId === t.id);
 /** Tasks that wait for this one (reverse dependency) — "חוסם: …". */
@@ -75,6 +95,12 @@ export function canComplete(t: Task, all: Task[]): Gate {
   const kids = childrenOf(t, all).filter(OPEN);
   if (kids.length) return { ok: false, reason: `יש ${kids.length} תת־משימות פתוחות. סגור אותן קודם.` };
   return { ok: true };
+}
+
+/** Can a closed task be reopened? Not under a parent that is already done (a done parent never has open children). */
+export function canReopen(t: Task, all: Task[]): Gate {
+  const parent = t.parentId ? all.find((x) => x.id === t.parentId) : undefined;
+  return parent && parent.status === "done" ? { ok: false, reason: `המשימה ההורה "${parent.title}" כבר סומנה כבוצעה. פתחו אותה קודם.` } : { ok: true };
 }
 
 /** Can the task be started (moved to in progress)? Not while blocked by an open dependency. */
@@ -118,7 +144,7 @@ export const BOARD_ORDER: BoardColumn[] = ["todo", "in_progress", "blockedOrWait
  * The canonical status a column means. "חסום / ממתין" stores `waiting` — a card shows as blocked there only when it
  * is (an open dependency, or a manual block with its reason); a move never creates a block without a reason.
  */
-export function statusForColumn(_t: Task, to: BoardColumn): WorkStatus {
+export function statusForColumn(to: BoardColumn): WorkStatus {
   if (to === "todo") return "todo";
   if (to === "in_progress") return "in_progress";
   if (to === "done") return "done";
@@ -128,17 +154,29 @@ export function statusForColumn(_t: Task, to: BoardColumn): WorkStatus {
 /** Validate a Kanban move (pkg1 plan: POST tasks/[id]/move → 409 move_blocked). */
 export function checkMove(t: Task, to: BoardColumn, all: Task[]): Gate {
   if (columnOf(t, all) === to) return { ok: false, reason: "המשימה כבר בעמודה הזו." };
+  // a card shown in "חסום / ממתין" because of an open dependency: moving it to its own status changes nothing
+  if (statusForColumn(to) === t.status) {
+    const b = openBlockers(t, all);
+    return { ok: false, reason: b.length ? `חסומה ע״י "${b[0].title}". היא תצא מהעמודה כשהתלות תושלם.` : "אין שינוי בסטטוס." };
+  }
   if (to === "done") return canComplete(t, all);
   if (to === "in_progress") return canStart(t, all);
   return { ok: true };
 }
 
 // ---------- patches ----------
-export type PatchResult = { ok: true; task: Task } | { ok: false; conflict: Task } | { ok: false; refused: string };
+export type PatchResult = WriteResult;
 
-/** Apply a patch only if the caller saw the current version; otherwise report a conflict (nothing is overwritten). */
-export function applyPatch(current: Task, patch: TaskPatch, expectedVersion: number, now: string, all: Task[] = [current]): PatchResult {
+const isOpen = (s: Task["status"]) => s !== "done" && s !== "cancelled";
+
+/**
+ * Apply a patch only if the caller saw the current token; otherwise report a conflict (nothing is overwritten).
+ * Every rule runs here, so the demo store and (later) the adapter share one write path. `actor` = who writes.
+ */
+export function applyPatch(current: Task, patch: TaskPatch, expectedVersion: string, now: string, all: Task[] = [current], actor?: Task["updatedBy"]): PatchResult {
   if (current.version !== expectedVersion) return { ok: false, conflict: current };
+  if (patch.status !== undefined && isOpen(patch.status) && !isOpen(current.status)) { const g = canReopen(current, all); if (!g.ok) return { ok: false, refused: g.reason }; }
+  if (patch.logMinutes !== undefined && !(Number.isInteger(patch.logMinutes) && patch.logMinutes >= 1 && patch.logMinutes <= 1440)) return { ok: false, refused: "זמן לרישום: בין דקה ל־24 שעות." };
   // the type already excludes "blocked"; this guards untyped input (adapters, persisted demo state)
   if (patch.status !== undefined && !CANONICAL.has(patch.status)) return { ok: false, refused: `"${patch.status}" אינו סטטוס שאפשר לשמור. לחסימה ידנית יש לכתוב סיבה.` };
   if (patch.block) {
@@ -150,12 +188,14 @@ export function applyPatch(current: Task, patch: TaskPatch, expectedVersion: num
   if (patch.title !== undefined && !patch.title.trim()) return { ok: false, refused: "כותרת היא שדה חובה." };
   if (patch.startDate && (patch.dueDate ?? current.dueDate) && patch.startDate > (patch.dueDate ?? current.dueDate)!) return { ok: false, refused: "תאריך ההתחלה אחרי היעד." };
   if (patch.dueDate && current.startDate && patch.dueDate < current.startDate) return { ok: false, refused: "היעד לפני תאריך ההתחלה." };
-  const { subtask, addSubtask, checklistItem, addChecklistItem, addComment, addDependency, block, unblock, ...fields } = patch;
+  const { subtask, addSubtask, checklistItem, addChecklistItem, addComment, addDependency, block, unblock, logMinutes, ...fields } = patch;
   if (addDependency) {
     const on = all.find((x) => x.id === addDependency.id);
     if (on) { const g = canDepend(current, on, all); if (!g.ok) return { ok: false, refused: g.reason }; }
   }
-  const next: Task = { ...current, ...fields, version: current.version + 1, updatedAt: now };
+  const next: Task = { ...current, ...fields, version: nextVersion(current.version), updatedAt: now, ...(actor ? { updatedBy: actor } : {}) };
+  // logged time is an increment; a source that does not report time stays unknown (null), never "0 + n"
+  if (logMinutes !== undefined && current.spentMinutes != null) next.spentMinutes = current.spentMinutes + logMinutes;
   if (subtask) next.subtasks = current.subtasks.map((s) => (s.id === subtask.id ? { ...s, done: subtask.done } : s));
   if (addSubtask) next.subtasks = [...current.subtasks, { id: addSubtask.id, title: addSubtask.title, done: false }];
   if (checklistItem) next.checklist = current.checklist.map((c) => (c.id === checklistItem.id ? { ...c, checked: checklistItem.checked } : c));
@@ -163,21 +203,41 @@ export function applyPatch(current: Task, patch: TaskPatch, expectedVersion: num
   if (addComment) next.comments = [...current.comments, addComment];
   if (addDependency) next.dependsOn = [...current.dependsOn, addDependency];
   // a block reason lives only on a waiting task: leaving `waiting` or unblocking drops it; blocking sets both together
-  if (unblock || (fields.status !== undefined && fields.status !== "waiting")) delete next.blockedReason;
-  if (block) { next.status = "waiting"; next.blockedReason = block.reason.trim(); }
+  if (unblock || (fields.status !== undefined && fields.status !== "waiting")) { delete next.blockedReason; if (next.statusKey === "blocked") delete next.statusKey; }
+  if (block) { next.status = "waiting"; next.statusKey = "blocked"; next.blockedReason = block.reason.trim(); }
   const inv = taskInvariant(next);
   if (!inv.ok) return { ok: false, refused: inv.reason };
   return { ok: true, task: next };
 }
 
+/**
+ * Undo as a compensating write: back to `previous` only if the task is still at the token the undone action
+ * produced (otherwise someone changed it since — nothing is overwritten), and only if the rules still allow the
+ * restored state (e.g. reopening under a parent that was completed meanwhile is refused).
+ */
+export function revertTask(current: Task, previous: Task, expectedVersion: string, now: string, all: Task[], actor?: Task["updatedBy"]): PatchResult {
+  if (current.id !== previous.id) return { ok: false, refused: "משימה שגויה." };
+  if (current.version !== expectedVersion) return { ok: false, refused: "המשימה השתנתה מאז הפעולה, ולכן הביטול לא בוצע (כדי לא לדרוס שינוי חדש יותר)." };
+  const next: Task = { ...previous, version: nextVersion(current.version), updatedAt: now, ...(actor ? { updatedBy: actor } : {}) };
+  const others = all.map((t) => (t.id === next.id ? next : t));
+  if (next.status === "done" && current.status !== "done") { const g = canComplete(next, others); if (!g.ok) return { ok: false, refused: g.reason }; }
+  if (isOpen(next.status) && !isOpen(current.status)) { const g = canReopen(next, others); if (!g.ok) return { ok: false, refused: g.reason }; }
+  const inv = taskInvariant(next);
+  return inv.ok ? { ok: true, task: next } : { ok: false, refused: inv.reason };
+}
+
 // ---------- permissions ----------
 export type WorkAction = "edit" | "assign" | "changeStatus" | "complete" | "delete" | "comment" | "trackTime" | "create";
 
-/** Matrix (pkg1 plan §8): owner/admin all; member edits work but cannot delete; viewer reads and comments only. */
-export function canDo(role: WorkRole, action: WorkAction, caps?: Partial<WorkCapabilities>): boolean {
+/**
+ * Matrix (pkg1 plan §8): owner/admin all; member edits work but cannot delete; viewer reads and comments only.
+ * With `caps` (the task source's capability map), an action whose capability is not `live` is refused — unless
+ * `allowPlanned` (the fixture demo, where planned capabilities run on fixtures, labelled "מתוכנן").
+ */
+export function canDo(role: WorkRole, action: WorkAction, caps?: Partial<Record<keyof WorkCapabilities, CapabilityState>>, allowPlanned = false): boolean {
   const capFor: Partial<Record<WorkAction, keyof WorkCapabilities>> = { assign: "assign", changeStatus: "changeStatus", complete: "changeStatus", comment: "comment", trackTime: "trackTime", create: "create" };
   const cap = capFor[action];
-  if (caps && cap && caps[cap] === false) return false;
+  if (caps && cap && caps[cap] !== undefined && caps[cap] !== "live" && !(caps[cap] === "planned" && allowPlanned)) return false;
   if (role === "viewer") return action === "comment";
   if (role === "member") return action !== "delete";
   return true;
@@ -230,8 +290,9 @@ export function pauseTimer(t: ActiveTimer, nowMs: number): ActiveTimer {
 export function resumeTimer(t: ActiveTimer, nowIso: string): ActiveTimer {
   return t.running ? t : { ...t, startedAt: nowIso, running: true };
 }
-/** Minutes to log when the timer is stopped (rounded up to a whole minute; nothing under 30 seconds). */
-export const minutesToLog = (t: ActiveTimer, nowMs: number) => { const ms = elapsedOf(t, nowMs); return ms < 30_000 ? 0 : Math.ceil(ms / 60_000); };
+/** Minutes to log when the timer is stopped: whole minutes, nothing under 30 seconds, never more than 24 hours. */
+export const MAX_LOG_MINUTES = 1440;
+export const minutesToLog = (t: ActiveTimer, nowMs: number) => { const ms = elapsedOf(t, nowMs); return ms < 30_000 ? 0 : Math.min(MAX_LOG_MINUTES, Math.ceil(ms / 60_000)); };
 
 /** Starting a timer while another runs: one timer per person — the running one is stopped and logged first. */
 export function switchTimer(current: ActiveTimer | null, task: Pick<Task, "id" | "title" | "context">, nowIso: string): { next: ActiveTimer; logged: { taskId: string; minutes: number } | null; conflict: boolean } {

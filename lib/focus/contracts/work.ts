@@ -1,6 +1,6 @@
 import type { IsoDate, IsoDateTime, PersonId } from "./common";
 import type { Loadable } from "./loadable";
-import type { Priority, WorkDisplayStatus, WorkStatus } from "./status";
+import type { Priority, WorkStatus } from "./status";
 
 /**
  * Mytiv Work — UI contract (handoff README → "חוזה רכיבים"). This is the meeting point with `auto/work-pkg1`:
@@ -13,8 +13,8 @@ export type TaskSource = "mytiv" | "clickup";
 /** `planned` = the backend for this capability does not exist yet: rendered in full, labelled "מתוכנן", fed by fixtures. */
 export type CapabilityState = "live" | "planned";
 
-/** A summary of another task as shown (its display status, which may be the derived "blocked"). */
-export type TaskRef = { id: string; title: string; status: WorkDisplayStatus };
+/** A reference to another task (a dependency). Its status is always read from the live task, never stored here. */
+export type TaskRef = { id: string; title: string };
 
 export type Subtask = { id: string; title: string; done: boolean; assigneeId?: PersonId; dueDate?: IsoDate; estimateMinutes?: number; spentMinutes?: number };
 export type ChecklistItem = { id: string; label: string; checked: boolean };
@@ -31,6 +31,11 @@ export type Task = {
   status: WorkStatus;
   /** the business's own label for the status (pkg1 `work_statuses.label_he`, e.g. "בבדיקה"); falls back to the status word */
   statusLabel?: string;
+  /**
+   * the business's own status key (pkg1 `work_statuses.key`) under the canonical category. `"blocked"` under
+   * `waiting` is a manual block (Work contract §5) — shown as "חסום" with or without a reason from the source.
+   */
+  statusKey?: string;
   priority: Priority;
   assigneeId: PersonId | null;
   participantIds: PersonId[];
@@ -53,9 +58,10 @@ export type Task = {
   /** who we are waiting for (status `waiting`) — pkg1 `waiting_on` + a label */
   waitingFor?: string;
   /**
-   * Manual block (handoff: "חסום" only with a written reason). Only on a `waiting` task and never blank — enforced by
-   * `taskInvariant` on every patch. pkg1: the business status key `blocked` under category `waiting`, reason in
-   * `waiting_on`. A task blocked by an open dependency derives its block from `dependsOn` and carries no reason here.
+   * The written reason of a manual block. Only on a `waiting` task and never blank — enforced by `taskInvariant` on
+   * every write; a block made in Focus always carries one (the `block` patch requires it). pkg1 has no column for
+   * it yet (backend gap, contract §12) — a source block without a reason still shows as blocked via `statusKey`.
+   * A task blocked by an open dependency derives its block from `dependsOn` and carries no reason here.
    */
   blockedReason?: string;
   /** follow-up date for blocked/waiting items */
@@ -65,9 +71,14 @@ export type Task = {
   activity: ActivityEvent[];
   source: TaskSource;
   state: CapabilityState;
-  /** optimistic concurrency (pkg1 `tasks.version`; ClickUp `date_updated` marker) — sent back with every patch */
-  version: number;
+  /**
+   * Opaque concurrency token (pkg1 `tasks.version`; ClickUp `date_updated` marker). Sent back unchanged with every
+   * write; the next token always comes from the write's result — the UI never computes or compares it otherwise.
+   */
+  version: string;
   updatedAt: IsoDateTime;
+  /** who made the last write (pkg1 audit actor); names the other side of a version conflict */
+  updatedBy?: PersonId | "system";
 };
 
 export type MyTasksBuckets = {
@@ -95,6 +106,8 @@ export type TaskPatch = Partial<Pick<Task, "title" | "notes" | "status" | "prior
   block?: { reason: string };
   /** lifts a manual block (the task stays `waiting` until its status changes) */
   unblock?: true;
+  /** logged time to add (timer or manual entry; 1..1440). An increment — unknown time (`null`) stays unknown. */
+  logMinutes?: number;
 };
 
 export type BoardColumn = "todo" | "in_progress" | "blockedOrWaiting" | "done";
@@ -128,16 +141,20 @@ export type WorkViewState =
   | { kind: "permissionDenied"; reason: string }
   | { kind: "versionConflict"; mine: Task; theirs: Task; theirsBy: string; field: keyof Task };
 
-/** Callbacks the Mytiv Work components emit. The demo store implements them; pkg1 will implement them over its API. */
+/** Result of every task write: the new task (with its new token), a version conflict (nothing written), or a refusal. */
+export type WriteResult = { ok: true; task: Task } | { ok: false; conflict: Task } | { ok: false; refused: string };
+
+/**
+ * The Mytiv Work commands the components call (the demo store implements them today and is checked against this
+ * type; the pkg1 adapter will implement the same shape over its API). Every write takes the token it last saw.
+ */
 export type WorkCommands = {
-  onPatch(taskId: string, patch: TaskPatch, expectedVersion: number): void;
-  onMove(taskId: string, to: BoardColumn): void;
-  onCreate(draft: { title: string; dueDate: IsoDate | null; assigneeId: PersonId | null; projectId?: string; priority: Priority }): void;
-  onStartTimer(taskId: string): void;
-  onPauseTimer(): void;
-  onResumeTimer(): void;
-  onStopTimer(): void;
-  onLogTime(taskId: string, minutes: number): void;
+  patchTask(taskId: string, patch: TaskPatch, expectedVersion: string): WriteResult & { previous?: Task };
+  moveTask(taskId: string, to: BoardColumn, expectedVersion: string): WriteResult & { previous?: Task };
+  /** undo = a compensating write back to `previous`, only if the task is still at the token the action produced */
+  undoTask(previous: Task, expectedVersion: string): WriteResult;
+  createTask(draft: Pick<Task, "title" | "dueDate" | "priority"> & Partial<Task>): Task;
+  logTime(taskId: string, minutes: number): { entry: TimeEntry; result: WriteResult; previous?: Task };
 };
 
 export type MyTasksData = { buckets: Loadable<MyTasksBuckets>; activeTimer: ActiveTimer | null };

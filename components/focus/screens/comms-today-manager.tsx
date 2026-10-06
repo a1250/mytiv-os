@@ -18,6 +18,7 @@ import { Page, PageHeader, ViewOnlyStrip } from "@/components/focus/patterns/pag
 import { StuckPanel } from "@/components/focus/patterns/stuck-panel";
 import { TimeBoard } from "@/components/focus/patterns/time-board";
 import { useDemo } from "@/components/focus/shell/demo-store";
+import { useTaskUndo } from "@/components/focus/shell/task-actions";
 import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { Banner, EmptyState, LoadableView } from "@/components/focus/ui/feedback";
@@ -40,6 +41,7 @@ const REMIND_MS = 1200;
 export default function CommsTodayManagerScreen() {
   const demo = useDemo();
   const toast = useToast();
+  const undo = useTaskUndo();
   const { now, state } = demo;
   const M = MANAGER_TODAY;
   const me = M.person;
@@ -74,7 +76,7 @@ export default function CommsTodayManagerScreen() {
     const r = demo.patchTask(t.id, { assigneeId: me.id }, t.version);
     if (!r.ok) { toast.push({ kind: "error", title: "לא הוקצה", detail: "refused" in r ? r.refused : "המשימה עודכנה במקביל. רענן ונסה שוב." }); return; }
     if (t.source === "clickup") demo.startJob({ id: `sync-${t.id}`, kind: "sync_clickup", label: "מסנכרן ל־ClickUp", detail: "", durationMs: SYNC_MS, outcome: "success", href: R.todayManager });
-    toast.push({ title: `"${t.title}" הוקצתה לך`, detail: t.source === "clickup" ? "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר." : undefined, undo: { onUndo: () => { demo.cancelJob(`sync-${t.id}`); demo.restoreTask({ ...r.previous!, version: r.task.version + 1 }); } } });
+    toast.push({ title: `"${t.title}" הוקצתה לך`, detail: t.source === "clickup" ? "\"סונכרן\" יוצג רק אחרי ש־ClickUp יאשר." : undefined, undo: { onUndo: undo(r.previous!, r.task.version, () => demo.cancelJob(`sync-${t.id}`)) } });
   };
   const sendRemind = (it: ManagerItem) => {
     setConfirmRemind(null);

@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import type { MyTasksBuckets, Task } from "@/lib/focus/contracts/work";
 import { cx } from "@/components/focus/ui/cx";
 import { Chips } from "@/components/focus/ui/tabs";
+import { blockInfo } from "@/lib/focus/state/work";
 import { SectionHead } from "../page";
 import { TaskCard, type TaskCardProps } from "./task-card";
 
@@ -20,7 +21,8 @@ const COLS: BucketKey[][] = [["today"], ["overdue", "blocked"], ["soon", "waitin
 const MOBILE_ORDER: BucketKey[] = ["overdue", "today", "blocked", "soon", "waitingOnOthers", "noDate", "unmapped"];
 type Filter = "time" | "overdue" | "blocked" | "waitingOnOthers";
 
-export function MyTasksView({ buckets, now, timer, limit = 3 }: { buckets: MyTasksBuckets; now: string; timer: TaskCardProps["timer"]; limit?: number }) {
+/** `all` = every task (to derive what blocks a card); `timer` is omitted for roles that may not track time. */
+export function MyTasksView({ buckets, all, now, timer, limit = 3 }: { buckets: MyTasksBuckets; all: Task[]; now: string; timer?: TaskCardProps["timer"]; limit?: number }) {
   const [filter, setFilter] = useState<Filter>("time");
   const [expanded, setExpanded] = useState<Partial<Record<BucketKey, boolean>>>({});
   const section = (k: BucketKey, first: boolean, extra?: ReactNode) => {
@@ -31,7 +33,7 @@ export function MyTasksView({ buckets, now, timer, limit = 3 }: { buckets: MyTas
       <section key={k} className={cx("f-mytasks__sec", !first && "f-mytasks__sec--gap", `f-mytasks__sec--${k}`)} aria-label={TITLES[k].title} data-bucket={k}>
         <SectionHead title={TITLES[k].title} count={list.length} tone={TITLES[k].tone} level={2} />
         {list.length === 0 && <p className="f-mytasks__none">אין כאן משימות.</p>}
-        {shown.map((t: Task, i) => <TaskCard key={t.id} task={t} now={now} timer={timer} blocked={k === "blocked"} compact={k === "soon" || k === "noDate" || (k === "today" && i >= 2) || (k === "overdue" && i >= 1)} />)}
+        {shown.map((t: Task, i) => <TaskCard key={t.id} task={t} now={now} timer={timer} block={blockInfo(t, all)} compact={k === "soon" || k === "noDate" || (k === "today" && i >= 2) || (k === "overdue" && i >= 1)} />)}
         {list.length > shown.length && (
           <button type="button" className="f-mytasks__more f-hit" onClick={() => setExpanded((e) => ({ ...e, [k]: true }))}>הצג עוד {list.length - shown.length}</button>
         )}

@@ -8,7 +8,7 @@ import { fmtAgo, fmtDate, fmtDayMonth, fmtDuration, fmtTime } from "@/lib/focus/
 import { demoIso } from "@/lib/focus/fixtures/clock";
 import { PEOPLE, PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
 import { R } from "@/lib/focus/routes";
-import { blocking, canComplete, canDepend, canDo, childrenOf, displayStatus, isManuallyBlocked, openBlockers, parseDuration } from "@/lib/focus/state/work";
+import { blocking, canComplete, canDepend, canDo, childrenOf, displayStatus, isManuallyBlocked, openBlockers, parseDuration, type WorkAction } from "@/lib/focus/state/work";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
 import { Banner } from "@/components/focus/ui/feedback";
@@ -18,14 +18,16 @@ import { PRIORITY } from "./task-card";
 
 /**
  * TaskDrawer (Mytiv Work contract): `{ task, onPatch(patch), onClose }` — every Task field + the activity timeline.
- * Each change is a patch with the version the drawer last saw; a newer version from someone else is a conflict that
+ * Each change is a patch with the token the drawer last saw; a newer write from someone else is a conflict that
  * shows both values and overwrites nothing until the user decides. Viewers see text (no controls) and may comment.
  * Sections whose backend does not exist yet carry "מתוכנן" (from the source's capability map).
  */
 export type DrawerProps = {
   task: Task; all: Task[]; now: string; role: WorkRole; caps: Record<keyof WorkCapabilities, CapabilityState>;
-  baseVersion: number; viewerId: string;
-  onPatch: (patch: TaskPatch, expectedVersion: number) => { ok: true } | { ok: false; conflict?: Task; refused?: string };
+  baseVersion: string; viewerId: string;
+  /** the fixture demo: planned capabilities run on demo data (labelled "מתוכנן"); elsewhere only live ones write */
+  allowPlanned?: boolean;
+  onPatch: (patch: TaskPatch, expectedVersion: string) => { ok: true } | { ok: false; conflict?: Task; refused?: string };
   onResolveConflict: (keep: "mine" | "theirs") => void;
   conflict: { theirs: Task; mine: TaskPatch; by: string } | null;
   timer: { active: ActiveTimer | null; elapsedMs: number; onStart: () => void; onPause: () => void; onStop: () => void };
@@ -51,6 +53,8 @@ export function TaskDrawerBody(p: DrawerProps) {
   const { task: t, all, now, role, caps } = p;
   const id = useId();
   const edit = canDo(role, "edit");
+  // role permission AND the source's capability (live; planned only in the demo) — the one gate for every control
+  const can = (a: WorkAction) => canDo(role, a, caps, p.allowPlanned);
   const [commentDraft, setCommentDraft] = useState("");
   const [subDraft, setSubDraft] = useState("");
   const [checkDraft, setCheckDraft] = useState("");
@@ -111,14 +115,14 @@ export function TaskDrawerBody(p: DrawerProps) {
         <div className="f-td__fields">
           <label className="f-td__field">
             <span className="f-td__fl">סטטוס</span>
-            {edit && canDo(role, "changeStatus") ? (
+            {edit && can("changeStatus") ? (
               <select className={cx("f-td__pill", `f-td__pill--${manualBlock ? "blocked" : t.status}`)} value={manualBlock ? BLOCK : t.status}
                 onChange={(e) => (e.target.value === BLOCK ? setBlocking(true) : (closeBlock(), patch({ status: e.target.value as WorkStatus })))}>
                 {t.status === "unknown" && <option value="unknown">{WORK.unknown.glyph} {WORK.unknown.word}</option>}
                 {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{WORK[s].glyph} {WORK[s].word}</option>)}
                 {t.status !== "unknown" && <option value={BLOCK}>{WORK.blocked.glyph} {manualBlock ? WORK.blocked.word : `${WORK.blocked.word}…`}</option>}
               </select>
-            ) : <WorkStatusTag status={manualBlock || blockers.length ? "blocked" : t.status} />}
+            ) : <WorkStatusTag status={displayStatus(t, all)} />}
           </label>
           <label className="f-td__field">
             <span className="f-td__fl">עדיפות</span>
@@ -130,7 +134,7 @@ export function TaskDrawerBody(p: DrawerProps) {
           </label>
           <label className="f-td__field">
             <span className="f-td__fl">אחראי {caps.assign === "planned" && <PlannedTag />}</span>
-            {edit && canDo(role, "assign") ? (
+            {edit && can("assign") ? (
               <select className="f-td__pill" value={t.assigneeId ?? ""} onChange={(e) => patch({ assigneeId: e.target.value || null })}>
                 <option value="">ללא אחראי</option>
                 {Object.values(PEOPLE).filter((x) => x.role !== "viewer").map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -151,7 +155,7 @@ export function TaskDrawerBody(p: DrawerProps) {
         {manualBlock && !blocking_ && (
           <div className="f-td__blockwhy">
             <span><span aria-hidden>{WORK.blocked.glyph}</span> חסום: {t.blockedReason}</span>
-            {edit && canDo(role, "changeStatus") && <Button variant="link" size="sm" onClick={() => patch({ unblock: true })}>הסר חסימה</Button>}
+            {edit && can("changeStatus") && <Button variant="link" size="sm" onClick={() => patch({ unblock: true })}>הסר חסימה</Button>}
           </div>
         )}
         {blocking_ && (
@@ -190,7 +194,7 @@ export function TaskDrawerBody(p: DrawerProps) {
             <span className="f-td__barfill" style={{ width: `${t.estimateMinutes && t.spentMinutes != null ? Math.max(4, Math.min(100, (t.spentMinutes / t.estimateMinutes) * 100)) : 4}%` }} />
           </span>
           {t.spentMinutes == null && <span className="f-meta-sm">המקור ({t.source === "clickup" ? "ClickUp" : "Mytiv"}) לא מדווח זמן — לא ידוע, לא 0.{loggedHere > 0 ? ` נרשמו כאן ${loggedHere} דק׳.` : ""}</span>}
-          {canDo(role, "trackTime") && (
+          {can("trackTime") && (
             <div className="f-td__timer">
               {timerHere && p.timer.active?.running ? (
                 <>
@@ -224,8 +228,9 @@ export function TaskDrawerBody(p: DrawerProps) {
             return (
               <Link key={d.id} href={R.task(d.id)} className="f-td__dep">
                 <Icon name="link" size={15} className="f-tcard__depicon" />
-                <span>חסום על ידי <b>{d.title}</b></span>
-                {dep && <WorkStatusTag status={dep.status} size="xs" className="f-td__deptag" />}
+                {/* the dependency's state is read from the live task: an open one blocks, a closed one no longer does */}
+                <span>{dep && dep.status !== "done" && dep.status !== "cancelled" ? "חסום על ידי" : "תלוי ב־"} <b>{d.title}</b></span>
+                {dep && <WorkStatusTag status={displayStatus(dep, all)} size="xs" className="f-td__deptag" />}
               </Link>
             );
           })}
@@ -237,7 +242,7 @@ export function TaskDrawerBody(p: DrawerProps) {
               if (!on) return;
               const g = canDepend(t, on, all);
               if (!g.ok) { setError(g.reason); return; }
-              patch({ addDependency: { id: on.id, title: on.title, status: on.status } });
+              patch({ addDependency: { id: on.id, title: on.title } });
               setDepPick("");
             }}>
               <label htmlFor={`${id}-dep`} className="f-sr">הוסף תלות</label>
@@ -310,7 +315,7 @@ export function TaskDrawerBody(p: DrawerProps) {
               </div>
             </div>
           ))}
-          {canDo(role, "comment") && (
+          {can("comment") && (
             <form className="f-td__newcomment" onSubmit={(e) => {
               e.preventDefault();
               if (!commentDraft.trim()) return;
@@ -339,13 +344,13 @@ export function TaskDrawerBody(p: DrawerProps) {
       </aside>
 
       <div className="f-td__foot">
-        {canDo(role, "complete") && !done && (
+        {can("complete") && !done && (
           gate.ok ? <Button variant="primary" onClick={() => patch({ status: "done" })}>סמן כבוצע</Button>
             : <span className="f-btn-wrap f-td__gate"><Button variant="primary" aria-disabled="true" onClick={() => setError(gate.reason)}>סמן כבוצע</Button><span className="f-btn-why">{gate.reason}</span></span>
         )}
-        {canDo(role, "create") && <Button variant="neutral" onClick={p.onDuplicate}>שכפל</Button>}
+        {can("create") && <Button variant="neutral" onClick={p.onDuplicate}>שכפל</Button>}
         <span className="f-grow" />
-        <span className="f-meta f-td__saved" role="status">עודכן {fmtAgo(t.updatedAt, now)} · נשמר אוטומטית · גרסה {t.version}</span>
+        <span className="f-meta f-td__saved" role="status">עודכן {fmtAgo(t.updatedAt, now)} · נשמר אוטומטית</span>
       </div>
     </div>
   );
@@ -366,7 +371,7 @@ function describeTask(t: Task, keys: (keyof TaskPatch)[]) {
   if (keys.includes("status")) return `סטטוס: ${WORK[t.status].word}`;
   if (keys.includes("priority")) return `עדיפות: ${PRIORITY[t.priority].word}`;
   if (keys.includes("dueDate")) return `יעד: ${t.dueDate ? fmtDate(t.dueDate) : "—"}`;
-  return `גרסה ${t.version}`;
+  return "הגרסה החדשה";
 }
 
 /** Drawer header row (breadcrumb, source, close). */

@@ -109,22 +109,24 @@ export function NextActionHero({ next }: { next: NonNullable<ProjectDetail["next
   );
 }
 
-export function HoursRing({ spent, budget, sourceLabel, updatedAt, now, extra }: { spent: number; budget: number; sourceLabel: string; updatedAt: string; now: string; extra?: ReactNode }) {
-  const pct = Math.round((spent / budget) * 100);
-  const tone = pct > 100 ? "over" : pct > 80 ? "warn" : "ok";
+/** `budget: null` = no budget is set: the ring says so ("—"), never "x מתוך 0" or an infinite percentage. */
+export function HoursRing({ spent, budget, sourceLabel, updatedAt, now, extra }: { spent: number; budget: number | null; sourceLabel: string; updatedAt: string; now: string; extra?: ReactNode }) {
+  const pct = budget ? Math.round((spent / budget) * 100) : null;
+  const tone = pct == null ? "ok" : pct > 100 ? "over" : pct > 80 ? "warn" : "ok";
+  const of = budget ? `${budget}` : "—";
   return (
-    <section className="f-panel f-hours" aria-label={`שעות: ${spent} מתוך ${budget}`}>
-      <span className={cx("f-ring", `f-ring--${tone}`)} style={{ ["--pct" as string]: `${Math.min(100, pct)}%` }} role="img" aria-label={`${pct}% מהתקציב`}>
-        <span className="f-ring__in">{pct}%</span>
+    <section className="f-panel f-hours" aria-label={budget ? `שעות: ${spent} מתוך ${budget}` : `שעות: ${spent}, אין תקציב שעות`}>
+      <span className={cx("f-ring", `f-ring--${tone}`)} style={{ ["--pct" as string]: `${Math.min(100, pct ?? 0)}%` }} role="img" aria-label={pct == null ? "אין תקציב שעות" : `${pct}% מהתקציב`}>
+        <span className="f-ring__in">{pct == null ? "—" : `${pct}%`}</span>
       </span>
       <div className="f-hours__text">
-        <b className="f-hours__main">{spent} מתוך {budget} שעות</b>
+        <b className="f-hours__main">{budget ? `${spent} מתוך ${of} שעות` : `${spent} שעות · אין תקציב שעות`}</b>
         <span className="f-meta">{sourceLabel} · {fmtAgo(updatedAt, now)}</span>
         {extra}
       </div>
       <div className="f-hours__compact">
         <div><b>שעות</b><span className="f-meta">{sourceLabel} · {fmtAgo(updatedAt, now)}</span></div>
-        <b className="f-hours__num">{spent} / {budget}</b>
+        <b className="f-hours__num">{spent} / {of}</b>
       </div>
     </section>
   );

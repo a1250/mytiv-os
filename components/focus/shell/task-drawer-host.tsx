@@ -12,6 +12,7 @@ import { Dialog } from "@/components/focus/ui/dialog";
 import { useToast } from "@/components/focus/ui/toast";
 import { elapsedOf } from "@/lib/focus/state/work";
 import { useIsDemo } from "./scope";
+import { useTaskUndo } from "./task-actions";
 import { TaskDrawerBody, TaskDrawerHead } from "@/components/focus/patterns/work/task-drawer";
 import { useDemo, useTicker } from "./demo-store";
 
@@ -27,9 +28,10 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
   const demo = useDemo();
   const toast = useToast();
   const isDemo = useIsDemo();
+  const undo = useTaskUndo();
   const taskId = params.get("task") ?? defaultTaskId ?? null;
   const task = demo.state.tasks.find((t) => t.id === taskId) ?? null;
-  const [base, setBase] = useState<{ id: string; version: number } | null>(null);
+  const [base, setBase] = useState<{ id: string; version: string } | null>(null);
   const [conflict, setConflict] = useState<{ theirs: Task; mine: TaskPatch; by: string } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
@@ -38,6 +40,9 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
   // capture the version the drawer "loaded" when it opens on a task (a later remote edit is then detectable) —
   // derived state updated during render (React's "storing information from previous renders" pattern)
   if (task && base?.id !== task.id) { setBase({ id: task.id, version: task.version }); setConflict(null); }
+  // the viewer's own writes from elsewhere (timer, manual time, undo, list toggles) move the base with them — only
+  // someone else's write is a conflict
+  else if (task && base && !conflict && task.version !== base.version && task.updatedBy === demo.viewer.id) setBase({ id: task.id, version: task.version });
 
   const close = (force = false) => {
     if (dirty && !force) { setConfirmClose(true); return; }
@@ -57,22 +62,25 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
   if (!task || !base) return null;
   const version = base.version;
 
-  const onPatch = (patch: TaskPatch, expected: number) => {
+  const caps = CAPABILITIES[task.source];
+  const writer = (t: Task) => (t.updatedBy && t.updatedBy !== "system" ? PEOPLE_BY_ID[t.updatedBy]?.name : undefined) ?? "משתמש אחר";
+  const onPatch = (patch: TaskPatch, expected: string) => {
     const r = demo.patchTask(task.id, patch, expected);
     if (r.ok) {
       setBase({ id: task.id, version: r.task.version });
-      if (patch.status || patch.assigneeId !== undefined) {
-        const prev = r.previous!;
+      if (patch.status || patch.assigneeId !== undefined || patch.block || patch.unblock) {
+        const cap = patch.assigneeId !== undefined ? caps.assign : caps.changeStatus;
         toast.push({
-          title: patch.status ? `סטטוס: ${WORK[patch.status].word}` : `אחראי: ${patch.assigneeId ? PEOPLE_BY_ID[patch.assigneeId]?.name : "ללא"}`,
-          detail: task.source === "clickup" ? "ClickUp הוא מקור האמת — השינוי יסונכרן לשם (בדמו: נשמר כאן)." : "נשמר.",
-          undo: { onUndo: () => { demo.restoreTask({ ...prev, version: r.task.version + 1 }); setBase({ id: task.id, version: r.task.version + 1 }); } },
+          title: patch.block ? "סומן כחסום" : patch.unblock ? "החסימה הוסרה" : patch.status ? `סטטוס: ${WORK[patch.status].word}` : `אחראי: ${patch.assigneeId ? PEOPLE_BY_ID[patch.assigneeId]?.name : "ללא"}`,
+          // honest about where it lives: a planned capability runs on the demo data only, never "saved" at the source
+          detail: cap === "planned" ? "יכולת מתוכננת — נשמר בהדגמה בלבד, לא במקור." : task.source === "clickup" ? "ClickUp הוא מקור האמת — השינוי יסונכרן לשם (בדמו: נשמר כאן)." : "נשמר.",
+          undo: { onUndo: undo(r.previous!, r.task.version) },
         });
       }
       return { ok: true as const };
     }
     if ("conflict" in r) {
-      setConflict({ theirs: r.conflict, mine: patch, by: "דנה" });
+      setConflict({ theirs: r.conflict, mine: patch, by: writer(r.conflict) });
       return { ok: false as const, conflict: r.conflict };
     }
     return { ok: false as const, refused: r.refused };
@@ -96,7 +104,8 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
         all={demo.state.tasks}
         now={demo.now}
         role={demo.state.role}
-        caps={CAPABILITIES[task.source]}
+        caps={caps}
+        allowPlanned={isDemo}
         baseVersion={version}
         viewerId={demo.viewer.id}
         onPatch={onPatch}
@@ -106,22 +115,37 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
           if (keep === "mine" && conflict) {
             const r = demo.patchTask(task.id, conflict.mine, theirs.version);
             if (r.ok) setBase({ id: task.id, version: r.task.version });
+            else {
+              // re-applying mine is refused by the rules on the newer version: say so, keep theirs
+              setBase({ id: task.id, version: theirs.version });
+              toast.push({ kind: "error", title: "השינוי שלך לא נשמר", detail: "refused" in r ? r.refused : "המשימה השתנתה שוב. פתחו אותה מחדש ונסו שוב." });
+            }
           } else setBase({ id: task.id, version: theirs.version });
           setConflict(null);
         }}
         timer={{
-          active: timer, elapsedMs: timer ? elapsedOf(timer, now) : 0,
+          active: timer, elapsedMs: timer ? (demo.hydrated ? elapsedOf(timer, now) : timer.elapsedMs) : 0, // no clock math before hydration
           onStart: () => { const r = demo.timerStart(task.id); if (r?.conflict && r.logged) toast.push({ title: `טיימר עבר ל"${task.title}"`, detail: `הטיימר הקודם נעצר ונרשמו ${r.logged.minutes} דק׳.` }); },
-          onPause: demo.timerPause, onStop: () => { const r = demo.timerStop(); if (r) toast.push({ title: `נרשמו ${r.minutes} דק׳`, detail: r.task?.title, undo: { onUndo: () => demo.timerRestore({ ...r.stopped, running: false, elapsedMs: elapsedOf(r.stopped, Date.now()) }, r.task, r.entry?.id) } }); },
+          onPause: demo.timerPause, onStop: () => {
+            const r = demo.timerStop();
+            if (!r) return;
+            const restore = () => demo.timerRestore(r.stopped, r.elapsedMs, r.entry?.id);
+            toast.push({ title: `נרשמו ${r.minutes} דק׳`, detail: r.task?.title, undo: { onUndo: r.write?.ok && r.task ? undo(r.task, r.write.task.version, restore) : restore } });
+          },
         }}
         entries={demo.state.timeEntries}
-        onLogTime={(m) => { const r = demo.logTime(task.id, m); toast.push({ title: `נרשמו ${m} דק׳ ידנית`, detail: task.title, undo: { onUndo: () => { demo.removeTimeEntry(r.entry.id); if (r.previous) demo.restoreTask(r.previous); } } }); }}
+        onLogTime={(m) => {
+          const r = demo.logTime(task.id, m);
+          if (!r.result.ok) { demo.removeTimeEntry(r.entry.id); toast.push({ kind: "error", title: "הזמן לא נרשם", detail: "refused" in r.result ? r.result.refused : "המשימה עודכנה בינתיים." }); return; }
+          toast.push({ title: `נרשמו ${m} דק׳ ידנית`, detail: caps.trackTime === "planned" ? `${task.title} · יכולת מתוכננת — בהדגמה בלבד` : task.title, undo: { onUndo: undo(r.previous!, r.result.task.version, () => demo.removeTimeEntry(r.entry.id)) } });
+        }}
         onDuplicate={() => {
-          // a copy starts fresh: open, unblocked (no block reason without a waiting status), no history
-          const { blockedReason: _blocked, ...rest } = task;
-          void _blocked;
-          const copy = demo.createTask({ ...rest, id: `t-copy-${Date.now()}`, title: `${task.title} (עותק)`, status: "todo", comments: [], activity: [], version: 1, dependsOn: [], spentMinutes: 0 });
-          toast.push({ title: "נוצר עותק", detail: copy.title, undo: { onUndo: () => demo.removeTask(copy.id) } });
+          // a copy starts fresh: open, unblocked, no history — and it is a local Mytiv task (creating at ClickUp is
+          // not a live capability); a parent that is already done is not kept (createTask drops it)
+          const { blockedReason: _blocked, statusKey: _key, version: _v, updatedBy: _by, ...rest } = task;
+          void _blocked; void _key; void _v; void _by;
+          const copy = demo.createTask({ ...rest, id: `t-copy-${Date.now()}`, title: `${task.title} (עותק)`, status: "todo", source: "mytiv", state: "live", comments: [], activity: [], dependsOn: [], spentMinutes: 0 });
+          toast.push({ title: "נוצר עותק ב־Mytiv", detail: copy.title, undo: { onUndo: () => demo.removeTask(copy.id) } });
         }}
         onClose={() => close()}
         onDirtyChange={setDirty}

@@ -5,7 +5,7 @@ import type { TimeColumn } from "@/lib/focus/contracts/today";
 import { AGENDA, RESUME, STUCK, TODAY_METRICS, TODAY_PROJECTS } from "@/lib/focus/fixtures/today";
 import { fmtLongDate, fmtShortLongDate, fmtWaiting } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
-import { bucketsFor } from "@/lib/focus/state/work";
+import { blockInfo, bucketsFor, canDo } from "@/lib/focus/state/work";
 import { ActionCard, CompactActionCard } from "@/components/focus/patterns/action-card";
 import { AgendaPanel } from "@/components/focus/patterns/agenda";
 import { MetricGrid } from "@/components/focus/patterns/metrics";
@@ -35,7 +35,8 @@ export default function TodayScreen() {
   const { now, viewer, state } = demo;
   const q = useQueue();
   const buckets = bucketsFor(state.tasks, viewer.id, now);
-  const timer = { activeTaskId: state.timer?.running ? state.timer.taskId : null, onStart: demo.timerStart, onPause: demo.timerPause };
+  // the timer is a write (time entries): offered only to roles that may track time
+  const timer = canDo(state.role, "trackTime") ? { activeTaskId: state.timer?.running ? state.timer.taskId : null, onStart: demo.timerStart, onPause: demo.timerPause } : undefined;
   const firstPrimary = q.items.find((x) => x.column === "now" && x.phase.kind === "default")?.item.id;
 
   const columns = COLUMNS.map((c) => {
@@ -104,7 +105,7 @@ export default function TodayScreen() {
             <section key={title} className="f-stack-9" aria-label={title}>
               <SectionHead title={title} count={list.length} tone={tone} size="sm" level={3} />
               {list.slice(0, 2).map((t, i) => (
-                <TaskCard key={t.id} task={t} compact={i > 0} now={now} size="sm" timer={timer} blocked={list === buckets.blocked} />
+                <TaskCard key={t.id} task={t} compact={i > 0} now={now} size="sm" timer={timer} block={blockInfo(t, state.tasks)} />
               ))}
             </section>
           ))}

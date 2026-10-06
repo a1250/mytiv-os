@@ -47,7 +47,8 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 export default async function FocusLayout({ children, params }: { children: React.ReactNode; params: Promise<{ businessSlug: string }> }) {
   const scope = await getFocusScope((await params).businessSlug);
   return (
-    <div className={`${openSans.variable} ${plexMono.variable} focus-app`} dir="rtl" lang="he">
+    // suppressHydrationWarning: ThemeScript sets data-f-theme on this element before React hydrates it
+    <div className={`${openSans.variable} ${plexMono.variable} focus-app`} dir="rtl" lang="he" suppressHydrationWarning>
       <ThemeScript />
       <a href="#main" className="f-skip">דלג לתוכן</a>
       <FocusScopeProvider scope={scope}>

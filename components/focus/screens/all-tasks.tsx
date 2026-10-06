@@ -2,7 +2,7 @@
 
 import Link from "@/components/focus/ui/link";
 import { Suspense, useState, type ReactNode } from "react";
-import type { Task } from "@/lib/focus/contracts/work";
+import type { Task, TaskPatch } from "@/lib/focus/contracts/work";
 import { HOURS_SYNC } from "@/lib/focus/fixtures/projects";
 import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
 import { daysBetween, fmtAgo, fmtDayMonth } from "@/lib/focus/format";
@@ -10,6 +10,7 @@ import { R } from "@/lib/focus/routes";
 import { bucketsFor, canComplete, canDo, displayStatus } from "@/lib/focus/state/work";
 import { Page, PageHeader } from "@/components/focus/patterns/page";
 import { useDemo } from "@/components/focus/shell/demo-store";
+import { useTaskUndo } from "@/components/focus/shell/task-actions";
 import { TaskDrawerHost } from "@/components/focus/shell/task-drawer-host";
 import { Button, ButtonLink } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
@@ -28,12 +29,14 @@ type Filter = "mine" | "today" | "overdue" | "blocked" | "waiting";
 function Inner() {
   const demo = useDemo();
   const toast = useToast();
+  const undo = useTaskUndo();
   const { state, now, viewer } = demo;
   const [filter, setFilter] = useState<Filter>("mine");
   const [group, setGroup] = useState<"project" | "owner">("project");
   const b = bucketsFor(state.tasks, viewer.id, now);
   const sets: Record<Filter, Task[]> = {
-    mine: [...b.overdue, ...b.today, ...b.blocked, ...b.waitingOnOthers, ...b.soon],
+    // every open task of mine — including no-date and unmapped-status ones (never silently dropped from "שלי")
+    mine: [...b.overdue, ...b.today, ...b.blocked, ...b.waitingOnOthers, ...b.soon, ...b.noDate, ...b.unmapped],
     today: b.today, overdue: b.overdue, blocked: b.blocked, waiting: b.waitingOnOthers,
   };
   const list = sets[filter];
@@ -43,10 +46,17 @@ function Inner() {
     return acc;
   }, {});
 
+  /** one write path for the quick actions: the row's token, refusals explained, undo as a compensating write */
+  const write = (t: Task, patch: TaskPatch, title: string, detail: string) => {
+    const r = demo.patchTask(t.id, patch, t.version);
+    if (!r.ok) { toast.push({ kind: "error", title: "לא נשמר", detail: "refused" in r ? r.refused : "המשימה עודכנה בינתיים. רעננו ונסו שוב." }); return; }
+    toast.push({ title, detail, undo: { onUndo: undo(r.previous!, r.task.version) } });
+  };
+
   const action = (t: Task): ReactNode => {
     if (!canDo(state.role, "edit")) return <Link href={R.task(t.id)} className="f-link">פתח</Link>;
     if (displayStatus(t, state.tasks) === "blocked" && !t.assigneeId) {
-      return <Button variant="link" size="sm" onClick={() => { const r = demo.patchTask(t.id, { assigneeId: viewer.id }, t.version); if (r.ok) toast.push({ title: "הוקצה לך", detail: t.title, undo: { onUndo: () => demo.restoreTask({ ...r.previous!, version: r.task.version + 1 }) } }); }}>הקצה לי</Button>;
+      return <Button variant="link" size="sm" onClick={() => write(t, { assigneeId: viewer.id }, "הוקצה לך", t.title)}>הקצה לי</Button>;
     }
     if (t.links.campaignId && t.status === "in_progress") return <Link href={R.designEdit(t.links.campaignId)} className="f-link">פתח בעורך</Link>;
     if (t.links.proposalId) return <Link href={R.proposal(t.links.proposalId)} className="f-link">פתח הצעה</Link>;
@@ -54,12 +64,12 @@ function Inner() {
     if (t.status === "waiting") {
       const tomorrow = new Date(new Date(now).getTime() + 86_400_000).toISOString().slice(0, 10);
       return t.followUp ? <span className="f-meta-sm">מעקב {fmtDayMonth(t.followUp)}</span> : (
-        <Button variant="link" size="sm" onClick={() => { const r = demo.patchTask(t.id, { followUp: tomorrow }, t.version); if (r.ok) toast.push({ title: "נקבע מעקב למחר", detail: `מול ${t.waitingFor ?? "הגורם הממתין"} · יופיע בהיום שלי`, undo: { onUndo: () => demo.restoreTask({ ...r.previous!, version: r.task.version + 1 }) } }); }}>קבע מעקב</Button>
+        <Button variant="link" size="sm" onClick={() => write(t, { followUp: tomorrow }, "נקבע מעקב למחר", `מול ${t.waitingFor ?? "הגורם הממתין"} · יופיע בהיום שלי`)}>קבע מעקב</Button>
       );
     }
     const gate = canComplete(t, state.tasks);
     return gate.ok
-      ? <Button variant="link" size="sm" onClick={() => { const r = demo.patchTask(t.id, { status: "done" }, t.version); if (r.ok) toast.push({ title: "סומן כהושלם", detail: t.title, undo: { onUndo: () => demo.restoreTask({ ...r.previous!, version: r.task.version + 1 }) } }); }}>סמן כהושלם</Button>
+      ? <Button variant="link" size="sm" onClick={() => write(t, { status: "done" }, "סומן כהושלם", t.title)}>סמן כהושלם</Button>
       : <Link href={R.task(t.id)} className="f-link">פתח</Link>;
   };
 

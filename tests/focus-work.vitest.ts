@@ -9,6 +9,7 @@ import {
   applyPatch, BOARD_ORDER, blockedWhy, boardColumns, bucketsFor, canComplete, canDepend, canDo, canStart, checkMove, columnOf,
   displayStatus, elapsedOf, isBlocked, minutesToLog, openCount, parseDuration, parseQuickTask, pauseTimer, resumeTimer, startTimer,
   statusForColumn, switchTimer, taskInvariant, type PatchResult,
+  blockInfo, canReopen, isManuallyBlocked, MAX_LOG_MINUTES, revertTask,
 } from "@/lib/focus/state/work";
 import type { TaskPatch } from "@/lib/focus/contracts/work";
 
@@ -16,7 +17,7 @@ const NOW = "2026-10-01T08:10:00+03:00";
 const base = (s: Partial<Task> & Pick<Task, "id">): Task => ({
   title: s.id, notes: "", status: "todo", priority: "medium", assigneeId: "me", participantIds: [], startDate: null, dueDate: null,
   estimateMinutes: null, spentMinutes: 0, subtasks: [], checklist: [], parentId: null, dependsOn: [], links: { projectId: "p" }, context: {},
-  comments: [], evidence: [], activity: [], source: "mytiv", state: "live", version: 1, updatedAt: NOW, ...s,
+  comments: [], evidence: [], activity: [], source: "mytiv", state: "live", version: "v1", updatedAt: NOW, ...s,
 });
 
 describe("My Tasks buckets", () => {
@@ -24,7 +25,7 @@ describe("My Tasks buckets", () => {
     const t = [
       base({ id: "today", dueDate: "2026-10-01" }), base({ id: "late", dueDate: "2026-09-29" }), base({ id: "soon", dueDate: "2026-10-03" }),
       base({ id: "nodate" }), base({ id: "wait", status: "waiting" }), base({ id: "blk", status: "waiting", blockedReason: "ממתין לצלם" }),
-      base({ id: "dep", dueDate: "2026-10-01", dependsOn: [{ id: "blk", title: "", status: "blocked" }] }),
+      base({ id: "dep", dueDate: "2026-10-01", dependsOn: [{ id: "blk", title: "" }] }),
       base({ id: "unk", status: "unknown" }), base({ id: "done", status: "done" }), base({ id: "other", assigneeId: "x" }),
     ];
     const b = bucketsFor(t, "me", NOW);
@@ -49,7 +50,7 @@ describe("My Tasks buckets", () => {
 
 describe("Kanban transitions", () => {
   const blocker = base({ id: "b", status: "in_progress" });
-  const dependent = base({ id: "d", dependsOn: [{ id: "b", title: "b", status: "in_progress" }] });
+  const dependent = base({ id: "d", dependsOn: [{ id: "b", title: "b" }] });
   const parent = base({ id: "parent", status: "in_progress" });
   const child = base({ id: "child", parentId: "parent" });
   const all = [blocker, dependent, parent, child];
@@ -60,10 +61,10 @@ describe("Kanban transitions", () => {
     expect(Object.values(boardColumns([...all, base({ id: "u", status: "unknown" })])).flat()).toHaveLength(4);
   });
   it("sets the status the column means; waiting stays waiting", () => {
-    expect(statusForColumn(base({ id: "x" }), "in_progress")).toBe("in_progress");
-    expect(statusForColumn(base({ id: "x", status: "waiting" }), "blockedOrWaiting")).toBe("waiting");
+    expect(statusForColumn("in_progress")).toBe("in_progress");
+    expect(statusForColumn("blockedOrWaiting")).toBe("waiting");
     // "blocked" is never a stored status: the column stores waiting, and a move creates no block without a reason
-    expect(statusForColumn(base({ id: "x" }), "blockedOrWaiting")).toBe("waiting");
+    expect(statusForColumn("blockedOrWaiting")).toBe("waiting");
   });
   it("refuses moves that break the rules, with a reason", () => {
     expect(checkMove(dependent, "in_progress", all).ok).toBe(false);
@@ -88,7 +89,7 @@ describe("parent / sub-task and dependency rules", () => {
   });
   it("dependencies stay within the project and never form a cycle", () => {
     const a = base({ id: "a" });
-    const b = base({ id: "b", dependsOn: [{ id: "a", title: "a", status: "todo" }] });
+    const b = base({ id: "b", dependsOn: [{ id: "a", title: "a" }] });
     const other = base({ id: "o", links: { projectId: "q" } });
     expect(canDepend(a, other, [a, b, other]).ok).toBe(false);
     expect(canDepend(a, a, [a]).ok).toBe(false);
@@ -98,28 +99,29 @@ describe("parent / sub-task and dependency rules", () => {
 });
 
 describe("patches with optimistic concurrency", () => {
-  const t = base({ id: "t", version: 3 });
+  const t = base({ id: "t", version: "v3" });
   it("applies with the current version and bumps it", () => {
-    const r = applyPatch(t, { priority: "high" }, 3, NOW);
-    expect(r.ok && r.task.version === 4 && r.task.priority === "high").toBe(true);
+    const r = applyPatch(t, { priority: "high" }, "v3", NOW, [t], "u-dana");
+    // a new opaque token, minted by the write path; the writer is recorded
+    expect(r.ok && r.task.version !== "v3" && r.task.priority === "high" && r.task.updatedBy === "u-dana").toBe(true);
   });
   it("a stale version is a conflict and overwrites nothing", () => {
-    const r = applyPatch(t, { priority: "high" }, 2, NOW);
+    const r = applyPatch(t, { priority: "high" }, "v2", NOW);
     expect(r.ok).toBe(false);
     expect("conflict" in r && r.conflict.priority).toBe("medium");
   });
   it("refuses invalid changes", () => {
-    expect(applyPatch(t, { title: "  " }, 3, NOW).ok).toBe(false);
-    expect(applyPatch({ ...t, dueDate: "2026-10-05" }, { startDate: "2026-10-09" }, 3, NOW).ok).toBe(false);
-    const blocked = base({ id: "x", dependsOn: [{ id: "y", title: "y", status: "todo" }] });
-    const r = applyPatch(blocked, { status: "done" }, 1, NOW, [blocked, base({ id: "y" })]);
+    expect(applyPatch(t, { title: "  " }, "v3", NOW).ok).toBe(false);
+    expect(applyPatch({ ...t, dueDate: "2026-10-05" }, { startDate: "2026-10-09" }, "v3", NOW).ok).toBe(false);
+    const blocked = base({ id: "x", dependsOn: [{ id: "y", title: "y" }] });
+    const r = applyPatch(blocked, { status: "done" }, "v1", NOW, [blocked, base({ id: "y" })]);
     expect("refused" in r && r.refused).toContain("חסום");
   });
   it("adds checklist items, sub-tasks, comments and same-project dependencies", () => {
-    const r = applyPatch(t, { addChecklistItem: { id: "k", label: "x" }, addSubtask: { id: "s", title: "y" } }, 3, NOW);
+    const r = applyPatch(t, { addChecklistItem: { id: "k", label: "x" }, addSubtask: { id: "s", title: "y" } }, "v3", NOW);
     expect(r.ok && r.task.checklist.length === 1 && r.task.subtasks.length === 1).toBe(true);
     const other = base({ id: "o", links: { projectId: "q" } });
-    const d = applyPatch(t, { addDependency: { id: "o", title: "o", status: "todo" } }, 3, NOW, [t, other]);
+    const d = applyPatch(t, { addDependency: { id: "o", title: "o" } }, "v3", NOW, [t, other]);
     expect(d.ok).toBe(false);
   });
 });
@@ -131,7 +133,12 @@ describe("permissions hide actions", () => {
     expect(canDo("member", "delete")).toBe(false);
     expect(canDo("member", "edit")).toBe(true);
     expect(canDo("owner", "delete")).toBe(true);
-    expect(canDo("owner", "assign", { assign: false })).toBe(false);
+    // capabilities: only "live" writes — a planned one only in the demo (allowPlanned)
+    expect(canDo("owner", "assign", { assign: "live" })).toBe(true);
+    expect(canDo("owner", "assign", { assign: "planned" })).toBe(false);
+    expect(canDo("owner", "assign", { assign: "planned" }, true)).toBe(true);
+    expect(canDo("viewer", "assign", { assign: "planned" }, true)).toBe(false);
+    expect(canDo("viewer", "trackTime")).toBe(false);
   });
 });
 
@@ -184,10 +191,10 @@ describe("timer", () => {
 });
 
 describe("blocked is derived, never stored (Work contract §5)", () => {
-  const dep = base({ id: "dep", title: "צילום", status: "in_progress" });
+  const dep = base({ id: "dep", title: "צילום" });
   const waiting = base({ id: "w", status: "waiting" });
   const manual = base({ id: "m", status: "waiting", blockedReason: "ממתין לצלם חיצוני" });
-  const byDep = base({ id: "bd", dependsOn: [{ id: "dep", title: "צילום", status: "in_progress" }] });
+  const byDep = base({ id: "bd", dependsOn: [{ id: "dep", title: "צילום" }] });
   const all = [dep, waiting, manual, byDep];
 
   it("shows blocked only for an open dependency or a manual block with its reason", () => {
@@ -201,34 +208,34 @@ describe("blocked is derived, never stored (Work contract §5)", () => {
   });
 
   it("refuses to store status \"blocked\" from any (untyped) input", () => {
-    const r = applyPatch(waiting, { status: "blocked" } as unknown as TaskPatch, 1, NOW, all);
+    const r = applyPatch(waiting, { status: "blocked" } as unknown as TaskPatch, "v1", NOW, all);
     expect(r.ok).toBe(false);
     expect("refused" in r && r.refused).toBeTruthy();
   });
 
   it("a manual block needs a written reason; blank or whitespace is refused", () => {
     for (const reason of ["", "   ", "\n\t"]) {
-      const r = applyPatch(waiting, { block: { reason } }, 1, NOW, all);
+      const r = applyPatch(waiting, { block: { reason } }, "v1", NOW, all);
       expect(r.ok, JSON.stringify(reason)).toBe(false);
       expect("refused" in r && r.refused).toContain("דורשת סיבה כתובה"); // the first layer, not only the invariant
     }
-    const ok = applyPatch(base({ id: "t" }), { block: { reason: "  אין צלם  " } }, 1, NOW, all);
+    const ok = applyPatch(base({ id: "t" }), { block: { reason: "  אין צלם  " } }, "v1", NOW, all);
     expect(ok.ok && ok.task.status).toBe("waiting");
     expect(ok.ok && ok.task.blockedReason).toBe("אין צלם");
-    expect(applyPatch(base({ id: "c", status: "done" }), { block: { reason: "x" } }, 1, NOW, all).ok).toBe(false);
+    expect(applyPatch(base({ id: "c", status: "done" }), { block: { reason: "x" } }, "v1", NOW, all).ok).toBe(false);
   });
 
   it("leaving waiting or unblocking drops the reason (no stale block)", () => {
-    const moved = applyPatch(manual, { status: "todo" }, 1, NOW, all);
+    const moved = applyPatch(manual, { status: "todo" }, "v1", NOW, all);
     expect(moved.ok && moved.task.blockedReason).toBeUndefined();
-    const lifted = applyPatch(manual, { unblock: true }, 1, NOW, all);
+    const lifted = applyPatch(manual, { unblock: true }, "v1", NOW, all);
     expect(lifted.ok && lifted.task.status).toBe("waiting");
     expect(lifted.ok && lifted.task.blockedReason).toBeUndefined();
     expect(lifted.ok && displayStatus(lifted.task, all)).toBe("waiting");
   });
 
   it("no column maps to a non-canonical status", () => {
-    for (const col of BOARD_ORDER) expect(["todo", "in_progress", "waiting", "done"]).toContain(statusForColumn(manual, col));
+    for (const col of BOARD_ORDER) expect(["todo", "in_progress", "waiting", "done"]).toContain(statusForColumn(col));
   });
 
   it("every fixture task satisfies the stored-task invariant", () => {
@@ -252,10 +259,108 @@ describe("blocked is derived, never stored (Work contract §5)", () => {
       if (rnd(2)) r = applyPatch(t, patches[rnd(patches.length)], t.version, NOW, tasks);
       else {
         const to = BOARD_ORDER[rnd(BOARD_ORDER.length)];
-        r = checkMove(t, to, tasks).ok ? applyPatch(t, { status: statusForColumn(t, to) }, t.version, NOW, tasks) : { ok: false, refused: "move" };
+        r = checkMove(t, to, tasks).ok ? applyPatch(t, { status: statusForColumn(to) }, t.version, NOW, tasks) : { ok: false, refused: "move" };
       }
       if (r.ok) tasks = tasks.map((x) => (x.id === t.id ? r.task : x));
       for (const x of tasks) expect(taskInvariant(x).ok).toBe(true);
     }
+  });
+});
+
+describe("undo is a compensating write (versioned, rule-checked)", () => {
+  const parent = base({ id: "p", status: "in_progress" });
+  const child = base({ id: "c", parentId: "p" });
+  it("reverts only while the task is still at the token the action produced", () => {
+    const done = applyPatch(child, { status: "done" }, "v1", NOW, [parent, child]);
+    expect(done.ok).toBe(true);
+    if (!done.ok) return;
+    const ok = revertTask(done.task, child, done.task.version, NOW, [parent, done.task]);
+    expect(ok.ok && ok.task.status).toBe("todo");
+    // someone wrote after the action: the undo would overwrite it → refused, nothing written
+    const later = applyPatch(done.task, { priority: "high" }, done.task.version, NOW, [parent, done.task]);
+    if (!later.ok) throw new Error("setup");
+    const stale = revertTask(later.task, child, done.task.version, NOW, [parent, later.task]);
+    expect(stale.ok).toBe(false);
+    expect("refused" in stale && stale.refused).toContain("השתנתה");
+  });
+  it("tokens never go backwards: an undo mints a new one", () => {
+    const done = applyPatch(child, { status: "done" }, "v1", NOW, [parent, child]);
+    if (!done.ok) throw new Error("setup");
+    const r = revertTask(done.task, child, done.task.version, NOW, [parent, done.task]);
+    expect(r.ok && r.task.version).not.toBe(child.version);
+    expect(r.ok && r.task.version).not.toBe(done.task.version);
+  });
+  it("an undo that would reopen a child under a parent completed meanwhile is refused", () => {
+    const doneChild = { ...child, status: "done" as const, version: "v2" };
+    const doneParent = { ...parent, status: "done" as const };
+    const r = revertTask(doneChild, child, "v2", NOW, [doneParent, doneChild]);
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe("parent / child reopen rule", () => {
+  it("a closed child cannot be reopened under a done parent (any path: patch or move)", () => {
+    const p = base({ id: "p", status: "done" });
+    const c = base({ id: "c", parentId: "p", status: "done" });
+    expect(canReopen(c, [p, c]).ok).toBe(false);
+    expect(applyPatch(c, { status: "todo" }, "v1", NOW, [p, c]).ok).toBe(false);
+    expect(applyPatch(c, { status: statusForColumn("in_progress") }, "v1", NOW, [p, c]).ok).toBe(false);
+    expect(canReopen(c, [{ ...p, status: "in_progress" }, c]).ok).toBe(true);
+  });
+});
+
+describe("Kanban: a move that would change nothing is refused (not a fake success)", () => {
+  it("a card in 'blocked/waiting' only because of its dependency cannot be 'moved' to its own status", () => {
+    const dep = base({ id: "d", title: "צילום", status: "in_progress" });
+    const t = base({ id: "t", status: "todo", dependsOn: [{ id: "d", title: "צילום" }] });
+    expect(columnOf(t, [dep, t])).toBe("blockedOrWaiting");
+    const g = checkMove(t, "todo", [dep, t]);
+    expect(g.ok).toBe(false);
+    expect(!g.ok && g.reason).toContain("צילום");
+  });
+});
+
+describe("logged time is a write, an increment, and never turns unknown into a number", () => {
+  it("adds minutes, bumps the token, bounds the amount", () => {
+    const t = base({ id: "t", spentMinutes: 30 });
+    const r = applyPatch(t, { logMinutes: 45 }, "v1", NOW);
+    expect(r.ok && r.task.spentMinutes).toBe(75);
+    expect(r.ok && r.task.version).not.toBe("v1");
+    expect(applyPatch(t, { logMinutes: 0 }, "v1", NOW).ok).toBe(false);
+    expect(applyPatch(t, { logMinutes: 1441 }, "v1", NOW).ok).toBe(false);
+    expect(applyPatch(t, { logMinutes: 1.5 }, "v1", NOW).ok).toBe(false);
+  });
+  it("a source that does not report time stays unknown (null), not 0 + n", () => {
+    const r = applyPatch(base({ id: "u", spentMinutes: null }), { logMinutes: 30 }, "v1", NOW);
+    expect(r.ok && r.task.spentMinutes).toBeNull();
+  });
+  it("a timer never logs more than 24 hours", () => {
+    const t: ActiveTimer = { taskId: "t", title: "", context: "", startedAt: "2026-10-01T00:00:00Z", elapsedMs: 0, running: true };
+    expect(minutesToLog(t, new Date("2026-10-04T00:00:00Z").getTime())).toBe(MAX_LOG_MINUTES);
+  });
+});
+
+describe("manual block from the source's status vocabulary (contract §5)", () => {
+  it("the business key 'blocked' under waiting is a block even without a reason; the reason is shown when present", () => {
+    const keyOnly = base({ id: "k", status: "waiting", statusKey: "blocked" });
+    expect(isManuallyBlocked(keyOnly)).toBe(true);
+    expect(displayStatus(keyOnly, [keyOnly])).toBe("blocked");
+    expect(blockInfo(keyOnly, [keyOnly])?.why).toContain("בלי סיבה");
+    expect(taskInvariant(keyOnly).ok).toBe(true);
+    expect(taskInvariant({ ...keyOnly, status: "todo" }).ok).toBe(false);
+  });
+  it("blocking writes the key and the reason together; leaving waiting clears both", () => {
+    const b = applyPatch(base({ id: "x" }), { block: { reason: "אין צלם" } }, "v1", NOW);
+    expect(b.ok && b.task.statusKey).toBe("blocked");
+    if (!b.ok) return;
+    const out = applyPatch(b.task, { status: "in_progress" }, b.task.version, NOW);
+    expect(out.ok && out.task.statusKey).toBeUndefined();
+    expect(out.ok && out.task.blockedReason).toBeUndefined();
+  });
+  it("a card names the open blocker, never a finished dependency", () => {
+    const done = base({ id: "d1", status: "done", title: "ישן" });
+    const open = base({ id: "d2", status: "in_progress", title: "פתוח" });
+    const t = base({ id: "t", dependsOn: [{ id: "d1", title: "ישן" }, { id: "d2", title: "פתוח" }] });
+    expect(blockInfo(t, [done, open, t])?.by?.title).toBe("פתוח");
   });
 });

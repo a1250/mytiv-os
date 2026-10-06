@@ -193,15 +193,19 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
 {
   const ctx = await browser.newContext({ colorScheme: "light" });
   const page = await ctx.newPage();
+  const consoleErrors = [];
+  page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") consoleErrors.push(m.text()); });
   await check("theme dark persists across reload and is applied before hydration", async () => {
     await go(page, "/focus");
     await page.click(".f-avatar-btn");
     await page.click(".f-theme__opt >> text=כהה");
     await page.reload({ waitUntil: "commit" });
-    const early = await page.evaluate(() => new Promise((r) => { const t = () => document.documentElement.getAttribute("data-f-theme") ? r(document.documentElement.getAttribute("data-f-theme")) : requestAnimationFrame(t); t(); }));
+    const early = await page.evaluate(() => new Promise((r) => { const t = () => { const a = document.querySelector(".focus-app")?.getAttribute("data-f-theme"); return a ? r(a) : requestAnimationFrame(t); }; t(); }));
     await settle(page);
     const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    return early === "dark" && bg === "rgb(17, 20, 28)" ? "dark before paint" : `attr=${early} bg=${bg}`;
+    await page.waitForTimeout(300);
+    const hydration = consoleErrors.filter((m) => /hydrat|didn't match/i.test(m));
+    return early === "dark" && bg === "rgb(17, 20, 28)" && hydration.length === 0 ? "dark before paint, no hydration mismatch" : `attr=${early} bg=${bg} hydration=${hydration.length}`;
   });
   await check("system follows prefers-color-scheme", async () => {
     await page.click(".f-avatar-btn");

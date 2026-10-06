@@ -3,14 +3,15 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 /**
- * Theme: light / dark / system, remembered per browser. The choice is applied to <html data-f-theme> by an inline
- * script before first paint (ThemeScript, rendered at the top of the Focus layout), so there is no flash; "system"
- * removes the attribute and the tokens follow prefers-color-scheme (light-dark() in focus.css).
+ * Theme: light / dark / system, remembered per browser. The choice is applied to the Focus root
+ * (`.focus-app[data-f-theme]`, which carries suppressHydrationWarning) by an inline script before first paint
+ * (ThemeScript, the first child of that root), so there is no flash and the shared <html> is never touched;
+ * "system" removes the attribute and the tokens follow prefers-color-scheme (light-dark() in focus.css).
  */
 export type ThemePref = "light" | "dark" | "system";
 export const THEME_KEY = "mytiv-focus-theme";
 
-const SCRIPT = `(function(){try{var t=localStorage.getItem(${JSON.stringify(THEME_KEY)});var d=document.documentElement;if(t==="light"||t==="dark"){d.setAttribute("data-f-theme",t)}else{d.removeAttribute("data-f-theme")}}catch(e){}})();`;
+const SCRIPT = `(function(){try{var t=localStorage.getItem(${JSON.stringify(THEME_KEY)});var s=document.currentScript;var d=s&&s.closest(".focus-app");if(!d)return;if(t==="light"||t==="dark"){d.setAttribute("data-f-theme",t)}else{d.removeAttribute("data-f-theme")}}catch(e){}})();`;
 
 /** Blocking inline script — must render before the Focus content. */
 export function ThemeScript() {
@@ -19,7 +20,7 @@ export function ThemeScript() {
 
 /** Stored value → preference; anything unknown is "system". Pure (unit-tested). */
 export const parseThemePref = (v: string | null | undefined): ThemePref => (v === "light" || v === "dark" ? v : "system");
-/** The attribute to put on <html> for a preference (null = remove, follow prefers-color-scheme). */
+/** The attribute to put on the Focus root for a preference (null = remove, follow prefers-color-scheme). */
 export const themeAttr = (p: ThemePref): "light" | "dark" | null => (p === "system" ? null : p);
 
 const listeners = new Set<() => void>();
@@ -37,7 +38,8 @@ function subscribe(fn: () => void) {
   return () => { listeners.delete(fn); window.removeEventListener("storage", onStorage); };
 }
 function apply(p: ThemePref) {
-  const d = document.documentElement;
+  const d = document.querySelector(".focus-app");
+  if (!d) return;
   const a = themeAttr(p);
   if (a) d.setAttribute("data-f-theme", a);
   else d.removeAttribute("data-f-theme");

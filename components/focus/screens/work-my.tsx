@@ -4,13 +4,14 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { CLIENTS, PEOPLE } from "@/lib/focus/fixtures/people";
 import { fmtLongDate } from "@/lib/focus/format";
-import { bucketsFor, canComplete, canDo, elapsedOf, openCount, type Gate } from "@/lib/focus/state/work";
+import { bucketsFor, canDo, elapsedOf, openCount } from "@/lib/focus/state/work";
 import { MyTasksView } from "@/components/focus/patterns/work/my-tasks";
 import { Page, PageHeader } from "@/components/focus/patterns/page";
 import { QuickCreate } from "@/components/focus/patterns/work/quick-create";
 import { TaskBoard } from "@/components/focus/patterns/work/task-board";
 import { TaskListView } from "@/components/focus/patterns/work/task-list";
 import { useDemo, useTicker } from "@/components/focus/shell/demo-store";
+import { useBoardMove, useToggleDone } from "@/components/focus/shell/task-actions";
 import { TaskDrawerHost } from "@/components/focus/shell/task-drawer-host";
 import { TimerBar } from "@/components/focus/shell/timer-bar";
 import { Banner } from "@/components/focus/ui/feedback";
@@ -29,22 +30,23 @@ function Inner() {
   const toast = useToast();
   const params = useSearchParams();
   const [view, setView] = useState<View>("time");
-  const [createOpen, setCreateOpen] = useState(params.get("create") === "1");
+  // "?create=1" opens the form — also when it arrives while this screen is already mounted (top-bar create menu)
+  const createParam = params.get("create") === "1";
+  const [createOpen, setCreateOpen] = useState(createParam);
+  const [seenCreate, setSeenCreate] = useState(createParam);
+  if (createParam !== seenCreate) { setSeenCreate(createParam); if (createParam) setCreateOpen(true); }
   const [expanded, setExpanded] = useState<string[]>([]);
   const { now, viewer, state } = demo;
   const buckets = bucketsFor(state.tasks, viewer.id, now);
   const mine = state.tasks.filter((t) => t.assigneeId === viewer.id || t.participantIds.includes(viewer.id));
-  const timer = { activeTaskId: state.timer?.running ? state.timer.taskId : null, onStart: (id: string) => { const r = demo.timerStart(id); if (r?.conflict && r.logged) toast.push({ title: "הטיימר עבר משימה", detail: `הטיימר הקודם נעצר ונרשמו ${r.logged.minutes} דק׳.` }); }, onPause: demo.timerPause };
   const role = state.role;
+  // the timer is a write (time entries): offered only to roles that may track time
+  const timer = canDo(role, "trackTime")
+    ? { activeTaskId: state.timer?.running ? state.timer.taskId : null, onStart: (id: string) => { const r = demo.timerStart(id); if (r?.conflict && r.logged) toast.push({ title: "הטיימר עבר משימה", detail: `הטיימר הקודם נעצר ונרשמו ${r.logged.minutes} דק׳.` }); }, onPause: demo.timerPause }
+    : undefined;
+  const toggleDone = useToggleDone();
+  const onMove = useBoardMove();
   const tick = useTicker(view === "board" && !!state.timer?.running, 1000);
-
-  const toggleDone = (id: string) => {
-    const t = state.tasks.find((x) => x.id === id)!;
-    const gate: Gate = t.status === "done" ? { ok: true } : canComplete(t, state.tasks);
-    if (!gate.ok) { toast.push({ kind: "error", title: "לא ניתן לסמן כבוצע", detail: gate.reason }); return; }
-    const r = demo.patchTask(id, { status: t.status === "done" ? "todo" : "done" }, t.version);
-    if (r.ok) toast.push({ title: r.task.status === "done" ? "סומן כבוצע" : "נפתח מחדש", detail: t.title, undo: { onUndo: () => demo.restoreTask({ ...r.previous!, version: r.task.version + 1 }) } });
-  };
 
   const total = openCount(buckets);
   return (
@@ -70,21 +72,16 @@ function Inner() {
           }}
         /></div>
       )}
-      {view === "time" && <MyTasksView buckets={buckets} now={now} timer={timer} />}
+      {view === "time" && <MyTasksView buckets={buckets} all={state.tasks} now={now} timer={timer} />}
       {view === "list" && (
         <TaskListView tasks={mine.filter((t) => t.status !== "done")} all={state.tasks} now={now} expandedIds={expanded} canEdit={canDo(role, "complete")}
           onToggleExpand={(id) => setExpanded((e) => (e.includes(id) ? e.filter((x) => x !== id) : [...e, id]))}
-          onToggleDone={(t) => toggleDone(t.id)} />
+          onToggleDone={toggleDone} />
       )}
       {view === "board" && (
         <TaskBoard tasks={mine} all={state.tasks} canEdit={canDo(role, "changeStatus")}
           timerTaskId={state.timer?.taskId} timerLabel={state.timer && demo.hydrated ? fmtDuration(elapsedOf(state.timer, tick)).slice(0, 5) : undefined}
-          onMove={(id, to) => {
-            const r = demo.moveTask(id, to);
-            if (!r.ok) { toast.push({ kind: "error", title: "לא ניתן להזיז", detail: r.reason }); return { ok: false, reason: r.reason }; }
-            toast.push({ title: "הועבר", detail: r.previous.title, undo: { onUndo: () => demo.restoreTask({ ...r.previous, version: r.previous.version + 2 }) } });
-            return { ok: true };
-          }} />
+          onMove={onMove} />
       )}
       <TimerBar note="רשום על המשימה · מתווסף לדוח השעות" />
       <TaskDrawerHost />
