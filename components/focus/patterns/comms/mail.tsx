@@ -213,20 +213,25 @@ export function ClaimList({ claims, text }: { claims: DraftClaim[]; text: string
 /* ---------- send review (explicit confirmation) ---------- */
 
 export function SendReviewDialog({
-  open, onClose, onConfirm, to, from, subject, text, claims, via,
+  open, onClose, onConfirm, to, from, subject, text, claims, via, targetCheck,
 }: {
-  open: boolean; onClose: () => void; onConfirm: () => void; to: { name: string; address: string }; from: { name: string; address: string };
+  open: boolean; onClose: () => void; to: { name: string; address: string }; from: { name: string; address: string };
   subject: string; text: string; claims: DraftClaim[]; via: string;
+  /** the earlier send's outcome is UNKNOWN: this statement must be ticked too — `onConfirm(true)` carries it */
+  targetCheck?: string;
+  onConfirm: (targetChecked: boolean) => void;
 }) {
   return (
     <Dialog open={open} onClose={onClose} labelledBy="cm-send-title" className="f-cm-modal">
-      {open && <SendReviewBody onClose={onClose} onConfirm={onConfirm} to={to} from={from} subject={subject} text={text} claims={claims} via={via} />}
+      {open && <SendReviewBody onClose={onClose} onConfirm={onConfirm} to={to} from={from} subject={subject} text={text} claims={claims} via={via} targetCheck={targetCheck} />}
     </Dialog>
   );
 }
 
-function SendReviewBody({ onClose, onConfirm, to, from, subject, text, claims, via }: Omit<Parameters<typeof SendReviewDialog>[0], "open">) {
+function SendReviewBody({ onClose, onConfirm, to, from, subject, text, claims, via, targetCheck }: Omit<Parameters<typeof SendReviewDialog>[0], "open">) {
   const [confirmed, setConfirmed] = useState(false);
+  const [checkedTarget, setCheckedTarget] = useState(false);
+  const ready = confirmed && (!targetCheck || checkedTarget);
   const [attempted, setAttempted] = useState(false);
   const pending = claims.filter((c) => c.verification !== "verified" && text.includes(c.phrase));
   const empty = text.trim().length === 0;
@@ -245,6 +250,12 @@ function SendReviewBody({ onClose, onConfirm, to, from, subject, text, claims, v
           {pending.map((c) => <li key={c.id}><span aria-hidden>◆</span> {c.label}: {c.basis}</li>)}
         </ul>
       )}
+      {targetCheck && !empty && (
+        <>
+          <p className="f-field__error f-cm-dlg__unknown" id="cm-send-unknown"><span aria-hidden>!</span>לא ידוע אם השליחה הקודמת יצאה. שליחה חדשה אפשרית רק אחרי בדיקה ב־{via}.</p>
+          <Checkbox checked={checkedTarget} onChange={(v) => { setCheckedTarget(v); setAttempted(false); }} aria-describedby="cm-send-unknown">{targetCheck}</Checkbox>
+        </>
+      )}
       {empty ? (
         <p className="f-field__error" role="alert"><span aria-hidden>!</span>הטיוטה ריקה. אין מה לשלוח.</p>
       ) : (
@@ -252,9 +263,9 @@ function SendReviewBody({ onClose, onConfirm, to, from, subject, text, claims, v
           {pending.length > 0 ? "בדקתי את הפרטים המסומנים ואני מאשר/ת לשלוח את המייל הזה" : "בדקתי ואני מאשר/ת לשלוח את המייל הזה"}
         </Checkbox>
       )}
-      {attempted && !confirmed && !empty && <span id="cm-send-err" className="f-field__error" role="alert"><span aria-hidden>!</span>יש לסמן את תיבת האישור לפני השליחה.</span>}
+      {attempted && !ready && !empty && <span id="cm-send-err" className="f-field__error" role="alert"><span aria-hidden>!</span>{targetCheck && !checkedTarget ? "יש לבדוק ב־" + via + " ולסמן שההודעה הקודמת לא נשלחה." : "יש לסמן את תיבת האישור לפני השליחה."}</span>}
       <div className="f-cm-dlg__actions">
-        <Button variant="danger" aria-disabled={!confirmed || empty ? true : undefined} onClick={() => { if (!confirmed || empty) { setAttempted(true); return; } onConfirm(); }}>שלח דרך {via}</Button>
+        <Button variant="danger" aria-disabled={!ready || empty ? true : undefined} aria-describedby={attempted && !ready ? "cm-send-err" : undefined} onClick={() => { if (!ready || empty) { setAttempted(true); return; } onConfirm(!!targetCheck && checkedTarget); }}>שלח דרך {via}</Button>
         <Button variant="neutral" onClick={onClose}>חזור לעריכה</Button>
       </div>
     </div>

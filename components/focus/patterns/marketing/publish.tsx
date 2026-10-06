@@ -39,10 +39,14 @@ export function ContentTimeline({ steps, label }: { steps: TimelineStep[]; label
 }
 
 export function MetaPublishConfirm({
-  meta, title, context, rows, confirmText, state, onToggle, onSubmit, onRetry, onClose,
+  meta, title, context, rows, confirmText, state, onToggle, onSubmit, onRetry, onClose, targetCheck,
 }: {
   meta: PublishPlan["meta"]; title: string; context: string; rows: { label: string; value: ReactNode }[]; confirmText: string;
-  state: ExecState; onToggle: () => void; onSubmit: () => void; onRetry: () => void; onClose: () => void;
+  state: ExecState; onToggle: () => void; onSubmit: () => void; onClose: () => void;
+  /** undefined: no retry here (the outcome is unknown — the next attempt starts over with the target check) */
+  onRetry?: () => void;
+  /** the earlier attempt's outcome is UNKNOWN: this statement is required before the new schedule */
+  targetCheck?: { text: string; checked: boolean; onToggle: (v: boolean) => void; error: boolean };
 }) {
   const resultRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (state.step === "sent" || state.step === "failed") resultRef.current?.focus(); }, [state.step]);
@@ -71,6 +75,13 @@ export function MetaPublishConfirm({
         <Checkbox checked={state.step !== "summary" || state.confirmed} onChange={onToggle} disabled={locked} aria-describedby={state.step === "summary" && state.attempted ? "mk-pre-err" : undefined}>
           {confirmText}
         </Checkbox>
+        {targetCheck && (
+          <>
+            <p className="f-field__error" id="mk-pre-unknown"><span aria-hidden>!</span>לא ידוע אם התזמון הקודם נקלט ב־Meta. תזמון חדש אפשרי רק אחרי בדיקה שם.</p>
+            <Checkbox checked={targetCheck.checked} onChange={targetCheck.onToggle} aria-describedby={targetCheck.error ? "mk-pre-check-err" : "mk-pre-unknown"}>{targetCheck.text}</Checkbox>
+            {targetCheck.error && !targetCheck.checked && <span id="mk-pre-check-err" className="f-field__error" role="alert"><span aria-hidden>!</span>יש לבדוק ב־Meta Business Suite ולסמן שהתזמון הקודם לא קיים.</span>}
+          </>
+        )}
         {state.step === "summary" && state.attempted && !state.confirmed && (
           <span id="mk-pre-err" className="f-field__error" role="alert"><span aria-hidden>!</span>יש לסמן את תיבת האישור לפני התזמון.</span>
         )}
@@ -85,7 +96,7 @@ export function MetaPublishConfirm({
           <>
             <Banner kind="error" title={meta.failureTitle} detail={state.message} />
             <div className="f-mk-pre__actions">
-              <Button variant="danger" onClick={onRetry}>נסה שוב לתזמן</Button>
+              {onRetry && <Button variant="danger" onClick={onRetry}>נסה שוב לתזמן</Button>}
               <Button variant="neutral" onClick={onClose}>סגור · התוכן נשאר טיוטה</Button>
             </div>
           </>

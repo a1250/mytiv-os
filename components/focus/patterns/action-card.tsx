@@ -18,7 +18,9 @@ export type CardPhase =
   | { kind: "working"; label: string }
   | { kind: "done"; title: string; detail?: string; undo?: { label: string; onUndo: () => void } }
   /** `retryLabel`: when the outcome is unknown the retry says the user checked the target first */
-  | { kind: "failed"; title: string; detail?: string; onRetry: () => void; retryLabel?: string };
+  | { kind: "failed"; title: string; detail?: string; onRetry: () => void; retryLabel?: string }
+  /** an UNKNOWN outcome has no direct retry here: the next attempt needs the target check, on the screen that asks for it */
+  | { kind: "unknown"; title: string; detail?: string; checkHref?: string; checkLabel: string };
 
 export function ActionCard({
   title, context, why, waiting, risk, action, primary, phase = { kind: "default" }, onQuickApprove, size = "md", headingLevel = 3,
@@ -73,6 +75,14 @@ function PhaseFooter({ phase, action, primary, quick }: { phase: CardPhase; acti
           <b className="f-acard__state f-acard__state--failed"><span aria-hidden>!</span> {phase.title}</b>
           {phase.detail && <span className="f-acard__why">{phase.detail}</span>}
           <Button variant="secondary" size="sm" onClick={phase.onRetry}>{phase.retryLabel ?? "נסה שוב"}</Button>
+        </div>
+      );
+    case "unknown":
+      return (
+        <div className="f-acard__result" role="status">
+          <b className="f-acard__state f-acard__state--failed"><span aria-hidden>?</span> {phase.title}</b>
+          {phase.detail && <span className="f-acard__why">{phase.detail}</span>}
+          {phase.checkHref && <Link href={phase.checkHref} className="f-btn f-btn--secondary f-btn--sm">{phase.checkLabel}</Link>}
         </div>
       );
   }

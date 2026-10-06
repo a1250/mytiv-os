@@ -19,6 +19,8 @@ export type Job = {
    * is unknown. Set on reload for EXTERNAL_JOB_KINDS only; the status is then failed + unknown, never done.
    */
   interruptedAt?: number;
+  /** the external thing this job acts on (`gmail:<thread>`, `meta:<approval>`): every attempt on it is gated together */
+  target?: string;
   /** step labels shown as a timeline while running */
   steps?: string[];
   href?: string;              // where the result lives
@@ -60,4 +62,52 @@ export const runningNow = (j: Job | undefined): boolean => !!j && !j.cancelledAt
  */
 export function interruptExternal(jobs: Job[], now: number): Job[] {
   return jobs.map((j) => (!j.cancelledAt && !j.interruptedAt && EXTERNAL_JOB_KINDS.includes(j.kind) && jobStatus(j, now).state === "running" ? { ...j, interruptedAt: now } : j));
+}
+
+/* ---------- external attempts: one invariant for every entry point ---------- */
+
+export const gmailTarget = (threadId: string) => `gmail:${threadId}`;
+export const metaTarget = (approvalId: string) => `meta:${approvalId}`;
+
+/** What the user must state before a new attempt after an UNKNOWN outcome — that the target shows no earlier attempt. */
+export const TARGET_CHECK = {
+  gmail: "בדקתי בתיקיית נשלח ב־Gmail וההודעה הקודמת לא נשלחה",
+  meta: "בדקתי ב־Meta Business Suite והתזמון הקודם לא קיים",
+} as const;
+
+export type ExternalGate =
+  | { ok: true }
+  | { ok: false; reason: "in_flight" | "already_done" }
+  | { ok: false; reason: "needs_target_check"; unknownJobId: string };
+
+/**
+ * May a new external attempt on `target` start now? Decided from the jobs themselves (persisted), not from UI state:
+ * - an attempt still running, or one the target confirmed (sent / scheduled), blocks every new attempt;
+ * - if the latest attempt's outcome is UNKNOWN (interrupted before the target answered), a new attempt needs the
+ *   user's explicit statement that they checked the target and the earlier attempt did not happen — given for THAT
+ *   attempt (`attestedUnknownJobId`). The statement is consumed by the attempt it unlocks: once that attempt exists
+ *   it is the latest, so an older statement unlocks nothing;
+ * - after a confirmed failure the ordinary retry applies.
+ * Cancelled attempts (an undone schedule) do not count.
+ */
+export function externalGate(jobs: Job[], target: string, now: number, attestedUnknownJobId?: string): ExternalGate {
+  const mine = jobs.filter((j) => j.target === target && !j.cancelledAt).sort((a, b) => a.startedAt - b.startedAt);
+  const states = mine.map((j) => jobStatus(j, now));
+  if (states.some((s) => s.state === "done")) return { ok: false, reason: "already_done" };
+  const latest = mine.at(-1), st = states.at(-1);
+  if (!latest || !st) return { ok: true };
+  if (st.state === "running") return { ok: false, reason: "in_flight" };
+  if (st.state === "failed" && st.unknown && attestedUnknownJobId !== latest.id) return { ok: false, reason: "needs_target_check", unknownJobId: latest.id };
+  return { ok: true };
+}
+
+/**
+ * The store's admission of a new external attempt (what `startExternal` runs): the gate decides; an admitted job
+ * replaces any earlier job with the same id and becomes the latest attempt on its target.
+ */
+export function admitExternal(jobs: Job[], job: Job & { target: string }, attestedUnknownJobId?: string):
+  { ok: true; jobs: Job[] } | { ok: false; gate: Exclude<ExternalGate, { ok: true }> } {
+  const gate = externalGate(jobs, job.target, job.startedAt, attestedUnknownJobId);
+  if (!gate.ok) return { ok: false, gate };
+  return { ok: true, jobs: [...jobs.filter((x) => x.id !== job.id), job] };
 }

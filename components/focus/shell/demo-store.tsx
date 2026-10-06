@@ -10,7 +10,7 @@ import { ACTIVE_TIMER, TASKS, TIME_ENTRIES } from "@/lib/focus/fixtures/work";
 import { checkDecision } from "@/lib/focus/state/approvals";
 import { getSales, proposalSendBlock } from "@/components/focus/patterns/sales/sales-store";
 import { execReducer, initialExec, type ExecEvent, type ExecState } from "@/lib/focus/state/execution";
-import { interruptExternal, jobStatus, type Job } from "@/lib/focus/state/jobs";
+import { admitExternal, interruptExternal, jobStatus, type ExternalGate, type Job } from "@/lib/focus/state/jobs";
 import { applyPatch, checkMove, elapsedOf, minutesToLog, nextVersion, pauseTimer, resumeTimer, revertTask, statusForColumn, switchTimer, taskInvariant, type PatchResult } from "@/lib/focus/state/work";
 
 /**
@@ -374,6 +374,20 @@ function useStoreValue() {
     scheduleJobNotice(j);
     return j;
   }, [scheduleJobNotice]);
+  /**
+   * The only way to start an external attempt (mail send, Meta schedule): checked against every earlier attempt on
+   * the same target from the latest state (externalGate) — in flight, already confirmed, or an UNKNOWN outcome that
+   * the user has not explicitly checked at the target. Whatever button the user pressed, a refused attempt starts nothing.
+   */
+  const startExternal = useCallback((job: Omit<Job, "startedAt"> & { target: string }, attestedUnknownJobId?: string): { ok: true; job: Job } | { ok: false; gate: Exclude<ExternalGate, { ok: true }> } => {
+    const latest = latestState.current;
+    const admitted = admitExternal(latest.jobs, { ...job, startedAt: Date.now() }, attestedUnknownJobId);
+    if (!admitted.ok) return admitted;
+    const j = startJob(job);
+    // visible to an immediate second call (double click) before React re-renders
+    latestState.current = { ...latest, jobs: [...latest.jobs.filter((x) => x.id !== j.id), j] };
+    return { ok: true, job: j };
+  }, [startJob]);
   const cancelJob = useCallback((id: string) => { clearTimeout(timers.current[id]); const at = Date.now(); dispatch({ type: "cancelJob", id, at }); dispatch({ type: "tick", at }); }, []);
 
   /** dispatch-only actions — stable identities, safe in effect dependencies */
@@ -398,8 +412,8 @@ function useStoreValue() {
     ...({ patchTask, moveTask, undoTask, createTask, removeTask, logTime } satisfies WorkCommands),
     simulateRemoteEdit,
     timerStart, timerPause, timerResume, timerStop, timerRestore, removeTimeEntry,
-    startJob, cancelJob,
-  }), [hydrated, s, stable, approval, decide, undoDecision, exec, patchTask, undoTask, moveTask, createTask, removeTask, simulateRemoteEdit, timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry, startJob, cancelJob]);
+    startJob, startExternal, cancelJob,
+  }), [hydrated, s, stable, approval, decide, undoDecision, exec, patchTask, undoTask, moveTask, createTask, removeTask, simulateRemoteEdit, timerStart, timerPause, timerResume, timerStop, timerRestore, logTime, removeTimeEntry, startJob, startExternal, cancelJob]);
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

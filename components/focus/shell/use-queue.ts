@@ -8,7 +8,7 @@ import { fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { canQuickApprove, queueOrder } from "@/lib/focus/state/approvals";
 import { PUBLISH_SUSHI } from "@/lib/focus/fixtures/marketing";
-import { jobStatus, runningNow } from "@/lib/focus/state/jobs";
+import { jobStatus, metaTarget, runningNow } from "@/lib/focus/state/jobs";
 import { canUndo } from "@/lib/focus/state/undo";
 import type { CardPhase } from "@/components/focus/patterns/action-card";
 import { useToast } from "@/components/focus/ui/toast";
@@ -62,8 +62,15 @@ export function useQueue() {
 
   const scheduleWithMeta = (approvalId: string, withToast = true, decidedAt?: string) => {
     const fail = state.failNext;
+    // the store's gate for this post at Meta: never while one is in flight or confirmed, never after an UNKNOWN
+    // outcome without the target check (asked on the publish screen) — whatever called this
+    const r = demo.startExternal({ id: `schedule-${approvalId}`, kind: "schedule_meta", target: metaTarget(approvalId), label: "מבקש תזמון מ־Meta", detail: "", durationMs: META_SCHEDULE_MS, outcome: fail ? "failure" : "success", href: R.today });
+    if (!r.ok) {
+      toast.push({ kind: "error", title: r.gate.reason === "already_done" ? "כבר מתוזמן ב־Meta" : r.gate.reason === "in_flight" ? "בקשת תזמון כבר בדרך" : "לא ידוע אם התזמון הקודם נקלט",
+        detail: r.gate.reason === "needs_target_check" ? "בדקו ב־Meta Business Suite ותזמנו ממסך הפרסום, שם מסמנים שהתזמון הקודם לא קיים." : "לא נשלחה בקשה נוספת." });
+      return;
+    }
     if (fail) demo.setFailNext(false);
-    demo.startJob({ id: `schedule-${approvalId}`, kind: "schedule_meta", label: "מבקש תזמון מ־Meta", detail: "", durationMs: META_SCHEDULE_MS, outcome: fail ? "failure" : "success", href: R.today });
     if (withToast) toast.push({ title: "האישור נשמר", detail: "מבקש תזמון מ־Meta. \"מתוזמן\" יוצג רק אחרי ש־Meta תאשר.", undo: { onUndo: () => undo(approvalId, decidedAt, true) } });
   };
 
@@ -98,7 +105,7 @@ export function useQueue() {
     if (job && !job.cancelledAt) {
       const st = jobStatus(job, state.clock);
       if (st.state === "running") return { kind: "working", label: "שומר ומבקש תזמון מ־Meta…" };
-      if (st.state === "failed" && st.unknown) return { kind: "failed", title: "לא ידוע אם התזמון נקלט", detail: "הבקשה ל־Meta נקטעה לפני תשובה. האישור נשמר. בדקו ב־Meta לפני ניסיון נוסף.", onRetry: () => scheduleWithMeta(id, false), retryLabel: "בדקתי ב־Meta · תזמן שוב" };
+      if (st.state === "failed" && st.unknown) return { kind: "unknown", title: "לא ידוע אם התזמון נקלט", detail: "הבקשה ל־Meta נקטעה לפני תשובה. האישור נשמר. תזמון חדש רק אחרי בדיקה ב־Meta.", checkHref: a.content ? R.designPublish(a.content.designId) : undefined, checkLabel: "לבדיקה ולתזמון מחדש" };
       if (st.state === "failed") return { kind: "failed", title: "התזמון לא בוצע", detail: "האישור נשמר. Meta לא זמינה כרגע.", onRetry: () => scheduleWithMeta(id, false) };
       return {
         kind: "done", title: "אושר ומתוזמן", detail: `Meta אישרה ב־${fmtTime(demoIso(st.at))}. הסטורי יעלה מחר ב־18:00.`,

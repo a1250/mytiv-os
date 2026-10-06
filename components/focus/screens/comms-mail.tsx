@@ -9,7 +9,7 @@ import { MAILBOX } from "@/lib/focus/fixtures/comms";
 import { CLIENTS } from "@/lib/focus/fixtures/people";
 import { fmtAgo, fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
-import { jobStatus, type JobStatus } from "@/lib/focus/state/jobs";
+import { externalGate, gmailTarget, jobStatus, TARGET_CHECK, type JobStatus } from "@/lib/focus/state/jobs";
 import { useNavGuard } from "@/components/focus/shell/nav-guard";
 import { ClaimList, DraftEditor, DraftLegend, MessageBody, MessageHeader, SendReviewDialog, ThreadList } from "@/components/focus/patterns/comms/mail";
 import { useDemo } from "@/components/focus/shell/demo-store";
@@ -144,21 +144,27 @@ function Inner() {
   };
   const revertAi = () => put({ ai: undefined });
 
-  const confirmSend = () => {
+  // the send gate for this thread (the store enforces it; the screen only shows what it asks for)
+  const sendGate = thread ? externalGate(state.jobs, gmailTarget(thread.id), state.clock) : null;
+  const needsTargetCheck = sendGate?.ok === false && sendGate.reason === "needs_target_check";
+
+  const confirmSend = (targetChecked: boolean) => {
     if (!thread || !d) return;
     setSendOpen(false);
-    // never a second send of the same reply: refused while one is in flight or after Gmail confirmed
-    // the latest committed jobs, not this render's (a double click / a toast-time call must see the first send)
-    // — every send job of this thread counts, not only the one the draft points at (a draft can be restored)
-    const now0 = Date.now();
-    const sends = demo.getLatest().jobs.filter((x) => x.kind === "send_mail" && x.id.startsWith(`mail-send-${thread.id}-`) && !x.cancelledAt).map((x) => jobStatus(x, now0));
-    const inFlight = sending || sends.some((x) => x.state === "running"), done = sent || sends.some((x) => x.state === "done");
-    if (inFlight || done) { toast.push({ kind: "error", title: done ? "התשובה כבר נשלחה" : "התשובה כבר בשליחה", detail: "לא נשלח שוב." }); return; }
+    // every send — first, retry, after an unknown outcome — goes through the store's gate for this thread
+    const gate = externalGate(demo.getLatest().jobs, gmailTarget(thread.id), Date.now());
+    const attested = targetChecked && gate.ok === false && gate.reason === "needs_target_check" ? gate.unknownJobId : undefined;
     const fail = state.failNext;
-    if (fail) demo.setFailNext(false);
     const cur = committed();
     const jobId = `mail-send-${thread.id}-${Date.now()}`;
-    demo.startJob({ id: jobId, kind: "send_mail", label: `תשובה ל${thread.from.name}`, detail: "", durationMs: SEND_MS, outcome: fail ? "failure" : "success", href: `${R.comms}?thread=${thread.id}` });
+    const r = demo.startExternal({ id: jobId, kind: "send_mail", target: gmailTarget(thread.id), label: `תשובה ל${thread.from.name}`, detail: "", durationMs: SEND_MS, outcome: fail ? "failure" : "success", href: `${R.comms}?thread=${thread.id}` }, attested);
+    if (!r.ok) {
+      const g = r.gate;
+      toast.push({ kind: "error", title: g.reason === "already_done" ? "התשובה כבר נשלחה" : g.reason === "in_flight" ? "התשובה כבר בשליחה" : "לא נשלח",
+        detail: g.reason === "needs_target_check" ? "לא ידוע אם השליחה הקודמת יצאה. בדקו בתיקיית נשלח ב־Gmail וסמנו זאת לפני שליחה חדשה." : "לא נשלח שוב." });
+      return;
+    }
+    if (fail) demo.setFailNext(false);
     setDrafts((xs) => ({ ...xs, [thread.id]: { ...cur, savedText: text, send: { jobId, text } } }));
   };
 
@@ -230,7 +236,7 @@ function Inner() {
                   {sendFailed && (send.state === "failed" && send.unknown
                     // interrupted by a reload before Gmail answered: it may have gone out — never offer a blind retry
                     ? <Banner kind="warning" title="לא ידוע אם התשובה נשלחה" detail={`השליחה נקטעה לפני ש־${MAILBOX.source.label} אישר. בדקו בתיקיית "נשלח" לפני שליחה חוזרת. הטיוטה נשמרה ולא סומנה כנשלחה.`}
-                        action={<Button variant="secondary" size="sm" onClick={() => setSendOpen(true)}>בדקתי · שלח שוב</Button>} />
+                        action={<Button variant="secondary" size="sm" onClick={() => setSendOpen(true)}>בדיקה ושליחה מחדש…</Button>} />
                     : <Banner kind="error" title="השליחה נכשלה" detail={`${MAILBOX.source.label} לא אישר. הטיוטה נשמרה ולא סומנה כנשלחה.`}
                         action={<Button variant="secondary" size="sm" onClick={() => setSendOpen(true)}>נסה שוב</Button>} />
                   )}
@@ -284,7 +290,7 @@ function Inner() {
           </aside>
 
           <SendReviewDialog
-            open={sendOpen} onClose={() => setSendOpen(false)} onConfirm={confirmSend}
+            open={sendOpen} onClose={() => setSendOpen(false)} onConfirm={confirmSend} targetCheck={needsTargetCheck ? TARGET_CHECK.gmail : undefined}
             to={thread.from} from={MAILBOX.account} subject={thread.subject} text={text} claims={claims} via={MAILBOX.source.label}
           />
         </>

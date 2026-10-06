@@ -442,6 +442,135 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
   await ctx.close();
 }
 
+// 5d. UNKNOWN external outcome is a gated state (final review P2): Gmail send and Meta schedule. Interrupt in flight,
+// reload → UNKNOWN; no generic CTA or ordinary retry starts another attempt; the explicit target-system statement
+// unlocks exactly one; a confirmed failure keeps the normal retry; a confirmed success is never repeated.
+{
+  const STORE = "mytiv-focus-demo-v3";
+  const jobsOf = (page, target) => page.evaluate(([k, t]) => (JSON.parse(sessionStorage.getItem(k) ?? "{}").jobs ?? []).filter((j) => j.target === t).map((j) => ({ id: j.id, startedAt: j.startedAt, interrupted: !!j.interruptedAt, cancelled: !!j.cancelledAt })), [STORE, target]);
+  const fresh2 = async () => { const f = await fresh(); await go(f.page, "/focus"); await f.page.evaluate(() => sessionStorage.clear()); return f; };
+  {
+    const { ctx, page } = await fresh2();
+    const T = "gmail:t-noa";
+    await check("Gmail: a send interrupted by a reload is UNKNOWN; the generic 'בדוק ושלח' cannot start another send without the Gmail check", async () => {
+      await go(page, "/focus/comms");
+      await page.click(".f-cm-reply__foot button:has-text('בדוק ושלח')");
+      await page.getByLabel(/ואני מאשר\/ת לשלוח/).check();
+      await page.click("dialog[open] .f-btn--danger");
+      await page.waitForSelector(".f-cm-reply__state >> text=שולח דרך", { timeout: 3000 });
+      await page.reload({ waitUntil: "domcontentloaded" }); await settle(page);
+      await page.waitForTimeout(2200);
+      if (!(await page.isVisible("text=לא ידוע אם התשובה נשלחה"))) return false;
+      const before = (await jobsOf(page, T)).length;
+      await page.click(".f-cm-reply__foot button:has-text('בדוק ושלח')"); // the generic CTA
+      const asks = await page.isVisible("dialog[open] >> text=בדקתי בתיקיית נשלח ב־Gmail וההודעה הקודמת לא נשלחה");
+      await page.getByLabel(/ואני מאשר\/ת לשלוח/).check(); // only the ordinary confirmation
+      // the send button is aria-disabled until the Gmail check is ticked: a click on it must do nothing
+      await page.locator("dialog[open] .f-btn--danger").evaluate((b) => b.click());
+      await page.waitForTimeout(300);
+      const after = (await jobsOf(page, T)).length;
+      return before === 1 && asks && after === 1 && (await page.isVisible("dialog[open]")) ? "held: 1 attempt, dialog asks for the Gmail check" : false;
+    });
+    await check("Gmail: the explicit Gmail check unlocks exactly one new send; once sent, it can never be sent again", async () => {
+      await page.getByLabel(/בדקתי בתיקיית נשלח ב־Gmail/).check();
+      await page.click("dialog[open] .f-btn--danger");
+      await page.waitForTimeout(200);
+      const started = await jobsOf(page, T);
+      if (started.length !== 2 || started[1].interrupted) return false;
+      await page.waitForSelector("#cm-sent-h", { timeout: 5000 });
+      const noCta = !(await page.isVisible(".f-cm-reply__foot button:has-text('בדוק ושלח')"));
+      return noCta && (await jobsOf(page, T)).length === 2 ? "1 new send, then sent; no send CTA left" : false;
+    });
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await fresh2();
+    await check("Gmail: a confirmed failure keeps the ordinary retry (no target check asked)", async () => {
+      await go(page, "/focus/comms");
+      await page.check(".f-cm-demo input");
+      await page.click(".f-cm-reply__foot button:has-text('בדוק ושלח')");
+      await page.getByLabel(/ואני מאשר\/ת לשלוח/).check();
+      await page.click("dialog[open] .f-btn--danger");
+      await page.waitForSelector("text=השליחה נכשלה", { timeout: 5000 });
+      await page.click(".f-cm-reply__foot button:has-text('בדוק ושלח')");
+      const asks = await page.isVisible("dialog[open] >> text=בדקתי בתיקיית נשלח");
+      await page.getByLabel(/ואני מאשר\/ת לשלוח/).check();
+      await page.click("dialog[open] .f-btn--danger");
+      await page.waitForTimeout(200);
+      return !asks && (await jobsOf(page, "gmail:t-noa")).length === 2 ? "retried normally" : false;
+    });
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await fresh2();
+    const T = "meta:content-sushi-story";
+    const approveStory = async () => {
+      await go(page, "/focus/work/list?task=t-photo-shoot");
+      await page.locator(".f-td__pill").first().selectOption("done");
+      await page.waitForTimeout(200);
+      await go(page, "/focus");
+      const card = page.locator("article.f-acard", { hasText: "סטורי" }).first();
+      await card.locator("a.f-btn").focus();
+      await page.keyboard.press("a");
+      return card;
+    };
+    await check("Meta: a schedule interrupted by a reload is UNKNOWN; the Today card offers no retry, only the check screen", async () => {
+      await approveStory();
+      await page.waitForSelector(".f-acard--working", { timeout: 3000 });
+      await page.reload({ waitUntil: "domcontentloaded" }); await settle(page);
+      await page.waitForTimeout(2000);
+      const card = page.locator("article.f-acard", { hasText: "סטורי" }).first();
+      const unknown = await card.locator("text=לא ידוע אם התזמון נקלט").isVisible();
+      const noRetry = (await card.locator("button:has-text('נסה שוב'), button:has-text('תזמן שוב')").count()) === 0;
+      return unknown && noRetry && (await jobsOf(page, T)).length === 1 ? "unknown, link to check only" : false;
+    });
+    await check("Meta: the publish screen's retry and summary cannot start a schedule without the Meta check", async () => {
+      await page.click("article.f-acard >> text=לבדיקה ולתזמון מחדש");
+      await page.waitForURL("**/publish");
+      await page.click("#mk-schedule"); // "בדיקה ב־Meta ותזמון מחדש…"
+      await page.waitForSelector("dialog[open] .f-mk-pre");
+      const asks = await page.isVisible("dialog[open] >> text=בדקתי ב־Meta Business Suite והתזמון הקודם לא קיים");
+      await page.locator("dialog[open] .f-mk-pre .f-check").filter({ hasText: "אני מאשר" }).locator("input").check();
+      await page.locator("dialog[open] .f-mk-pre__actions .f-btn--danger").evaluate((b) => b.click());
+      await page.waitForTimeout(300);
+      return asks && (await jobsOf(page, T)).length === 1 && (await page.isVisible("dialog[open] >> text=יש לבדוק ב־Meta Business Suite")) ? "held, asks for the Meta check" : false;
+    });
+    await check("Meta: the explicit Meta check unlocks exactly one new schedule; once scheduled, never again", async () => {
+      await page.getByLabel(/בדקתי ב־Meta Business Suite/).check();
+      await page.click("dialog[open] .f-mk-pre__actions .f-btn--danger");
+      await page.waitForTimeout(200);
+      const jobs = await jobsOf(page, T);
+      if (jobs.length !== 2) return false;
+      await page.waitForSelector("dialog[open] .f-mk-pre >> text=" + "סגור", { timeout: 5000 });
+      await page.click("dialog[open] .f-mk-pre__actions >> text=סגור");
+      const noSchedule = !(await page.isVisible("#mk-schedule"));
+      return noSchedule && (await jobsOf(page, T)).length === 2 ? "1 new schedule, then scheduled; no schedule CTA left" : false;
+    });
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await fresh2();
+    await check("Meta: a confirmed failure keeps the ordinary retry on the Today card", async () => {
+      await go(page, "/focus/screens");
+      await page.check(".f-smap__ctl--check input");
+      await go(page, "/focus/work/list?task=t-photo-shoot");
+      await page.locator(".f-td__pill").first().selectOption("done");
+      await page.waitForTimeout(200);
+      await go(page, "/focus");
+      const card = page.locator("article.f-acard", { hasText: "סטורי" }).first();
+      await card.locator("a.f-btn").focus();
+      await page.keyboard.press("a");
+      await card.locator("text=התזמון לא בוצע").waitFor({ timeout: 5000 });
+      const [first] = await jobsOf(page, "meta:content-sushi-story");
+      await card.locator("button:has-text('נסה שוב')").click();
+      await page.waitForTimeout(200);
+      const [again] = await jobsOf(page, "meta:content-sushi-story");
+      return first && again && again.startedAt > first.startedAt && !again.interrupted ? "retried normally (a new attempt started)" : false;
+    });
+    await ctx.close();
+  }
+}
+
 // 6. Mytiv Work rules
 {
   const { ctx, page } = await fresh();

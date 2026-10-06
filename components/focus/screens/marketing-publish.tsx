@@ -8,7 +8,7 @@ import { designById } from "@/lib/focus/fixtures/studio";
 import { daysBetween, fmtDate, fmtDayMonth, fmtTime, fmtWeekday } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { canExecute, execReducer, initialExec, type ExecState } from "@/lib/focus/state/execution";
-import { jobStatus, type Job } from "@/lib/focus/state/jobs";
+import { externalGate, type Job, jobStatus, metaTarget, TARGET_CHECK } from "@/lib/focus/state/jobs";
 import { DesignThumb, PlannedAction, useCopy } from "@/components/focus/patterns/marketing/marketing-parts";
 import { ContentTimeline, MetaPublishConfirm, type TimelineStep } from "@/components/focus/patterns/marketing/publish";
 import { useDemo } from "@/components/focus/shell/demo-store";
@@ -98,13 +98,22 @@ export default function MarketingPublishScreen() {
     setOpen(true);
   };
 
-  const startPublish = () => {
-    const fail = state.failNext;
-    if (fail) demo.setFailNext(false);
-    demo.startJob({
-      id: JOB_ID, kind: "schedule_meta", label: "מבקש תזמון מ־Meta", detail: `${whenText(at)} · ${channelLabel}`,
+  // the store's gate for this post at Meta (shared with quick approve on Today): an UNKNOWN outcome asks for the check
+  const metaGate = externalGate(state.jobs, metaTarget(plan.approvalId), state.clock);
+  const needsTargetCheck = metaGate.ok === false && metaGate.reason === "needs_target_check";
+
+  /** `targetChecked`: the user stated the earlier (unknown) schedule does not exist at Meta — required by the store then */
+  const startPublish = (targetChecked: boolean): boolean => {
+    const fail = demo.getLatest().failNext;
+    const g = externalGate(demo.getLatest().jobs, metaTarget(plan.approvalId), Date.now());
+    const attested = targetChecked && g.ok === false && g.reason === "needs_target_check" ? g.unknownJobId : undefined;
+    const r = demo.startExternal({
+      id: JOB_ID, kind: "schedule_meta", target: metaTarget(plan.approvalId), label: "מבקש תזמון מ־Meta", detail: `${whenText(at)} · ${channelLabel}`,
       durationMs: plan.meta.latencyMs, outcome: fail ? "failure" : "success", href: R.designPublish(plan.designId),
-    });
+    }, attested);
+    if (!r.ok) return false;
+    if (fail) demo.setFailNext(false);
+    return true;
   };
 
   const formatsLabel = plan.formats.map((f) => plan.downloads.find((d) => d.format === f)?.label ?? f).join(" ו");
@@ -199,7 +208,7 @@ export default function MarketingPublishScreen() {
                 </div>
                 <div className="f-mk-pub__actions">
                   <Button variant="primary" size="lg" id="mk-schedule" disabled={!!blocker} aria-describedby={blocker ? "mk-blocker" : undefined} onClick={proceed}>
-                    {js?.state === "failed" ? "נסה שוב לתזמן" : "המשך לתזמון"}
+                    {js?.state === "failed" ? (js.unknown ? "בדיקה ב־Meta ותזמון מחדש…" : "נסה שוב לתזמן") : "המשך לתזמון"}
                   </Button>
                   <span className="f-meta">התזמון יעבור דרך מסך סיכום לפני ביצוע</span>
                 </div>
@@ -251,6 +260,7 @@ export default function MarketingPublishScreen() {
           ]}
           confirmText={`אני מאשר לתזמן את ה${formatsLabel} ב־${channelLabel} ל־${whenText(at)}, וידוע לי שאחרי שהפוסט עולה אי אפשר לבטל אותו מכאן.`}
           onStart={startPublish}
+          targetCheck={needsTargetCheck ? TARGET_CHECK.meta : undefined}
           onClose={() => setOpen(false)}
         />}
       </Dialog>
@@ -259,10 +269,12 @@ export default function MarketingPublishScreen() {
 }
 
 /** Mounted only while the dialog is open, so every opening starts from a fresh, unconfirmed summary. */
-function PublishConfirmBody({ job, clock, title, context, rows, confirmText, onStart, onClose }: {
+function PublishConfirmBody({ job, clock, title, context, rows, confirmText, onStart, onClose, targetCheck }: {
   job: Job | undefined; clock: number; title: string; context: string; rows: { label: string; value: ReactNode }[];
-  confirmText: string; onStart: () => void; onClose: () => void;
+  confirmText: string; onStart: (targetChecked: boolean) => boolean; onClose: () => void; targetCheck?: string;
 }) {
+  const [checkedTarget, setCheckedTarget] = useState(false);
+  const [refused, setRefused] = useState(false);
   const [local, dispatch] = useReducer(execReducer, initialExec);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const mine = job && startedAt != null && job.startedAt >= startedAt ? jobStatus(job, clock) : null;
@@ -270,18 +282,22 @@ function PublishConfirmBody({ job, clock, title, context, rows, confirmText, onS
     : mine.state === "running" ? { step: "sending", startedAt: job!.startedAt }
     : mine.state === "done" ? { step: "sent", at: mine.at }
     : { step: "failed", at: mine.state === "failed" ? mine.at : 0, message: mine.state === "failed" && mine.unknown ? "הבקשה נקטעה לפני ש־Meta ענתה — לא ידוע אם תוזמן. בדקו ב־Meta לפני ניסיון נוסף." : plan.meta.failureDetail };
+  const unknownNow = mine?.state === "failed" && !!mine.unknown;
   const submit = (now: number) => {
-    if (!canExecute(local)) { dispatch({ type: "submit", now }); return; }
+    // the target check is part of the confirmation while the earlier outcome is unknown
+    if (!canExecute(local) || (targetCheck && !checkedTarget)) { setRefused(!!targetCheck && !checkedTarget); if (!canExecute(local)) dispatch({ type: "submit", now }); return; }
+    if (!onStart(!!targetCheck && checkedTarget)) { setRefused(true); return; }
     dispatch({ type: "submit", now });
     setStartedAt(now);
-    onStart();
   };
   return (
     <MetaPublishConfirm
       meta={plan.meta} title={title} context={context} rows={rows} confirmText={confirmText} state={view}
       onToggle={() => dispatch({ type: "toggleConfirm" })}
       onSubmit={() => submit(Date.now())}
-      onRetry={() => { setStartedAt(Date.now()); onStart(); }}
+      // a confirmed failure retries as usual; an UNKNOWN outcome has no retry here (close, check at Meta, start over)
+      onRetry={unknownNow ? undefined : () => { if (onStart(false)) setStartedAt(Date.now()); else setRefused(true); }}
+      targetCheck={targetCheck && local.step === "summary" ? { text: targetCheck, checked: checkedTarget, onToggle: (v) => { setCheckedTarget(v); setRefused(false); }, error: refused } : undefined}
       onClose={onClose}
     />
   );

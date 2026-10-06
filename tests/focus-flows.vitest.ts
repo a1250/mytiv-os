@@ -201,3 +201,52 @@ describe("an external job interrupted by a reload has an unknown outcome (round 
     expect(jobStatus(doneMail, 9999).state).toBe("done"); // already confirmed before the reload: stays done
   });
 });
+
+describe("UNKNOWN external outcome is a gated state — Gmail and Meta (final review P2)", async () => {
+  const { externalGate, gmailTarget, interruptExternal, metaTarget } = await import("@/lib/focus/state/jobs");
+  for (const [name, target, kind] of [["Gmail", gmailTarget("t-noa"), "send_mail"], ["Meta", metaTarget("content-sushi-story"), "schedule_meta"]] as const) {
+    const job = (id: string, startedAt: number, extra: Partial<Job> = {}): Job => ({ id, kind, target, label: id, detail: "", startedAt, durationMs: 1000, outcome: "success", ...extra });
+    describe(name, () => {
+      it("an attempt interrupted in flight comes back UNKNOWN and needs the target check — for every caller", () => {
+        const [a] = interruptExternal([job("a", 1000)], 1500); // reload while in flight
+        expect(externalGate([a], target, 9999)).toEqual({ ok: false, reason: "needs_target_check", unknownJobId: "a" });
+        // an ordinary retry (no statement) and a statement about another attempt do not pass
+        expect(externalGate([a], target, 9999, undefined).ok).toBe(false);
+        expect(externalGate([a], target, 9999, "other").ok).toBe(false);
+      });
+      it("the explicit statement for that attempt unlocks exactly one new attempt, and is consumed by it", () => {
+        const [a] = interruptExternal([job("a", 1000)], 1500);
+        expect(externalGate([a], target, 9999, "a")).toEqual({ ok: true });
+        const b = job("b", 10_000); // the one new attempt starts
+        expect(externalGate([a, b], target, 10_500, "a")).toEqual({ ok: false, reason: "in_flight" });
+        // interrupted again: the old statement unlocks nothing — a new check is needed
+        const [, b2] = interruptExternal([a, b], 10_500);
+        expect(externalGate([a, b2], target, 99_999, "a")).toEqual({ ok: false, reason: "needs_target_check", unknownJobId: "b" });
+      });
+      it("a confirmed failure keeps the ordinary retry", () => {
+        expect(externalGate([job("a", 1000, { outcome: "failure" })], target, 9999)).toEqual({ ok: true });
+        const [u] = interruptExternal([job("u", 1000)], 1500);
+        expect(externalGate([u, job("f", 5000, { outcome: "failure" })], target, 9999)).toEqual({ ok: true }); // unknown checked, then a known failure
+      });
+      it("a confirmed success can never be sent / scheduled again (with or without a statement)", () => {
+        expect(externalGate([job("a", 1000)], target, 9999)).toEqual({ ok: false, reason: "already_done" });
+        const [u] = interruptExternal([job("u", 1000)], 1500);
+        expect(externalGate([u, job("v", 5000)], target, 9999, "u")).toEqual({ ok: false, reason: "already_done" });
+      });
+      it("the store admits through the same gate: refused without the check, admitted once with it", async () => {
+        const { admitExternal } = await import("@/lib/focus/state/jobs");
+        const [u] = interruptExternal([job("u", 1000)], 1500);
+        const retry = { ...job("r", 5000), target };
+        expect(admitExternal([u], retry)).toEqual({ ok: false, gate: { ok: false, reason: "needs_target_check", unknownJobId: "u" } });
+        const ok = admitExternal([u], retry, "u");
+        expect(ok.ok && ok.jobs.map((j) => j.id)).toEqual(["u", "r"]);
+        // a second attempt right after (double click) is in flight, the statement is spent
+        expect(ok.ok && admitExternal(ok.jobs, { ...job("r2", 5001), target }, "u")).toEqual({ ok: false, gate: { ok: false, reason: "in_flight" } });
+      });
+      it("only this target counts; a cancelled (undone) attempt does not block a new one", () => {
+        expect(externalGate([job("a", 1000, { target: "elsewhere" })], target, 9999)).toEqual({ ok: true });
+        expect(externalGate([job("a", 1000, { cancelledAt: 1200 })], target, 9999)).toEqual({ ok: true });
+      });
+    });
+  }
+});
