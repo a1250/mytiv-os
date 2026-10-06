@@ -42,7 +42,7 @@ scope never reads the session or the DB. `next build` also needs dummy `QSTASH_C
   scope via `FOCUS_SCOPE`, default `/_demo`):
   - `routes.mjs` — every route at 1440/1280/1024/768/390: no console errors, no horizontal scroll, no `href="#"`,
     no placeholder links, internal links resolve and stay inside the scope, no product route imports the reference;
-  - `axe.mjs` — axe-core serious/critical, light and dark, desktop and 390px;
+  - `axe.mjs` — axe-core serious/critical: light and dark at 1440, light at 390;
   - `keyboard.mjs` — tab walk on every route (skip link first, visible focus, accessible names), menus, palette, dialogs;
   - `flows.mjs` — the stateful flows end to end: mandatory reason, confirmation before the red action, processing →
     success / failure, a failed proposal send that cannot be retried at a changed amount, undo window, focus queue,

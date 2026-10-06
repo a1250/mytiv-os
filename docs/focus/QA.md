@@ -23,7 +23,7 @@ copy and routing, not layout. Every number is reproducible with the scripts in `
 | Routes · console · responsive | ✓ 53 / 53 — every route × 1440/1280/1024/768/390: no console errors, no horizontal scroll, no `href="#"`, no placeholder links, 111 internal links resolve and stay in the scope, no product route imports `components/focus/reference` | `routes.mjs` |
 | Accessibility (axe-core, serious + critical) | ✓ 150 / 150 — light + dark at 1440, light at 390 | `axe.mjs` |
 | Keyboard-only walkthrough | ✓ 54 / 54 — skip link first (or the deep-linked dialog), visible focus on every stop, accessible names, menus / palette / dialogs open with the keyboard, Esc closes, focus returns | `keyboard.mjs` |
-| Flows end to end | ✓ 30 / 30 — including the navigation guard (links, ⌘K, Back/Forward, drawer, D3), history without duplicate entries, a click queued while the guard entry is stepped off, listener counts stable, drafts kept by "save and leave", an interrupted send shown as unknown, a failed proposal send not retryable at a changed amount | `flows.mjs` |
+| Flows end to end | ✓ 36 / 36 — including the navigation guard (links, ⌘K, Back/Forward, drawer, D3), history without duplicate entries, a click queued while the guard entry is stepped off, listener counts stable, drafts kept by "save and leave", an interrupted send shown as unknown, a failed proposal send not retryable at a changed amount, quick approve never scheduling a placeholder photo, the round-3 regressions (no second mail send through a draft undo, no undo on a sent proposal, focus back on the task link after the drawer closes, a multi-step Back jump not pushed onto another page, Back-leave asking once) | `flows.mjs` |
 | Theme light / dark / system | ✓ persisted, attribute on `.focus-app` set before first paint (no flash, no hydration warning), system follows `prefers-color-scheme` | `flows.mjs` §7 |
 | Reduced motion | ✓ one global rule removes every transition / animation under `.focus-app`; `requestAnimationFrame` is used only to move focus and to order a queued navigation after the router's history step | code review |
 | RTL + LTR content | ✓ mixed Hebrew/Latin text nodes are single LTR tokens (brand names, AI, PDF) — no reordering; e-mails / phones / numbers use `<bdi>` / `dir="ltr"`, a business name `<bdi>` (auto); typed LTR text keeps its order | scan + `flows.mjs` §8 |
@@ -166,10 +166,11 @@ buttons are always reachable (M3, M8).
 
 ## 4. Open issues by severity
 
-No critical or high issues are open in the Focus UI. Integration prerequisites are listed separately in
-[mytiv-work-contract.md](mytiv-work-contract.md) §12–13.
+No P1 (security, tenant leak, data loss, false claim of an external effect) is open: the three independent review
+rounds' P1 findings are fixed and covered by tests (see [GPT_REVIEW_PACKET.md](GPT_REVIEW_PACKET.md) §3). Integration
+prerequisites are listed separately in [mytiv-work-contract.md](mytiv-work-contract.md) §12–13.
 
-**Medium**
+**Medium (design deviations, unchanged)**
 - H15 notifications render as a page; the frame designs a bell popover over the current screen.
 - E5 "all formats": formats arranged in one row of solid cards (frame: story as hero + dashed stacked column); Brand
   Kit moved to the side panel.
@@ -179,17 +180,27 @@ No critical or high issues are open in the Focus UI. Integration prerequisites a
   G1's Instagram row does not read the reconnect state set in G6.
 - M10 task drawer on phones is near full height (frame: half sheet with a grabber) and has no "תגובה" footer action.
 
-**Low**
+**Low / P3 (known, not fixed in this branch)**
+- Production bundle: the Focus layout's client bundle (demo store, fixture modules) is downloaded on a business's
+  "not connected" page too — nothing is rendered from it and the data is fictional, but the demo shell should get its
+  own route tree before real data lands. Not verified on a production build with a real session.
+- A jump of several history entries at once while a screen is dirty (Back's long-press menu) cannot be held by a page:
+  the guard lets it go cleanly; an in-memory draft is lost (store-backed drafts, e.g. mail, survive).
+- Mail: switching threads while a draft is unsaved uses the guard entry up; a later Back leaves without asking (the
+  drafts stay per thread in the store, nothing is lost).
+- Timer across tabs: two tabs of the same browser share the `localStorage` timer; stopping it in both can log twice
+  (the server timer in the integration plan removes this).
+- Task-title links in dense tables are 22px tall (under the project's 44px rule; WCAG 2.5.8 is met by spacing).
+- A menu whose link is held by the leave dialog may stay open behind it (not reproduced).
 - Native date inputs follow the browser locale format (D3, E7, W4, M10).
 - F5 / M6: no per-row completion checkbox (completion via quick action); M6 header + full-width "+ משימה" instead of a FAB.
 - D8 "פרטי התקלה" inline instead of below; W3 missing "קבץ לפי"; W5 report card styling flatter; W6 quick create is the
   inline bar, not the frame's modal; M5 nested pending cards; M9 FAB on its own row.
 - Shared patterns: `ActionCard` has no tag / footer slots (D8 copies its markup); H5's content board duplicates the
   TaskBoard keyboard / drag model instead of sharing it.
-- Chromium's date-picker button inside a date field draws its own focus ring (author CSS cannot reach it) — visible,
-  but not the 3px ink ring.
-- `next build` needs dummy `QSTASH_*` keys because an unrelated API route checks them at build time; the whole-repo lint
-  has 56 pre-existing errors outside this branch.
+- Chromium's date-picker button inside a date field draws its own focus ring (author CSS cannot reach it).
+- `next build` needs dummy `QSTASH_*` keys because an unrelated API route checks them at build time; the whole-repo
+  lint has pre-existing errors outside this branch.
 - The task drawer shows a "remote edit" demo control in the fixture demo scope only (absent for a business and in
   production, where the demo scope does not exist).
 

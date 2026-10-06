@@ -31,14 +31,16 @@ sees an honest "not connected yet" page until the adapters exist.
 | `components/focus/screens/` | One composed screen per product view | Composition only: store → patterns. No raw colours, no layout-by-inline-style. |
 | `components/focus/reference/` | The raw conversion of every handoff frame (`/_demo/focus/reference/<ID>`) | **Visual source of truth only** — used by the parity checks, never imported by product screens. |
 
-## Demo store — the one write path (temporary backend)
+## Demo store — the write path for Work and approvals (temporary backend)
 
 `components/focus/shell/demo-store.tsx` holds decisions, executions, tasks, timer, jobs, drafts, notifications.
-Session state → `sessionStorage` (`mytiv-focus-demo-v3`); the timer → `localStorage`.
+Session state → `sessionStorage` (`mytiv-focus-demo-v3`); the timer → `localStorage`. Two small session stores sit
+beside it for screens that have no Work semantics: sales leads / proposal draft (`patterns/sales/sales-store.ts`) and
+wizard-created projects (`patterns/clients/session-projects.ts`); the proposal send guard reads the sales store.
 - **Mytiv Work writes** implement `WorkCommands` (checked with `satisfies`): `patchTask`, `moveTask`, `undoTask`,
   `createTask`, `removeTask`, `logTime`. Each takes the opaque token (`Task.version: string`) the caller rendered;
   every rule runs in `applyPatch` / `revertTask` (canonical status, block needs a written reason, reopen gate,
-  dependency rules, stored-task invariant). Tokens are minted only there (`nextVersion`); `updatedBy` is the actor.
+  dependency rules, stored-task invariant). Tokens are minted only there (`nextVersion`; a created task starts at `v1`); `updatedBy` is the actor.
   The store keeps a write lineage (`writes`) so an open drawer adopts the viewer's own writes made elsewhere and
   treats anyone else's as a conflict (`onlyOwnWrites`).
 - **Undo** is a versioned compensating write (`useTaskUndo`, `useCreateUndo`) that is refused — and says why — when
@@ -70,7 +72,11 @@ Replacing it with the real backend = implementing the same commands over the end
 The dialog offers stay, leave without saving, and save-and-leave when the screen provides it. Leaving replaces the
 guard entry with the destination (no duplicate history entry); Back-leave steps over it. When the screen turns clean
 the guard entry is stepped off in the same commit, and any navigation started meanwhile is queued behind that step
-(never undone by it). Screens keep in-page confirmations only for in-page actions (closing the task drawer, switching
+(never undone by it). Discarding a draft and navigating in place (`useFocusRouter().discardAndReplace`: closing the
+drawer or switching the D3 task without saving) steps off first, so the discarded state is no history entry. "Leave"
+does not raise the browser's own prompt as well; with nothing behind the page it goes to the Focus home. A jump of
+several entries at once (Back's long-press menu) cannot be held by any page — the guard then lets it go without
+touching the other page's history (drafts kept in the store, like mail, survive it). Screens keep in-page confirmations only for in-page actions (closing the task drawer, switching
 the selected task, closing a form) — never a second leave dialog.
 
 ## Conventions
@@ -78,6 +84,9 @@ the selected task, closing a form) — never a second leave dialog.
 - **Styling**: class names `f-<block>__<elem>--<mod>` in the area's CSS file. Colours only via tokens (`var(--f-…)`
   in `app/(focus)/[businessSlug]/focus/focus.css`); the theme attribute lives on `.focus-app` (no hydration mismatch).
   Inline styles only for data-driven geometry/brand colours.
+- **Announcements**: banners are polite status regions (an error is its own variant, never an `alert` read on every
+  load); a toast is announced once by its container; a result that receives focus (pre-execution sent / failed) is
+  read from there, not also as a live region.
 - **Status language**: never render a glyph or a status colour by hand — use the status components (symbol + word).
   "Blocked" is derived (`displayStatus`, `blockedWhy`, `manualBlockText`); other domains read a task's block live
   (`blockedByTask`), never a copied sentence.

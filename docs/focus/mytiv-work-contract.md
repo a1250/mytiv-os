@@ -30,7 +30,7 @@ Routes are relative to the tenant segment `/{businessSlug}` (examples run on `/_
 | `/focus/work/states` | Every system state, interactive | W6 |
 | `/focus/work/all-tasks` | All my tasks across projects: filters, grouping, source of truth, one quick action per row | F5, M6 |
 | `/focus/projects/umino/execution` | Project execution grouped by status + blocked-task panel with save & sync | D3 |
-| any of the above `?task=<id>` | `TaskDrawerHost` opens the drawer for that task (deep link) | — |
+| `/focus/work`, `/focus/work/list`, `/focus/work/board`, `/focus/work/all-tasks` + `?task=<id>` | `TaskDrawerHost` opens the drawer for that task (deep link). In D3 `?task=` selects the side panel instead | — |
 
 ## 2. Components and props
 
@@ -38,9 +38,9 @@ All components are pure views. Actions leave them only through callbacks.
 
 | Component (file) | Props | Emits |
 |---|---|---|
-| `MyTasksView` (`patterns/work/my-tasks.tsx`) | `buckets: MyTasksBuckets`, `now`, `timer: { activeTaskId, onStart(id), onPause() }`, `limit?` | timer start/pause; navigation to `?task=` |
+| `MyTasksView` (`patterns/work/my-tasks.tsx`) | `buckets: MyTasksBuckets`, `all: Task[]` (to derive blocks), `now`, `timer: { activeTaskId, onStart(id), onPause() }`, `limit?` | timer start/pause; navigation to `?task=` |
 | `QuickCreate` (`patterns/work/quick-create.tsx`) | `now`, `people: {id,name}[]`, `clients: string[]`, `autoFocus?`, `compact?` | `onCreate({title, dueDate, priority, assigneeId, client}, keepOpen)` |
-| `TaskCard` / `RichTaskCard` / `PlainTaskCard` / `BlockedTaskCard` / `WaitingTaskCard` (`patterns/work/task-card.tsx`) | `task`, `now`, `size: "sm"\|"md"`, `view?`, `timer?`, `compact?` | timer start/pause |
+| `TaskCard` / `RichTaskCard` / `PlainTaskCard` / `BlockedTaskCard` / `WaitingTaskCard` (`patterns/work/task-card.tsx`) | `task`, `now`, `size: "sm"\|"md"`, `view?`, `timer?`, `compact?`, `block?` (`blockInfo`: the open blocker or the manual reason) | timer start/pause |
 | `TaskListView` (`patterns/work/task-list.tsx`) | `tasks`, `all`, `now`, `groupBy: "status"\|"none"`, `groupOrder?`, `expandedIds`, `columns?`, `selectedId?`, `canEdit?` | `onToggleExpand(id)`, `onToggleDone(task)`, `onOpen?(task)` |
 | `TaskBoard` (`patterns/work/task-board.tsx`) | `tasks`, `all`, `timerTaskId?`, `timerLabel?`, `canEdit?` | `onMove(taskId, to: BoardColumn, expectedVersion) → {ok, reason?}` |
 | `TaskDrawerBody` + `TaskDrawerHead` (`patterns/work/task-drawer.tsx`) | `task`, `all`, `now`, `role: WorkRole`, `caps: CapabilityMap`, `allowPlanned` (demo scope), `baseVersion`, `viewerId`, `conflict`, `timer`, `entries: TimeEntry[]` | `onPatch(patch, expectedVersion)`, `onResolveConflict("mine"\|"theirs")`, `onLogTime(minutes)`, `onDuplicate()`, `onClose()`, `onDirtyChange(dirty)` |
@@ -60,8 +60,8 @@ All components are pure views. Actions leave them only through callbacks.
 | `patchTask(id, patch, expectedVersion)` | Applies the patch through `applyPatch`, mints the next opaque token, records the actor (`updatedBy`) | Token must match, otherwise a conflict and nothing is written. Status must be canonical (no stored "blocked"). `block: {reason}` needs a non-blank reason and sets `waiting`; `unblock` lifts it. `done` needs `canComplete`; reopening under a done parent is refused (`canReopen`). Title required; start ≤ due; `addDependency` needs `canDepend` (same project, no cycle); `logMinutes` is an increment (1..1440) and unknown time stays unknown. The stored-task invariant (`taskInvariant`) is checked on the result. |
 | `moveTask(id, column, expectedVersion)` | Sets the column's canonical status (`blockedOrWaiting` → `waiting`) | `checkMove` → refusal with a reason (pkg1 plan: `409 move_blocked`); a move that changes nothing is refused, never a fake success |
 | `undoTask(previous, expectedVersion)` | Compensating write back to `previous` | Refused when the task is no longer at the token the undone action produced, or when the rules forbid it now (`revertTask`) |
-| `createTask(draft)` | New task, `state: "live"`, `source: "mytiv"`; no due date unless the user gave one | `parseQuickTask` for "מחר / גבוה / @שם / #לקוח"; an unknown `@` or `#` stays null and is never guessed; a done parent is not kept |
-| `removeTask(id, expectedVersion?)` | The undo of a create | Refused when the task changed since it was created or has children |
+| `createTask(draft)` | New task at the first token (`v1`), `state: "live"`, `source: "mytiv"`; no due date unless the user gave one | `parseQuickTask` for "מחר / גבוה / @שם / #לקוח"; an unknown `@` or `#` stays null and is never guessed; a done parent is not kept |
+| `removeTask(id, expectedVersion?)` | The undo of a create | Refused when the task changed since it was created, has children, or a timer runs on it |
 | `logTime(id, minutes)` | `patchTask(logMinutes)`; the `TimeEntry` exists only if that write went through | `parseDuration` accepts `1:30`, `90`, `1.5h`, `45m`, within 1..1440 minutes |
 | `timerStart(id)` / `timerPause` / `timerResume` / `timerStop` (store, not yet in `WorkCommands`) | One timer per person: a running one is stopped and logged first. Stop logs whole minutes (<30s logs nothing) through `logMinutes` | `switchTimer`, `pauseTimer`, `resumeTimer`, `minutesToLog` |
 
@@ -144,8 +144,8 @@ Shared screen actions live in `shell/task-actions.ts`: `useTaskGate` (role + cap
 
 - **Write flow:** the UI validates with the pure rules first and sends the write with the token it last saw (the demo store applies it through the same rules).
   - **On success:** store the returned token. pkg1 plan: every write returns `requestId` and `version`.
-  - **On `409 version`:** show `WorkStateView` `versionConflict` (mine vs theirs) and overwrite nothing. "שמור את שלי" re-sends with the new token; "קבל את של …" adopts the server copy. This is implemented in the drawer (`TaskDrawerHost`).
-  - **On any other failure:** revert locally and keep the draft. In D3 a ClickUp sync failure keeps the change here, marked "טרם סונכרן", with retry.
+  - **On `409 version`:** show the conflict (mine vs theirs, naming the writer) and overwrite nothing — in the drawer this is its own conflict block in `TaskDrawerBody`; `WorkStateView` `versionConflict` is the same state on the W6 reference screen. "שמור את שלי" re-sends with the new token; "קבל את של …" adopts the server copy. This is implemented in the drawer (`TaskDrawerHost`).
+  - **On any other failure:** revert locally and keep the draft. In D3 a ClickUp sync failure keeps the change here and the panel says it is not in ClickUp yet, with retry. A sync status belongs to one write (`syncJobId(taskId, version)`): a later write that started no sync never shows an earlier "סונכרן"; undoing a synced write starts a revert sync.
 - **Undo:** a versioned compensating write sent within the UI window (`UNDO_WINDOW_MS` = 10s, `lib/focus/state/undo.ts`), refused with the reason when the task moved on. For a domain window (e.g. a scheduled post) the undo stays available until that time.
 - **Expected errors → UI:**
 
@@ -168,6 +168,11 @@ UI matrix: `canDo(role, action, caps?, allowPlanned)` in `state/work.ts` (unit-t
 - **owner / admin:** everything.
 - **member:** everything except delete.
 - **viewer:** read and comment only.
+
+Actions → capabilities (`CAPABILITY_FOR`): status / complete / move → `changeStatus`; assign and joining as a
+participant → `assign`; due and start date → `setDueDate`; dependencies → `depend`; sub-tasks → `nest`; checklist →
+`checklist`; comment, time, create → their own key. Title, notes and priority have no capability key (pkg1 writes them
+for any member) and are gated by role only.
 
 With `caps` (the task source's `CapabilityMap`), an action whose capability is not `live` is refused — unless it is
 `planned` and `allowPlanned` is set, which is true only in the fixture demo scope. Every write site checks both:
