@@ -9,17 +9,19 @@ import type { BindingEditorState } from "./marketing-binding-editor";
 import { Copilot } from "./copilot";
 import { SpecEditor } from "./spec-editor";
 import { TaskTable } from "./task-table";
-import type { OpsTask, WorkspaceMember } from "@/lib/clickup";
+import { refKey, type StatusOptions, type TaskSourceCapabilities, type WorkItem, type WorkPerson } from "@/lib/work-source/types";
 import type { ProjectRow } from "@/lib/db/queries/projects";
 
 type Props = {
   businessSlug: string;
   project: ProjectRow;
-  tasks: OpsTask[];
-  bugs: OpsTask[];
-  decisions: OpsTask[];
-  members: WorkspaceMember[];
-  statusesByList: Record<string, string[]>;
+  tasks: WorkItem[];
+  bugs: WorkItem[];
+  decisions: WorkItem[];
+  members: WorkPerson[];
+  statusOptions: StatusOptions;
+  /** What the project's source supports (null when no source holds the project). */
+  capabilities: TaskSourceCapabilities | null;
   marketing: { binding: string | null; plan: MarketingPlan | null; canImport: boolean; unavailable: boolean; now: string; bindingEditor?: BindingEditorState;
     bindingVersion: number | null; previousPlans: { bindingVersion: number; revision: number; importedAt: string }[]; moduleEnabled: boolean };
   canWrite: boolean;
@@ -41,7 +43,8 @@ export function ClientWorkspace({
   bugs,
   decisions,
   members,
-  statusesByList,
+  statusOptions,
+  capabilities,
   marketing,
   canWrite,
   incomplete,
@@ -82,7 +85,8 @@ export function ClientWorkspace({
           projectId={project.id}
           tasks={tasks}
           members={members}
-          statusesByList={statusesByList}
+          statusOptions={statusOptions}
+          capabilities={capabilities}
           readOnly={!canWrite}
           emptyMessage={
             incomplete
@@ -102,7 +106,8 @@ export function ClientWorkspace({
           projectId={project.id}
           tasks={bugs}
           members={members}
-          statusesByList={statusesByList}
+          statusOptions={statusOptions}
+          capabilities={capabilities}
           readOnly={!canWrite}
           emptyMessage={incomplete ? "Bug list is partial (20-page cap) — open bugs can't be determined." : project.folderState === "unauthorized" ? "This project's ClickUp folder is not authorized for this business — bugs were not read." : "No open bugs."}
         />
@@ -116,22 +121,24 @@ export function ClientWorkspace({
         ) : (
           <ul className="flex flex-col gap-2">
             {decisions.map((d) => (
-              <li key={d.id} className="bg-card border-border rounded-xl border p-3.5">
+              <li key={refKey(d.ref)} className="bg-card border-border rounded-xl border p-3.5">
                 <div className="flex items-start gap-2">
                   <span className="flex-1 text-sm leading-snug font-medium">{d.title}</span>
-                  <a
-                    href={d.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Open in ClickUp"
-                    className="text-muted-foreground hover:text-foreground mt-0.5 shrink-0"
-                  >
-                    <ExternalLink className="size-4" />
-                  </a>
+                  {d.sourceLink && (
+                    <a
+                      href={d.sourceLink.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Open in ${d.sourceLink.label}`}
+                      className="text-muted-foreground hover:text-foreground mt-0.5 shrink-0"
+                    >
+                      <ExternalLink className="size-4" />
+                    </a>
+                  )}
                 </div>
                 <div className="mt-2">
-                  <Badge variant={d.statusType === "closed" || d.statusType === "done" ? "done" : "neutral"}>
-                    {d.status}
+                  <Badge variant={d.statusCategory === "done" ? "done" : "neutral"}>
+                    {d.statusLabel}
                   </Badge>
                 </div>
               </li>

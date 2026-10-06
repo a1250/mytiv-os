@@ -1,27 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guard, ApiGuardError } from "@/lib/api-guard";
+import { guard } from "@/lib/api-guard";
 import { updateTask, removeTask } from "@/lib/db/queries/tasks";
+import { OpsPolicyError, assertSameOrigin, assertWriter } from "@/lib/ops-policy";
+import { isUuid, parseTaskInput } from "@/lib/tasks-policy";
+import { assertTaskLinksInBusiness } from "@/lib/tasks-links";
+import { taskRouteError } from "@/lib/tasks-route";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ businessSlug: string; id: string }> }) {
   try {
     const { businessSlug, id } = await params;
     const { businessId } = await guard(businessSlug);
-    const patch = await req.json();
-    return NextResponse.json(await updateTask(businessId, id, patch));
+    assertSameOrigin(req);
+    if (!isUuid(id)) throw new OpsPolicyError("not_found", 404);
+    const input = parseTaskInput(await req.json(), "update");
+    await assertTaskLinksInBusiness(businessId, input);
+    const task = await updateTask(businessId, id, input);
+    if (!task) throw new OpsPolicyError("not_found", 404);
+    return NextResponse.json(task);
   } catch (err) {
-    if (err instanceof ApiGuardError) return err.response;
-    throw err;
+    return taskRouteError(err);
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ businessSlug: string; id: string }> }) {
+/** Deleting is permanent here (the table has no trash yet), so it is owners' and admins' only. */
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ businessSlug: string; id: string }> }) {
   try {
     const { businessSlug, id } = await params;
-    const { businessId } = await guard(businessSlug);
-    await removeTask(businessId, id);
+    const { businessId, role } = await guard(businessSlug);
+    assertSameOrigin(req);
+    assertWriter(role);
+    if (!isUuid(id) || !(await removeTask(businessId, id))) throw new OpsPolicyError("not_found", 404);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
-    if (err instanceof ApiGuardError) return err.response;
-    throw err;
+    return taskRouteError(err);
   }
 }

@@ -12,14 +12,8 @@ import { auth } from "@/lib/auth";
 import { resolveBusiness } from "@/lib/tenant";
 import { listLinkedProjects } from "@/lib/db/queries/projects";
 import { foldersForBusiness, stuckThresholdDays } from "@/lib/ops-config";
-import {
-  ClickUpConfigError,
-  ClickUpRateLimitError,
-  getOpenTasksWithCompleteness,
-  statsFor,
-  type OpsStats,
-  type OpsTask,
-} from "@/lib/clickup";
+import { openItemsAcross } from "@/lib/work-source";
+import { WorkSourceError, stuckItems, workStats, type WorkItem, type WorkStats } from "@/lib/work-source/types";
 
 /**
  * Ops Home — one screen answering one question: what is stuck, and on whom.
@@ -39,7 +33,7 @@ export default async function OpsHomePage({ params }: { params: Promise<{ busine
   const folders = foldersForBusiness(businessSlug, await listLinkedProjects(business.id));
   const thresholdDays = stuckThresholdDays();
 
-  let open: OpsTask[] | null = null;
+  let open: WorkItem[] | null = null;
   let incomplete = false;
   let failure: React.ReactNode = null;
 
@@ -49,12 +43,12 @@ export default async function OpsHomePage({ params }: { params: Promise<{ busine
     );
   } else {
     try {
-      const result = await getOpenTasksWithCompleteness(folders);
-      open = result.tasks;
-      incomplete = result.incomplete;
+      const result = await openItemsAcross(folders);
+      open = result.items;
+      incomplete = !result.complete;
     } catch (err) {
-      if (err instanceof ClickUpConfigError) failure = <ClickUpNotConfigured />;
-      else if (err instanceof ClickUpRateLimitError)
+      if (err instanceof WorkSourceError && err.reason === "not_configured") failure = <ClickUpNotConfigured />;
+      else if (err instanceof WorkSourceError && err.reason === "rate_limited")
         failure = <ClickUpRateLimited retryAfterSeconds={err.retryAfterSeconds} />;
       else failure = <ClickUpFailed message={err instanceof Error ? err.message : "Unknown error"} />;
     }
@@ -62,10 +56,8 @@ export default async function OpsHomePage({ params }: { params: Promise<{ busine
 
   // No read → no numbers; a truncated read is "unknown" too — show "—", never a
   // partial count (MKT-INT06). StatTiles renders null as "—".
-  const stats: OpsStats | null = open && !incomplete ? statsFor(open, thresholdDays) : null;
-  const stuck = open && !incomplete
-    ? open.filter((t) => t.daysIdle >= thresholdDays).sort((a, b) => b.daysIdle - a.daysIdle)
-    : [];
+  const stats: WorkStats | null = open && !incomplete ? workStats(open, thresholdDays) : null;
+  const stuck = open && !incomplete ? stuckItems(open, thresholdDays) : [];
 
   return (
     <div className="ops-root">

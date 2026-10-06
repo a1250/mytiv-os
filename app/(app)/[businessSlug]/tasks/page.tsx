@@ -28,6 +28,7 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("medium");
+  const [error, setError] = useState<string | null>(null);
 
   async function load() {
     setTasks((await api.tasks.list()) as Task[]);
@@ -37,22 +38,33 @@ export default function TasksPage() {
     load();
   }, []);
 
+  /** A refused write is said out loud, then the list is reloaded so it shows what is actually stored. */
+  async function attempt(write: () => Promise<unknown>) {
+    setError(null);
+    try {
+      await write();
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "";
+      setError(code === "approval_role_required" ? t("Only owners and admins can remove tasks.") : t("The change was not saved."));
+    }
+    await load();
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
-    await api.tasks.create({ title, priority });
-    setTitle("");
-    await load();
+    await attempt(async () => {
+      await api.tasks.create({ title, priority });
+      setTitle("");
+    });
   }
 
   async function handleStatusChange(id: string, status: string) {
-    await api.tasks.update(id, { status });
-    await load();
+    await attempt(() => api.tasks.update(id, { status }));
   }
 
   async function handleRemove(id: string) {
-    await api.tasks.remove(id);
-    await load();
+    await attempt(() => api.tasks.remove(id));
   }
 
   if (!tasks) return <div className="page">{t("Loading…")}</div>;
@@ -76,6 +88,8 @@ export default function TasksPage() {
         </select>
         <button type="submit">{t("Add")}</button>
       </form>
+
+      {error && <p role="alert" className="empty">{error}</p>}
 
       <div className="task-list">
         {tasks.length === 0 && <p className="empty">{t("No tasks yet.")}</p>}

@@ -4,7 +4,10 @@
  * succeeds is a leak.
  */
 import { db } from "../lib/db";
-import { businesses, settings as settingsTable } from "../lib/db/schema";
+import { businesses, projects as projectsTable, settings as settingsTable } from "../lib/db/schema";
+import * as projects from "../lib/db/queries/projects";
+import { assertTaskLinksInBusiness } from "../lib/tasks-links";
+import { parseTaskInput } from "../lib/tasks-policy";
 import { and, eq } from "drizzle-orm";
 import * as leads from "../lib/db/queries/leads";
 import * as tasks from "../lib/db/queries/tasks";
@@ -66,7 +69,23 @@ async function probe(
   }
 }
 
+/**
+ * This script WRITES probe rows into the first two businesses it finds. It must never run against a
+ * shared database: only a local Postgres (or the local neon shim's .invalid host) is accepted, unless
+ * LEAK_AUDIT_ALLOW_HOST names the exact host — a deliberate, per-run decision.
+ */
+function assertLocalDatabase() {
+  let host = "";
+  try { host = new URL(process.env.DATABASE_URL ?? "").hostname; } catch { /* unparsable → refused below */ }
+  const local = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(host) || host.endsWith(".invalid");
+  if (!local && (!host || process.env.LEAK_AUDIT_ALLOW_HOST !== host)) {
+    console.error(`REFUSED: DATABASE_URL host "${host || "(none)"}" is not local. The leak audit writes probe rows; run it against a local database only.`);
+    process.exit(2);
+  }
+}
+
 async function main() {
+  assertLocalDatabase();
   const [A, B] = await db.select().from(businesses);
   console.log(`A=${A.slug}  B=${B.slug}\n`);
   const a = A.id, b = B.id;
@@ -86,6 +105,23 @@ async function main() {
     read: async (biz, id) => (await tasks.listTasks(biz)).find((t: any) => t.id === id) ?? null,
     update: tasks.updateTask, remove: tasks.removeTask, patch: { title: "hijacked-by-B" },
   });
+
+  // Mytiv Work package 1: a task may link only to its own business's project/lead, the body allowlist
+  // refuses tenant/identity fields, and create keeps projectId (it used to be dropped).
+  const projectA = await projects.createProject(a, { name: "Audit project A" });
+  const projectB = await projects.createProject(b, { name: "Audit project B" });
+  const leadB = await leads.createLead(b, { company: "Audit lead B" });
+  const refused = async (fn: () => Promise<unknown>) => fn().then(() => false, () => true);
+  record("task links", "foreign project refused", await refused(() => assertTaskLinksInBusiness(a, { projectId: projectB.id })), "A could link B's project");
+  record("task links", "foreign lead refused", await refused(() => assertTaskLinksInBusiness(a, { leadId: leadB.id })), "A could link B's lead");
+  record("task links", "own project accepted", !(await refused(() => assertTaskLinksInBusiness(a, { projectId: projectA.id }))), "own project was refused");
+  record("task links", "tenant field refused", await refused(async () => parseTaskInput({ businessId: b, title: "x" }, "update")), "body could carry businessId");
+  const linked = await tasks.createTask(a, { title: "Audit linked task", projectId: projectA.id });
+  record("task links", "create keeps projectId", linked.projectId === projectA.id, "projectId dropped on create");
+  await tasks.removeTask(a, linked.id).catch(() => {});
+  await leads.removeLead(b, leadB.id).catch(() => {});
+  await db.delete(projectsTable).where(and(eq(projectsTable.businessId, a), eq(projectsTable.id, projectA.id))).catch(() => {});
+  await db.delete(projectsTable).where(and(eq(projectsTable.businessId, b), eq(projectsTable.id, projectB.id))).catch(() => {});
 
   const prop = await proposals.createProposal(a, { title: "Audit proposal" });
   await probe("proposals", a, b, prop, { read: proposals.getProposal, update: proposals.updateProposal, remove: proposals.removeProposal });

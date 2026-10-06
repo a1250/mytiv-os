@@ -3,7 +3,8 @@ import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { type MarketingPlan } from '@/lib/marketing/contract';
 import { timelineBars } from '@/lib/marketing/timeline';
-import type { OpsTask } from '@/lib/clickup';
+import { sameWorkRef, type WorkItem } from '@/lib/work-source/types';
+import { planItemTaskRef } from '@/lib/marketing/task-ref';
 import { MarketingBindingEditor, type BindingEditorState } from './marketing-binding-editor';
 
 function importError(error: unknown): string {
@@ -18,7 +19,7 @@ function importError(error: unknown): string {
   return 'לא ניתן לקרוא את התוכנית. יש לבדוק את מבנה הקובץ, התאריכים וההפניות למקורות.';
 }
 export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, canImport, unavailable, now, bindingEditor, bindingVersion, previousPlans, moduleEnabled }: {
-  businessSlug: string; projectId: string; binding: string | null; plan: MarketingPlan | null; tasks: OpsTask[]; canImport: boolean; unavailable: boolean; now: string;
+  businessSlug: string; projectId: string; binding: string | null; plan: MarketingPlan | null; tasks: WorkItem[]; canImport: boolean; unavailable: boolean; now: string;
   /** Present only for owners (T-2.2): the binding editor's view of the current binding row. */
   bindingEditor?: BindingEditorState;
   /** The active binding version the import is confirmed against (T-2.3); null when not connected. */
@@ -94,12 +95,13 @@ export function MarketingPanel({ businessSlug, projectId, binding, plan, tasks, 
         <h3 className="bg-muted px-4 py-3 font-semibold">לוח התוכנית</h3>
         <div className="overflow-x-auto"><div className="min-w-[600px] p-4" dir="ltr">
           {plan.items.map(i => {
-            const task = tasks.find(t => t.id === i.clickupTaskId);
+            const ref = planItemTaskRef(i);
+            const task = tasks.find(t => sameWorkRef(t.ref, ref));
             const priority = plan.priorities.find(p => p.id === i.priorityId);
             const b = bars.bar(i);
             return <article key={i.id} className="border-border grid grid-cols-[210px_1fr] gap-4 border-b py-4 last:border-0">
               <div dir="rtl"><h4 className="font-medium">{i.title}</h4><p className="text-muted-foreground text-xs">{i.kind} · {priority?.title}</p>
-                <p className="mt-2 text-xs">{task ? <a href={task.url} target="_blank" rel="noreferrer" className="underline">{task.status} · {task.assignee?.name || 'ללא אחראי'}</a> : i.clickupTaskId ? 'מצב הביצוע לא זמין ברשימה הנוכחית' : 'טרם קושרה משימת ביצוע'}</p>
+                <p className="mt-2 text-xs">{task ? <a href={task.sourceLink?.href} target="_blank" rel="noreferrer" className="underline">{task.statusLabel} · {task.assignee?.name || 'ללא אחראי'}</a> : ref ? 'מצב הביצוע לא זמין ברשימה הנוכחית' : 'טרם קושרה משימת ביצוע'}</p>
               </div>
               <div><p className="text-muted-foreground mb-2 text-xs">{i.start.slice(0, 10)} → {i.end.slice(0, 10)}</p>
                 <div className="bg-muted relative h-6 rounded"><div className="bg-foreground/70 absolute h-6 rounded" style={{ left: `${b.left}%`, width: `${b.width}%` }} /></div>

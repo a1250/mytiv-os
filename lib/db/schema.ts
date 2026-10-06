@@ -19,6 +19,8 @@ import {
   foreignKey,
   primaryKey,
   check,
+  date,
+  numeric,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -54,6 +56,8 @@ export const businessMemberships = pgTable(
     role: text("role").notNull().default("member"), // owner | admin | member
     invitedAt: timestamp("invited_at", { withTimezone: true }).defaultNow(),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    /** Mytiv Work: a member who left is deactivated, never deleted — their history and assignments keep a valid FK. */
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
   },
   (t) => [uniqueIndex("business_memberships_business_user_uq").on(t.businessId, t.userId)]
 );
@@ -90,6 +94,39 @@ export const settings = pgTable(
 // Tasks & Ops
 // ---------------------------------------------------------------------------
 
+/** Mytiv Work: the system status catalogue. Global, contains no tenant data; copied into every business. */
+export const workStatusTemplates = pgTable("work_status_templates", {
+  key: text("key").primaryKey(),
+  category: text("category").notNull(),
+  labelHe: text("label_he").notNull(),
+  position: integer("position").notNull(),
+}, (t) => [
+  check("work_status_templates_category_ck", sql`${t.category} in ('open','active','waiting','review','done','cancelled')`),
+]);
+
+/**
+ * Mytiv Work: statuses per business (ADR-0001 decision 4). The same key may exist in two businesses; a task
+ * can only point at a status of its own business, with that status's category (composite FK on tasks).
+ * key/category/business are immutable (trigger); renames change label_he and are appended to revisions.
+ */
+export const workStatuses = pgTable("work_statuses", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  templateKey: text("template_key").references(() => workStatusTemplates.key),
+  category: text("category").notNull(),
+  labelHe: text("label_he").notNull(),
+  position: integer("position").notNull(),
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("work_statuses_business_key_uq").on(t.businessId, t.key),
+  uniqueIndex("work_statuses_business_id_category_uq").on(t.businessId, t.id, t.category),
+  check("work_statuses_category_ck", sql`${t.category} in ('open','active','waiting','review','done','cancelled')`),
+  check("work_statuses_key_ck", sql`${t.key} ~ '^[a-z][a-z0-9_]{0,39}$'`),
+]);
+
 export const tasks = pgTable(
   "tasks",
   {
@@ -97,18 +134,69 @@ export const tasks = pgTable(
     businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     notes: text("notes").default(""),
-    status: text("status").notNull().default("todo"), // backlog | todo | in_progress | waiting | done
+    status: text("status").notNull().default("todo"), // legacy: backlog | todo | in_progress | waiting | done (until the contract step)
     priority: text("priority").notNull().default("medium"), // low | medium | high | urgent
     category: text("category").default(""),
-    dueDate: text("due_date"), // YYYY-MM-DD
+    dueDate: text("due_date"), // legacy YYYY-MM-DD text (until the contract step); due_on is the typed column
     leadId: uuid("lead_id"),
     projectId: uuid("project_id"),
     doneAt: timestamp("done_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    // ── Mytiv Work expand (0012): new columns only; nothing here constrains a legacy value ──
+    /** Per-business status row; with status_category it must match work_statuses (composite FK). */
+    statusId: uuid("status_id"),
+    statusCategory: text("status_category"),
+    dueOn: date("due_on"),
+    startOn: date("start_on"),
+    parentId: uuid("parent_id"),
+    position: numeric("position"),
+    ownerUserId: uuid("owner_user_id"),
+    createdBy: uuid("created_by").references(() => users.id),
+    type: text("type").notNull().default("task"),
+    waitingOn: text("waiting_on"),
+    estimateMinutes: integer("estimate_minutes"),
+    billable: boolean("billable"),
+    source: text("source").notNull().default("legacy"),
+    externalStatus: text("external_status"),
+    version: integer("version").notNull().default(1),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedBy: uuid("deleted_by").references(() => users.id),
+    trashBatchId: uuid("trash_batch_id"),
   },
-  (t) => [index("tasks_business_idx").on(t.businessId)]
+  (t) => [
+    index("tasks_business_idx").on(t.businessId),
+    uniqueIndex("tasks_business_id_uq").on(t.businessId, t.id),
+    index("tasks_business_project_idx").on(t.businessId, t.projectId),
+    index("tasks_business_owner_idx").on(t.businessId, t.ownerUserId),
+    index("tasks_business_parent_idx").on(t.businessId, t.parentId),
+    foreignKey({ name: "tasks_status_fk", columns: [t.businessId, t.statusId, t.statusCategory], foreignColumns: [workStatuses.businessId, workStatuses.id, workStatuses.category] }),
+    foreignKey({ name: "tasks_parent_fk", columns: [t.businessId, t.parentId], foreignColumns: [t.businessId, t.id] }),
+    foreignKey({ name: "tasks_owner_member_fk", columns: [t.businessId, t.ownerUserId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+    check("tasks_type_ck", sql`${t.type} in ('task','bug','decision')`),
+    check("tasks_waiting_on_ck", sql`${t.waitingOn} is null or ${t.waitingOn} in ('client','contractor','internal')`),
+    check("tasks_source_ck", sql`${t.source} in ('legacy','manual','proposal','comment','copilot','import_clickup')`),
+    check("tasks_estimate_ck", sql`${t.estimateMinutes} is null or ${t.estimateMinutes} between 0 and 1000000`),
+    check("tasks_version_ck", sql`${t.version} >= 1`),
+    check("tasks_status_pair_ck", sql`(${t.statusId} is null) = (${t.statusCategory} is null)`),
+    check("tasks_not_own_parent_ck", sql`${t.parentId} is null or ${t.parentId} <> ${t.id}`),
+  ]
 );
+
+/** Append-only history of every status definition change (rename, reorder, retire). */
+export const workStatusRevisions = pgTable("work_status_revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  statusId: uuid("status_id").notNull().references(() => workStatuses.id),
+  labelHe: text("label_he").notNull(),
+  position: integer("position").notNull(),
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
+  changedBy: uuid("changed_by"),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("work_status_revisions_status_idx").on(t.businessId, t.statusId)]);
 
 // Project Hub. One row per client project; the Ops module's spine.
 export const projects = pgTable(
@@ -127,10 +215,15 @@ export const projects = pgTable(
      * Replaces the hardcoded map in lib/ops-config.ts once Phase 1 lands.
      */
     clickupFolderId: text("clickup_folder_id"),
+    /** Mytiv Work: which source holds this project's work. Flipped per project at cutover (ADR-0001 decision 1, 10). */
+    workSource: text("work_source").notNull().default("clickup"),
+    cutoverAt: timestamp("cutover_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check("projects_work_source_ck", sql`${t.workSource} in ('clickup','mytiv')`),
     index("projects_business_idx").on(t.businessId),
     uniqueIndex("projects_business_id_uq").on(t.businessId, t.id),
     /**
@@ -173,7 +266,10 @@ export const leads = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("leads_business_idx").on(t.businessId)]
+  (t) => [
+    index("leads_business_idx").on(t.businessId),
+    uniqueIndex("leads_business_id_uq").on(t.businessId, t.id),
+  ]
 );
 
 export const leadNotes = pgTable(
