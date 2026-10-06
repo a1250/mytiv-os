@@ -1,34 +1,142 @@
 # Focus redesign — independent review packet
 
-Prepared 2026-10-06 for an independent review of the Focus (Direction C) frontend. Draft PR only: **no merge, no deploy,
-no backend integration** at this stage.
+Prepared 2026-10-06 for the second independent review of the Focus (Direction C) frontend, after the first review's
+findings, three self-review rounds and two verification rounds. Draft PR only: **no merge, no deploy, no backend integration.**
 
 | | |
 |---|---|
-| Repository | `a1250/mytiv-os` |
+| Repository | `a1250/mytiv-os` — draft PR a1250/mytiv-os#9 |
 | Branch | `auto/focus-redesign` |
-| Base branch | `auto/preview-mvp-app` (draft a1250/mytiv-os#8, itself stacked on #7 → `main`) |
-| Base SHA | `e35a189f7cbb545bdf1c7dd0a70c860bf3ea5031` — the tip of `auto/preview-mvp-app`; the Focus branch forked here, and the base has not moved since |
-| Final implementation SHA | `93f2182fc439e53412bf5e659192064c1dbcb955` — all QA evidence below was measured here |
-| Packet commit | this file is committed on top of `93f2182` (docs only; it changes no code) |
-| Diff vs base | 289 files, +40,350 / −0 — purely additive |
+| Base branch | `auto/preview-mvp-app` (draft a1250/mytiv-os#8, stacked on #7 → `main`) |
+| Base SHA | `e35a189f7cbb545bdf1c7dd0a70c860bf3ea5031` — unchanged since the branch forked |
+| Head reviewed the first time | `62fbb6e` |
+| Final implementation SHA | `d93d1a4042c7e6c74e8ba69dada7607c0c3c17a6` — every number below was measured here |
+| Packet commit | this file is committed on top of `d93d1a4` (docs only; it changes no code) |
+| Diff vs base | 298 files changed, 43174 insertions(+) — purely additive outside `.gitignore` |
 
-## 1. What to review
+## 1. The first independent review — findings and fixes
 
-The redesign is a typed, accessible component library under `/focus`, running on typed fixtures and a client-side demo
-store. Start with:
+| Finding | Fix | Where | Proven by |
+|---|---|---|---|
+| **P1** Focus bypassed the authenticated tenant boundary (`/focus`, fixtures for anyone) | Focus moved under the tenant segment `/{businessSlug}/focus`; the server layout resolves the scope like `api-guard`: session → membership → the business row (never the URL/query). Only the fixture demo scope `/_demo` renders fixtures, and only where prototype surfaces are on; a member business sees an honest "not connected yet" page. Every page and its metadata are scope-guarded. | `lib/focus/scope.ts`, `lib/focus/scope.server.ts`, `app/(focus)/[businessSlug]/focus/layout.tsx`, every `page.tsx`, `components/focus/shell/{scope,not-connected}.tsx`, `components/focus/ui/link.tsx` | `tests/focus-scope.vitest.ts` (25: decisions, real redirect/notFound wiring, static route-tree guarantees); `prod-surfaces.mjs` production 18/18; mutation: tenant guard, session, prototype switch, fixtures for a business, notFound, a page's guard, scoped links — all caught |
+| **P2** Prototype QA/reference surfaces reachable in production | Screen map, reference frames, phone-frame and `work/task` redirects, demo controls and the remote-edit control exist only in the demo scope (page **and** `generateMetadata`); the demo scope 404s in any production build | same + `requireDemoScope`, `fixtureMetadata` | `prod-surfaces.mjs` production 18/18 (404 with no prototype/fixture text, forged cookies and scope-making query params → `/login`), preview 6/6 |
+| **P2** Blocked state could violate the Work contract (blocked without a reason) | "Blocked" is derived, never stored: canonical `WorkStatus` has no blocked; a manual block = `waiting` + business key / written reason; `applyPatch` refuses a block without a reason and checks the stored-task invariant on every write and on hydrate | `lib/focus/contracts/{status,work}.ts`, `lib/focus/state/work.ts`, `components/focus/patterns/work/task-drawer.tsx` | `tests/focus-work.vitest.ts` (derivation, refusals, reason lifecycle, fixture invariant, a 2,000-step randomised patch/move run); mutations: block guard, invariant, canonical status, Kanban storing blocked — caught |
+| **P3** PR / packet metadata drift | Packet regenerated from git at the final SHA; PR description rewritten to the final state | this file | — |
 
-- `docs/focus/ARCHITECTURE.md` — layers (`components/focus/{ui,patterns,shell,screens}`, `lib/focus/{contracts,fixtures,state}`),
-  data states, theming, accessibility rules;
-- `docs/focus/mytiv-work-contract.md` — the Mytiv Work UI ↔ `auto/work-pkg1` contract and integration order;
-- `docs/focus/QA.md` — gates, two-pass per-screen visual QA, open issues;
-- `lib/focus/state/*` + `tests/focus-*.vitest.ts` — the pure rules and their tests (approvals, execution, undo, jobs,
-  work rules, timer, keyboard).
+## 2. What to review
 
-`components/focus/reference/*` (58 files) is the generated handoff conversion, served only at `/focus/reference/<ID>`
-as a visual record. No product route imports it; `routes.mjs` enforces that.
+- `docs/focus/ARCHITECTURE.md` — tenant scope, layers, the demo store's write path, the one navigation guard, conventions;
+- `docs/focus/mytiv-work-contract.md` — Work UI ↔ `auto/work-pkg1` contract: commands, opaque token, derived blocked, capabilities per control, errors, integration order;
+- `docs/focus/QA.md` — gates, per-screen visual QA, open issues by severity;
+- `lib/focus/{scope,scope.server}.ts`, `lib/focus/state/*`, `components/focus/shell/{demo-store,nav-guard,task-actions,task-drawer-host,use-queue}.ts(x)` and `tests/focus-*.vitest.ts` — where the rules live and are tested.
 
-## 2. Commits in scope (`e35a189..93f2182`, oldest first)
+`components/focus/reference/*` is the generated handoff conversion, served only in the demo scope as a visual record; no product route imports it (`routes.mjs` enforces it).
+
+## 3. Self-review — findings and fixes
+
+Three independent review rounds over the whole Focus diff (security/scope/navigation, state/flows/writes, a11y/quality/docs), each followed by fixes, regression tests and a full re-run, then two verification rounds on those fixes (round 4 re-checked round 3, round 5 re-checked round 4) until nothing above P3 remained. Severity: P1 = security / tenant leak / data loss / false claim of an external effect / broken core flow; P2 = a real defect a user hits; P3 = minor.
+
+### Round 1 (whole diff, after the first review's fixes)
+
+| Sev | Finding | Fix | Files |
+|---|---|---|---|
+| P1 | Concurrency token was a client-computed number; Kanban moves ignored the rendered version | Opaque string token minted only by the write path; moves send the rendered token; WorkCommands type-checks the store | lib/focus/contracts/work.ts, lib/focus/state/work.ts, demo-store.tsx, task-board.tsx |
+| P1 | Undo was a client rollback that could overwrite newer work | Versioned compensating write (revertTask), refused with a reason; reads latest state | lib/focus/state/work.ts, shell/task-actions.ts |
+| P2 | Logged time showed up as someone else's conflict; conflicts named the wrong writer | logMinutes is an increment through applyPatch with the actor; conflicts name updatedBy | demo-store.tsx, task-drawer-host.tsx |
+| P2 | Reopen under a done parent; duplicate kept block/parent; no-op Kanban move reported success | canReopen, duplicate as a fresh local task, checkMove refuses no-ops | lib/focus/state/work.ts, task-drawer-host.tsx |
+| P2 | Planned capabilities looked live; timer offered to roles that cannot track time | canDo(role, action, caps, allowPlanned); timer gated by role | lib/focus/state/work.ts, task-drawer.tsx, timer-bar.tsx, work-my.tsx |
+| P1 | Mail drafts and sends lost on navigation; a reply could be sent twice | Drafts + send job in the demo store; second send refused | comms-mail.tsx, demo-store.tsx |
+| P1 | A send interrupted by reload could look sent / one-click resend | Reloaded summary with an unknown-outcome notice and fresh confirmation | demo-store.tsx, pre-exec.tsx |
+| P2 | Approval undo ignored the decision identity and its window; Meta schedule not cancelled | Undo targets decidedAt, honours the reversibility window, cancels the schedule | shell/use-queue.ts |
+| P1 | A proposal edited after approval could be sent at the new amount | Send blocked when the saved total differs from the approved amount | approval.tsx, pre-exec.tsx |
+| P2 | Single-key shortcuts dead on a Hebrew layout | plainShortcut also matches the physical key | lib/focus/state/keyboard.ts |
+| P1 | Unsaved-changes guard bypassed by top bar, side cards, ⌘K, browser Back/Forward | One NavGuardProvider: capture-phase links, palette attempt, history guard entry, beforeunload | shell/nav-guard.tsx, ui/link.tsx, screens |
+| P2 | Other domains copied a task's block sentence that outlived the block | blockedByTask reads the live task | lib/focus/state/work.ts, clients-board.tsx, marketing-campaign.tsx, marketing-studio-home.tsx |
+| P3 | scopedHref doubled a path for a business slugged 'focus'; reference id 'constructor' → 500; dead exports | Idempotent scopedHref, Object.hasOwn, dead code removed | lib/focus/scope.ts, reference/[id]/page.tsx |
+| P3 | Frame server accepted posts from any origin | Origin allowlist | scripts/focus/frame-server.py |
+
+### Round 2
+
+| Sev | Finding | Fix | Files |
+|---|---|---|---|
+| P1 | Retrying a failed proposal send skipped the amount check | The store checks every submit and retry (proposalSendBlock, same function the screen shows); execReducer refuses blocked submit/retry; proposal locked while sending | lib/focus/state/execution.ts, demo-store.tsx, sales-store.ts, sales-proposal.tsx |
+| P1 | Toast showed 'בוטל' even when the undo was refused | onUndo returns false/text; toast closes without claiming | ui/toast.tsx, task-actions.ts, use-queue.ts |
+| P1 | Manager board showed 'סונכרן ל־ClickUp' without a confirmed job | Shown only for a done sync job, else 'טרם סונכרן' | comms-today-manager.tsx |
+| P1 | History races in the guard: a click right after a screen turned clean was undone; flows goto aborted | Step off the guard entry in the same commit; navigations queued until the history step lands | shell/nav-guard.tsx, ui/link.tsx |
+| P2 | Drawer adopted any write by the viewer even across someone else's | Write lineage; adopt only an unbroken chain of own writes (onlyOwnWrites) | demo-store.tsx, lib/focus/state/work.ts, task-drawer-host.tsx |
+| P2 | Drawer kept dirty state across tasks | Body keyed by task id, dirty/confirm reset | task-drawer-host.tsx |
+| P2 | Interrupted mail send / Meta schedule settled as done after reload | interruptExternal → failed + unknown, with 'check first' copy | lib/focus/state/jobs.ts, comms-mail.tsx, marketing-publish.tsx, use-queue.ts |
+| P2 | Quick writes skipped the source capability gate | useTaskGate at every quick write, planned writes say so | task-actions.ts, all-tasks.tsx, comms-today-manager.tsx, project-execution.tsx, work-my.tsx, timer-bar.tsx |
+| P2 | Board undo restored the whole board | Undo only the moved item, only if still there | clients-board.tsx |
+| P2 | Studio brief kept its own leave dialog (duplicate mechanism) | Uses the shared guard with save-and-leave | studio-new.tsx |
+| P3 | logTime wrote an entry for a refused write; create-undo not versioned; quick create invented today's date; approvals counts ≠ rows | Fixed each; removeTask versioned in WorkCommands | demo-store.tsx, contracts/work.ts, work-my.tsx, approvals-list.tsx |
+| P3 | a11y: drawer confirm focus, block form focus/select, pre-exec reason description, LeaveDialog description, bdi on business name | Fixed | task-drawer(-host).tsx, pre-exec.tsx, nav-guard.tsx, not-connected.tsx, dialog.tsx |
+
+### Round 3
+
+| Sev | Finding | Fix | Files |
+|---|---|---|---|
+| P1 | A sent mail could be sent again by undoing an earlier 'save draft' | Draft undo refused after a send or later edit; send guard counts every send job of the thread | comms-mail.tsx |
+| P1 | Proposal undo toasts could change a proposal being sent or already sent | Undo refused once sending/sent or after later edits | sales-proposal.tsx |
+| P1 | 'סונכרן ל־ClickUp' inherited by later writes that started no sync | Sync job per write (syncJobId(task, version)); revert sync for an undo | lib/focus/state/jobs.ts, task-actions.ts, comms-today-manager.tsx, project-execution.tsx |
+| P2 | Quick approve scheduled a post whose photo is a placeholder | Approve only; Meta waits for the photo task | use-queue.ts, marketing-publish.tsx |
+| P2 | Undo claimed Meta cancelled without asking Meta; unknown schedule retried in one click | Cancel is its own request job; 'checked first' retry; risk stated | use-queue.ts, action-card.tsx |
+| P2 | Proposal undo threw away later edits | Undo only while its change is the latest | sales-proposal.tsx |
+| P2 | Manager 'חסום' tag outlived the block | Tag read from the live task | comms-today-manager.tsx |
+| P2 | Timer-stop undo erased a running timer | Refused while another timer runs | task-actions.ts, timer-bar.tsx, task-drawer-host.tsx |
+| P2 | Multi-step Back jump while dirty pushed a guard entry onto the other page | Detected and let go without touching history | nav-guard.tsx |
+| P2 | Back → leave raised the browser prompt too | No beforeunload once the user chose to leave | nav-guard.tsx |
+| P2 | Fact editor and lead dialogs not covered by the guard | useNavGuard registered | fact-editor.tsx, lead-forms.tsx |
+| P2 | Focus dropped to <body> when the drawer closed / on the busy send button | Dialog restores focus when removed; loading buttons stay focusable | ui/dialog.tsx, ui/button.tsx |
+| P2 | Unbacked claims: follow-up task, 1-minute timeout, 'saved to brain/engine', D3 'טרם סונכרן' / reminder | Follow-up task really created on confirmation; other copy made true | fixtures/approvals.ts, demo-store.tsx, approval.tsx, blocked-panel.tsx |
+| P2 | Unknown time exposed as a 0 meter; toasts and banners announced twice / on load | Meter only when known; one announcement; banners polite | task-drawer.tsx, ui/toast.tsx, ui/feedback.tsx, pre-exec.tsx |
+| P2 | Docs claims that did not match the code | Docs rewritten to the code | docs/focus/*.md |
+| P3 | Discard left an extra history entry; leave with no history did nothing; reset left pending answers; done count ignored the filter; duplicated reason texts; capability gates for dates/dependencies/subtasks/checklist/participants; 'ממתין' on a manual block; dead code; frame server Host | Fixed each | nav-guard.tsx, ui/link.tsx, demo-store.tsx, project-execution.tsx, marketing-publish.tsx, task-drawer.tsx, frame-server.py |
+
+### Round 4 (verification of round 3)
+
+| Sev | Finding | Fix | Files |
+|---|---|---|---|
+| P2 | Proposal undo overwrote later edits after the editor was left and reopened | Undo compares the stored proposal, not a ref inside one editor instance | sales-proposal.tsx |
+| P2 | Undo toasts unreachable while the task drawer (modal) is open | Toasts render inside the topmost open modal dialog | ui/toast.tsx, ui/dialog.tsx |
+| P2 | Back → leave into a slow previous document briefly showed the Focus home | 'Nothing behind' decided up front (Navigation API); timer only as a fallback, cancelled on pagehide | nav-guard.tsx |
+| P2 | Focus to <body> when a deep-linked drawer closes; D3 save dropped focus | Fallback to #main; save keeps focus on its button | ui/dialog.tsx, project-execution.tsx |
+| P2 | Follow-up task unfindable; 'saved to the business brain' hint | Task is the viewer's, with lead/client context and a system activity line; hint and brief copy made true | fixtures/approvals.ts, demo-store.tsx, marketing-brief.tsx |
+| P3 | Mail refusal reason, Meta cancel/approve wording, re-schedule racing a cancel, D3 unknown sync, timer >24h edges, load-time failure alerts, silent drawer writes, busy 'נסח מחדש' | Fixed each | comms-mail.tsx, use-queue.ts, blocked-panel.tsx, demo-store.tsx, timer-bar.tsx, ui/status.tsx, ui/feedback.tsx, task-drawer-host.tsx |
+
+### Round 5 (convergence check of round 4)
+
+| Sev | Finding | Fix | Files |
+|---|---|---|---|
+| P2 | Error banners of saved failed states were alerts read on page load | Failures announce assertively through a live region, never role=alert | ui/feedback.tsx, ui/status.tsx |
+| P2 | After reopening the proposal editor, an earlier visit's undo changed the stored proposal but not the page | The editor follows a stored change made outside it | sales-proposal.tsx |
+| P3 | D3 save still dropped focus (loading/disabled save button); a refused undo inside a modal sent focus to the inert page | Focus to the panel heading; stays inside the modal | project-execution.tsx, blocked-panel.tsx, ui/toast.tsx |
+
+## 4. Commits since the first review (`62fbb6e..d93d1a4`, oldest first)
+
+| SHA | Subject |
+|---|---|
+| `cacf52d` | fix(focus): blocked is derived, never stored — canonical WorkStatus has no "blocked" (Work contract §5) |
+| `16a0061` | feat(focus): canonical tenant boundary — Focus lives under /{businessSlug}/focus, scoped like api-guard (P1, P2) |
+| `4fea1e0` | test(focus): tenant/prototype regression — scope decision + real redirect/notFound wiring, static route-tree guarantees, production/preview HTTP checks |
+| `c54b903` | test(focus): manual-block refusal asserts the first guard, not only the invariant (mutation-found gap) |
+| `78b0159` | fix(focus): Work writes are versioned end to end — opaque token, versioned undo, no false conflicts, capability + role gates (self-review) |
+| `2bdf445` | fix(focus): high-risk flows (self-review, part 1) — mail drafts/sends survive navigation, no double send, versioned approval undo with window + Meta cancel, interrupted send needs re-confirmation |
+| `5724d78` | fix(focus): high-risk flows (self-review, part 2) — proposal sent only at the approved amount, shortcuts work on a Hebrew layout, quiet toast countdown, honest hints |
+| `ed18bd8` | chore(focus): routing + code quality (self-review) — one project id, create-in-project, idempotent scopedHref, reference ids, dead code, demo e-mails |
+| `3f5896a` | fix(focus): one unsaved-changes guard for every way out — links, search (⌘K), browser Back/Forward, tab close (self-review P1) |
+| `c03cfe8` | fix(focus): other domains read a task's block live; frame server accepts only its own origin (self-review) |
+| `db75f50` | fix(focus): layout-safe single-key shortcuts (Hebrew/AZERTY by physical key); reports exit uses the one nav guard (self-review round 2) |
+| `e1eb6c7` | fix(focus): one leave guard, no history races — clean steps off the guard entry in the same commit, navigations wait for it, Back with nothing behind recovers; studio brief uses the shared guard (save and leave); dialog described by its text; browser checks for history, listeners, drafts (self-review round 2) |
+| `8099de8` | fix(focus): self-review round 2 — sends and retries checked against the approved amount in the store, toast never claims an undo that was refused, no 'synced' without a confirmed job, interrupted external sends are unknown, drawer adopts only its own write lineage, capability gate at every quick write, versioned create-undo, honest counts and copy, a11y focus/description fixes, stale docs |
+| `f8fb20c` | docs(focus): README, architecture, Work contract and QA gates describe the built system — tenant scope, demo-only prototype surfaces, one write path, derived blocked, opaque token, versioned undo, capability gate, send guard, one navigation guard; removeTask is part of WorkCommands |
+| `84b3749` | fix(focus): self-review round 3 (state) — no second mail send through a draft undo, proposal undos never touch a sent/sending proposal or later edits, sync status per write (never an inherited 'synced'), quick approve never schedules a placeholder photo, Meta cancel is its own request, unknown-outcome retry says 'checked first', manager tags read the live task, timer-stop undo cannot erase a running timer, honest planned/time toasts, drawer capability gates for due date/dependencies/subtasks/checklist, reset stops pending answers |
+| `c8d8282` | fix(focus): self-review round 3 (navigation, a11y, honesty) — a multi-step Back jump is never pushed onto another page, Back-leave asks once, discarding a draft leaves no history entry, leave with nothing behind goes home; fact editor and lead dialogs join the guard; focus returns when the drawer closes and stays on a busy button; toasts and banners announce once and not on load; a confirmed proposal send creates the promised follow-up task; claims without a backing removed; unknown time is not a 0 meter; capability gates for start date and participants; dead code removed; frame server checks Host; regression flows |
+| `a911f9c` | docs(focus): docs match the code after round 3 — drawer routes, conflict UI, sync per write, capability map per control, side stores, announcement policy, guard behaviour incl. its limits, open issues by severity |
+| `934f2bd` | fix(focus): round-4 verification findings — proposal undo checks the stored proposal (also across a reopened editor), undo toasts reachable while a modal is open, focus falls back to the page when the opener is gone, D3 save keeps focus, the confirmed send's follow-up task is the viewer's and system-created, no 'saved to the brain' claims, unknown ClickUp sync says so, Meta cancel/approve wording + no re-schedule racing a cancel, timer switch/stop never logs without the task write, load-time failures are not alerts, Back-leave with no history decided up front |
+| `d93d1a4` | fix(focus): round-5 convergence — failures announce assertively without role=alert (never read on load), the proposal editor follows a stored change made by an earlier visit's undo, D3 save keeps focus in the panel, a refused undo inside a modal keeps focus there |
+
+<details><summary>All 49 commits since the base</summary>
 
 | SHA | Subject |
 |---|---|
@@ -61,380 +169,82 @@ as a visual record. No product route imports it; `routes.mjs` enforces that.
 | `17edebd` | test(focus): flows — LTR content check; wait on navigation, busy jobs and live region instead of fixed sleeps |
 | `4548020` | fix(focus): design preview — a layer with a bounded width wraps inside the frame (4:5 headline no longer spills, D7/M8) |
 | `93f2182` | docs(focus): QA.md (gates, two-pass visual QA per screen, open issues) and README for the built architecture |
-
-## 3. Changed files
-
-By area: `components/focus/patterns` 60 · `components/focus/reference` 58 (generated) · `components/focus/screens` 45 ·
-`lib/focus/contracts` 14 · `lib/focus/fixtures` 13 · `components/focus/ui` 11 · `components/focus/shell` 10 ·
-`lib/focus/state` 7 · `lib/focus` (root) 4 · `app/focus/**` 59 route files · `scripts/focus` 8 (QA + converter) ·
-`docs/focus` 4 · `tests` 3 (`focus-*.vitest.ts`) · `.gitignore` 1 (ignores the raw handoff bundle).
-
-<details><summary>Full list (289 files, all added except <code>.gitignore</code>)</summary>
-
-- `.gitignore` (M)
-- `app/focus/approvals/[id]/page.tsx` (A)
-- `app/focus/approvals/page.tsx` (A)
-- `app/focus/clients/umino/brain/page.tsx` (A)
-- `app/focus/clients/umino/page.tsx` (A)
-- `app/focus/comms/calendar/page.tsx` (A)
-- `app/focus/comms/page.tsx` (A)
-- `app/focus/focus.css` (A)
-- `app/focus/layout.tsx` (A)
-- `app/focus/m/[n]/page.tsx` (A)
-- `app/focus/marketing/board/page.tsx` (A)
-- `app/focus/marketing/briefs/page.tsx` (A)
-- `app/focus/marketing/campaigns/thursday-sushi/page.tsx` (A)
-- `app/focus/marketing/inspiration/page.tsx` (A)
-- `app/focus/marketing/plan/page.tsx` (A)
-- `app/focus/marketing/prompts/page.tsx` (A)
-- `app/focus/marketing/trends/page.tsx` (A)
-- `app/focus/notifications/page.tsx` (A)
-- `app/focus/page.tsx` (A)
-- `app/focus/projects/new/page.tsx` (A)
-- `app/focus/projects/page.tsx` (A)
-- `app/focus/projects/umino/execution/page.tsx` (A)
-- `app/focus/projects/umino/page.tsx` (A)
-- `app/focus/reference/[id]/page.tsx` (A)
-- `app/focus/reports/activity/page.tsx` (A)
-- `app/focus/reports/hours/page.tsx` (A)
-- `app/focus/reports/page.tsx` (A)
-- `app/focus/reports/weekly/page.tsx` (A)
-- `app/focus/sales/discovery/page.tsx` (A)
-- `app/focus/sales/leads/noa-cohen/page.tsx` (A)
-- `app/focus/sales/outreach/page.tsx` (A)
-- `app/focus/sales/page.tsx` (A)
-- `app/focus/sales/proposals/corporate-hosting/page.tsx` (A)
-- `app/focus/sales/proposals/page.tsx` (A)
-- `app/focus/screens/page.tsx` (A)
-- `app/focus/settings/business/page.tsx` (A)
-- `app/focus/settings/connections/page.tsx` (A)
-- `app/focus/settings/users/page.tsx` (A)
-- `app/focus/studio/new/directions/page.tsx` (A)
-- `app/focus/studio/new/page.tsx` (A)
-- `app/focus/studio/page.tsx` (A)
-- `app/focus/studio/thursday-sushi/edit/page.tsx` (A)
-- `app/focus/studio/thursday-sushi/page.tsx` (A)
-- `app/focus/studio/thursday-sushi/publish/page.tsx` (A)
-- `app/focus/today-manager/page.tsx` (A)
-- `app/focus/work/all-tasks/page.tsx` (A)
-- `app/focus/work/board/page.tsx` (A)
-- `app/focus/work/list/page.tsx` (A)
-- `app/focus/work/page.tsx` (A)
-- `app/focus/work/states/page.tsx` (A)
-- `app/focus/work/task/page.tsx` (A)
-- `app/focus/work/time/page.tsx` (A)
-- `components/focus/patterns/action-card.tsx` (A)
-- `components/focus/patterns/agenda.tsx` (A)
-- `components/focus/patterns/approval/approval-parts.tsx` (A)
-- `components/focus/patterns/approval/approval.css` (A)
-- `components/focus/patterns/approval/content-review.tsx` (A)
-- `components/focus/patterns/approval/decision-block.tsx` (A)
-- `components/focus/patterns/approval/pre-exec.tsx` (A)
-- `components/focus/patterns/clients/client-parts.tsx` (A)
-- `components/focus/patterns/clients/clients.css` (A)
-- `components/focus/patterns/clients/content-board.tsx` (A)
-- `components/focus/patterns/clients/plan-parts.tsx` (A)
-- `components/focus/patterns/clients/portfolio.tsx` (A)
-- `components/focus/patterns/clients/session-projects.ts` (A)
-- `components/focus/patterns/clients/wizard-parts.tsx` (A)
-- `components/focus/patterns/comms/calendar.tsx` (A)
-- `components/focus/patterns/comms/comms.css` (A)
-- `components/focus/patterns/comms/leave-guard.tsx` (A)
-- `components/focus/patterns/comms/mail.tsx` (A)
-- `components/focus/patterns/comms/manager.tsx` (A)
-- `components/focus/patterns/comms/notifications.tsx` (A)
-- `components/focus/patterns/comms/settings.tsx` (A)
-- `components/focus/patterns/marketing/marketing-parts.tsx` (A)
-- `components/focus/patterns/marketing/marketing.css` (A)
-- `components/focus/patterns/marketing/publish.tsx` (A)
-- `components/focus/patterns/metrics.tsx` (A)
-- `components/focus/patterns/page.tsx` (A)
-- `components/focus/patterns/patterns.css` (A)
-- `components/focus/patterns/project-card.tsx` (A)
-- `components/focus/patterns/project/project-parts.tsx` (A)
-- `components/focus/patterns/project/project.css` (A)
-- `components/focus/patterns/reports/connection.ts` (A)
-- `components/focus/patterns/reports/fact-editor.tsx` (A)
-- `components/focus/patterns/reports/report-parts.tsx` (A)
-- `components/focus/patterns/reports/reports.css` (A)
-- `components/focus/patterns/sales/discovery-parts.tsx` (A)
-- `components/focus/patterns/sales/lead-forms.tsx` (A)
-- `components/focus/patterns/sales/lead-list.tsx` (A)
-- `components/focus/patterns/sales/lead-page.tsx` (A)
-- `components/focus/patterns/sales/outreach-parts.tsx` (A)
-- `components/focus/patterns/sales/proposal-editor.tsx` (A)
-- `components/focus/patterns/sales/proposal-list.tsx` (A)
-- `components/focus/patterns/sales/sales-parts.tsx` (A)
-- `components/focus/patterns/sales/sales-store.ts` (A)
-- `components/focus/patterns/sales/sales.css` (A)
-- `components/focus/patterns/stuck-panel.tsx` (A)
-- `components/focus/patterns/studio/design-preview.tsx` (A)
-- `components/focus/patterns/studio/editor-parts.tsx` (A)
-- `components/focus/patterns/studio/new-parts.tsx` (A)
-- `components/focus/patterns/studio/studio.css` (A)
-- `components/focus/patterns/time-board.tsx` (A)
-- `components/focus/patterns/work/blocked-panel.tsx` (A)
-- `components/focus/patterns/work/my-tasks.tsx` (A)
-- `components/focus/patterns/work/quick-create.tsx` (A)
-- `components/focus/patterns/work/task-board.tsx` (A)
-- `components/focus/patterns/work/task-card.tsx` (A)
-- `components/focus/patterns/work/task-drawer.tsx` (A)
-- `components/focus/patterns/work/task-list.tsx` (A)
-- `components/focus/patterns/work/time-report.tsx` (A)
-- `components/focus/patterns/work/work-states.tsx` (A)
-- `components/focus/patterns/work/work.css` (A)
-- `components/focus/reference/D1.tsx` (A)
-- `components/focus/reference/D2.tsx` (A)
-- `components/focus/reference/D3.tsx` (A)
-- `components/focus/reference/D4.tsx` (A)
-- `components/focus/reference/D5.tsx` (A)
-- `components/focus/reference/D6.tsx` (A)
-- `components/focus/reference/D7.tsx` (A)
-- `components/focus/reference/D8.tsx` (A)
-- `components/focus/reference/E1.tsx` (A)
-- `components/focus/reference/E2.tsx` (A)
-- `components/focus/reference/E3.tsx` (A)
-- `components/focus/reference/E4.tsx` (A)
-- `components/focus/reference/E5.tsx` (A)
-- `components/focus/reference/E6.tsx` (A)
-- `components/focus/reference/E7.tsx` (A)
-- `components/focus/reference/F1.tsx` (A)
-- `components/focus/reference/F2.tsx` (A)
-- `components/focus/reference/F3.tsx` (A)
-- `components/focus/reference/F4.tsx` (A)
-- `components/focus/reference/F5.tsx` (A)
-- `components/focus/reference/F6.tsx` (A)
-- `components/focus/reference/G1.tsx` (A)
-- `components/focus/reference/G2.tsx` (A)
-- `components/focus/reference/G3.tsx` (A)
-- `components/focus/reference/G4.tsx` (A)
-- `components/focus/reference/G5.tsx` (A)
-- `components/focus/reference/G6.tsx` (A)
-- `components/focus/reference/H1.tsx` (A)
-- `components/focus/reference/H10.tsx` (A)
-- `components/focus/reference/H11.tsx` (A)
-- `components/focus/reference/H12.tsx` (A)
-- `components/focus/reference/H13.tsx` (A)
-- `components/focus/reference/H14.tsx` (A)
-- `components/focus/reference/H15.tsx` (A)
-- `components/focus/reference/H2.tsx` (A)
-- `components/focus/reference/H3.tsx` (A)
-- `components/focus/reference/H4.tsx` (A)
-- `components/focus/reference/H5.tsx` (A)
-- `components/focus/reference/H6.tsx` (A)
-- `components/focus/reference/H7.tsx` (A)
-- `components/focus/reference/H8.tsx` (A)
-- `components/focus/reference/H9.tsx` (A)
-- `components/focus/reference/M1.tsx` (A)
-- `components/focus/reference/M10.tsx` (A)
-- `components/focus/reference/M2.tsx` (A)
-- `components/focus/reference/M3.tsx` (A)
-- `components/focus/reference/M4.tsx` (A)
-- `components/focus/reference/M5.tsx` (A)
-- `components/focus/reference/M6.tsx` (A)
-- `components/focus/reference/M7.tsx` (A)
-- `components/focus/reference/M8.tsx` (A)
-- `components/focus/reference/M9.tsx` (A)
-- `components/focus/reference/W1.tsx` (A)
-- `components/focus/reference/W2.tsx` (A)
-- `components/focus/reference/W3.tsx` (A)
-- `components/focus/reference/W4.tsx` (A)
-- `components/focus/reference/W5.tsx` (A)
-- `components/focus/reference/W6.tsx` (A)
-- `components/focus/screens/all-tasks.tsx` (A)
-- `components/focus/screens/approval.tsx` (A)
-- `components/focus/screens/approvals-list.tsx` (A)
-- `components/focus/screens/clients-board.tsx` (A)
-- `components/focus/screens/clients-client.tsx` (A)
-- `components/focus/screens/clients-new-project.tsx` (A)
-- `components/focus/screens/clients-plan.tsx` (A)
-- `components/focus/screens/clients-projects.tsx` (A)
-- `components/focus/screens/comms-business.tsx` (A)
-- `components/focus/screens/comms-calendar.tsx` (A)
-- `components/focus/screens/comms-mail.tsx` (A)
-- `components/focus/screens/comms-notifications.tsx` (A)
-- `components/focus/screens/comms-today-manager.tsx` (A)
-- `components/focus/screens/comms-users.tsx` (A)
-- `components/focus/screens/marketing-brief.tsx` (A)
-- `components/focus/screens/marketing-campaign.tsx` (A)
-- `components/focus/screens/marketing-inspiration.tsx` (A)
-- `components/focus/screens/marketing-prompts.tsx` (A)
-- `components/focus/screens/marketing-publish.tsx` (A)
-- `components/focus/screens/marketing-studio-home.tsx` (A)
-- `components/focus/screens/marketing-trends.tsx` (A)
-- `components/focus/screens/project-execution.tsx` (A)
-- `components/focus/screens/project.tsx` (A)
-- `components/focus/screens/reports-activity.tsx` (A)
-- `components/focus/screens/reports-brain.tsx` (A)
-- `components/focus/screens/reports-connections.tsx` (A)
-- `components/focus/screens/reports-goals.tsx` (A)
-- `components/focus/screens/reports-hours.tsx` (A)
-- `components/focus/screens/reports-weekly.tsx` (A)
-- `components/focus/screens/sales-discovery.tsx` (A)
-- `components/focus/screens/sales-lead.tsx` (A)
-- `components/focus/screens/sales-leads.tsx` (A)
-- `components/focus/screens/sales-outreach.tsx` (A)
-- `components/focus/screens/sales-proposal.tsx` (A)
-- `components/focus/screens/sales-proposals.tsx` (A)
-- `components/focus/screens/screen-map.tsx` (A)
-- `components/focus/screens/studio-directions.tsx` (A)
-- `components/focus/screens/studio-editor.tsx` (A)
-- `components/focus/screens/studio-formats.tsx` (A)
-- `components/focus/screens/studio-new.tsx` (A)
-- `components/focus/screens/today.tsx` (A)
-- `components/focus/screens/work-my.tsx` (A)
-- `components/focus/screens/work-project.tsx` (A)
-- `components/focus/screens/work-states.tsx` (A)
-- `components/focus/screens/work-time.tsx` (A)
-- `components/focus/shell/command-palette.tsx` (A)
-- `components/focus/shell/demo-store.tsx` (A)
-- `components/focus/shell/focus-bar.tsx` (A)
-- `components/focus/shell/menu.tsx` (A)
-- `components/focus/shell/shell.css` (A)
-- `components/focus/shell/task-drawer-host.tsx` (A)
-- `components/focus/shell/theme.tsx` (A)
-- `components/focus/shell/timer-bar.tsx` (A)
-- `components/focus/shell/top-bar.tsx` (A)
-- `components/focus/shell/use-queue.ts` (A)
-- `components/focus/ui/button.tsx` (A)
-- `components/focus/ui/cx.ts` (A)
-- `components/focus/ui/dialog.tsx` (A)
-- `components/focus/ui/feedback.tsx` (A)
-- `components/focus/ui/field.tsx` (A)
-- `components/focus/ui/icon.tsx` (A)
-- `components/focus/ui/misc.tsx` (A)
-- `components/focus/ui/status.tsx` (A)
-- `components/focus/ui/tabs.tsx` (A)
-- `components/focus/ui/toast.tsx` (A)
-- `components/focus/ui/ui.css` (A)
-- `docs/focus/ARCHITECTURE.md` (A)
-- `docs/focus/QA.md` (A)
-- `docs/focus/README.md` (A)
-- `docs/focus/mytiv-work-contract.md` (A)
-- `lib/focus/color.ts` (A)
-- `lib/focus/contracts/approvals.ts` (A)
-- `lib/focus/contracts/clients.ts` (A)
-- `lib/focus/contracts/common.ts` (A)
-- `lib/focus/contracts/comms.ts` (A)
-- `lib/focus/contracts/loadable.ts` (A)
-- `lib/focus/contracts/marketing.ts` (A)
-- `lib/focus/contracts/projects.ts` (A)
-- `lib/focus/contracts/reports.ts` (A)
-- `lib/focus/contracts/sales.ts` (A)
-- `lib/focus/contracts/settings.ts` (A)
-- `lib/focus/contracts/status.ts` (A)
-- `lib/focus/contracts/studio.ts` (A)
-- `lib/focus/contracts/today.ts` (A)
-- `lib/focus/contracts/work.ts` (A)
-- `lib/focus/fixtures/approvals.ts` (A)
-- `lib/focus/fixtures/clients.ts` (A)
-- `lib/focus/fixtures/clock.ts` (A)
-- `lib/focus/fixtures/comms.ts` (A)
-- `lib/focus/fixtures/marketing.ts` (A)
-- `lib/focus/fixtures/people.ts` (A)
-- `lib/focus/fixtures/projects.ts` (A)
-- `lib/focus/fixtures/reports.ts` (A)
-- `lib/focus/fixtures/sales.ts` (A)
-- `lib/focus/fixtures/settings.ts` (A)
-- `lib/focus/fixtures/studio.ts` (A)
-- `lib/focus/fixtures/today.ts` (A)
-- `lib/focus/fixtures/work.ts` (A)
-- `lib/focus/format.ts` (A)
-- `lib/focus/routes.ts` (A)
-- `lib/focus/screens.ts` (A)
-- `lib/focus/state/approvals.ts` (A)
-- `lib/focus/state/editor.ts` (A)
-- `lib/focus/state/execution.ts` (A)
-- `lib/focus/state/jobs.ts` (A)
-- `lib/focus/state/keyboard.ts` (A)
-- `lib/focus/state/undo.ts` (A)
-- `lib/focus/state/work.ts` (A)
-- `scripts/focus/convert-handoff.py` (A)
-- `scripts/focus/frame-server.py` (A)
-- `scripts/focus/qa/axe.mjs` (A)
-- `scripts/focus/qa/flows.mjs` (A)
-- `scripts/focus/qa/keyboard.mjs` (A)
-- `scripts/focus/qa/lib.mjs` (A)
-- `scripts/focus/qa/routes.mjs` (A)
-- `scripts/focus/qa/visual.mjs` (A)
-- `tests/focus-data-states.vitest.ts` (A)
-- `tests/focus-flows.vitest.ts` (A)
-- `tests/focus-work.vitest.ts` (A)
+| `62fbb6e` | docs(focus): independent review packet (base/final SHA, commits, files, test + browser + visual evidence, deviations, boundary, owner gates) |
+| `cacf52d` | fix(focus): blocked is derived, never stored — canonical WorkStatus has no "blocked" (Work contract §5) |
+| `16a0061` | feat(focus): canonical tenant boundary — Focus lives under /{businessSlug}/focus, scoped like api-guard (P1, P2) |
+| `4fea1e0` | test(focus): tenant/prototype regression — scope decision + real redirect/notFound wiring, static route-tree guarantees, production/preview HTTP checks |
+| `c54b903` | test(focus): manual-block refusal asserts the first guard, not only the invariant (mutation-found gap) |
+| `78b0159` | fix(focus): Work writes are versioned end to end — opaque token, versioned undo, no false conflicts, capability + role gates (self-review) |
+| `2bdf445` | fix(focus): high-risk flows (self-review, part 1) — mail drafts/sends survive navigation, no double send, versioned approval undo with window + Meta cancel, interrupted send needs re-confirmation |
+| `5724d78` | fix(focus): high-risk flows (self-review, part 2) — proposal sent only at the approved amount, shortcuts work on a Hebrew layout, quiet toast countdown, honest hints |
+| `ed18bd8` | chore(focus): routing + code quality (self-review) — one project id, create-in-project, idempotent scopedHref, reference ids, dead code, demo e-mails |
+| `3f5896a` | fix(focus): one unsaved-changes guard for every way out — links, search (⌘K), browser Back/Forward, tab close (self-review P1) |
+| `c03cfe8` | fix(focus): other domains read a task's block live; frame server accepts only its own origin (self-review) |
+| `db75f50` | fix(focus): layout-safe single-key shortcuts (Hebrew/AZERTY by physical key); reports exit uses the one nav guard (self-review round 2) |
+| `e1eb6c7` | fix(focus): one leave guard, no history races — clean steps off the guard entry in the same commit, navigations wait for it, Back with nothing behind recovers; studio brief uses the shared guard (save and leave); dialog described by its text; browser checks for history, listeners, drafts (self-review round 2) |
+| `8099de8` | fix(focus): self-review round 2 — sends and retries checked against the approved amount in the store, toast never claims an undo that was refused, no 'synced' without a confirmed job, interrupted external sends are unknown, drawer adopts only its own write lineage, capability gate at every quick write, versioned create-undo, honest counts and copy, a11y focus/description fixes, stale docs |
+| `f8fb20c` | docs(focus): README, architecture, Work contract and QA gates describe the built system — tenant scope, demo-only prototype surfaces, one write path, derived blocked, opaque token, versioned undo, capability gate, send guard, one navigation guard; removeTask is part of WorkCommands |
+| `84b3749` | fix(focus): self-review round 3 (state) — no second mail send through a draft undo, proposal undos never touch a sent/sending proposal or later edits, sync status per write (never an inherited 'synced'), quick approve never schedules a placeholder photo, Meta cancel is its own request, unknown-outcome retry says 'checked first', manager tags read the live task, timer-stop undo cannot erase a running timer, honest planned/time toasts, drawer capability gates for due date/dependencies/subtasks/checklist, reset stops pending answers |
+| `c8d8282` | fix(focus): self-review round 3 (navigation, a11y, honesty) — a multi-step Back jump is never pushed onto another page, Back-leave asks once, discarding a draft leaves no history entry, leave with nothing behind goes home; fact editor and lead dialogs join the guard; focus returns when the drawer closes and stays on a busy button; toasts and banners announce once and not on load; a confirmed proposal send creates the promised follow-up task; claims without a backing removed; unknown time is not a 0 meter; capability gates for start date and participants; dead code removed; frame server checks Host; regression flows |
+| `a911f9c` | docs(focus): docs match the code after round 3 — drawer routes, conflict UI, sync per write, capability map per control, side stores, announcement policy, guard behaviour incl. its limits, open issues by severity |
+| `934f2bd` | fix(focus): round-4 verification findings — proposal undo checks the stored proposal (also across a reopened editor), undo toasts reachable while a modal is open, focus falls back to the page when the opener is gone, D3 save keeps focus, the confirmed send's follow-up task is the viewer's and system-created, no 'saved to the brain' claims, unknown ClickUp sync says so, Meta cancel/approve wording + no re-schedule racing a cancel, timer switch/stop never logs without the task write, load-time failures are not alerts, Back-leave with no history decided up front |
+| `d93d1a4` | fix(focus): round-5 convergence — failures announce assertively without role=alert (never read on load), the proposal editor follows a stored change made by an earlier visit's undo, D3 save keeps focus in the panel, a refused undo inside a modal keeps focus there |
 
 </details>
 
-## 4. Boundary confirmation — backend, API, DB, migrations, pkg1 untouched
+## 5. Changed files (vs base)
 
-- `git diff --stat e35a189..93f2182 -- . ':!app/focus' ':!components/focus' ':!lib/focus' ':!docs/focus' ':!scripts/focus' ':!tests/focus-*'`
-  → only `.gitignore` (+3 lines).
-- `git diff --name-only e35a189..93f2182 -- lib/db app/api drizzle db migrations` → empty. No API route, schema,
-  migration, seed or production configuration changed.
-- `auto/work-pkg1` was read only, as a contract source. It is still at `6b6f537` (local, not pushed); nothing was
-  merged or cherry-picked from it.
-- Nothing under `/focus` makes network calls. External actions (Gmail, Meta, ClickUp, AI) are simulated by the demo
-  store, with failure injection from the screen map.
+| Area | Files |
+|---|---|
+| `.gitignore` | `.gitignore` |
+| `app/(focus)/[businessSlug]/focus/**` | 51 files |
+| `components/focus/patterns` | 59 files |
+| `components/focus/reference` | 58 generated reference files (visual record only) |
+| `components/focus/screens` | 45 files |
+| `components/focus/shell` | 14 files |
+| `components/focus/ui` | `button.tsx`, `cx.ts`, `dialog.tsx`, `feedback.tsx`, `field.tsx`, `icon.tsx`, `link.tsx`, `misc.tsx`, `status.tsx`, `tabs.tsx`, `toast.tsx`, `ui.css` |
+| `docs/focus` | `ARCHITECTURE.md`, `GPT_REVIEW_PACKET.md`, `QA.md`, `README.md`, `mytiv-work-contract.md` |
+| `lib/focus` | `color.ts`, `format.ts`, `routes.ts`, `scope.server.ts`, `scope.ts`, `screens.ts` |
+| `lib/focus/contracts` | 14 files |
+| `lib/focus/fixtures` | 13 files |
+| `lib/focus/state` | `approvals.ts`, `editor.ts`, `execution.ts`, `jobs.ts`, `keyboard.ts`, `undo.ts`, `work.ts` |
+| `scripts/focus` | `convert-handoff.py`, `frame-server.py` |
+| `scripts/focus/qa` | `axe.mjs`, `flows.mjs`, `keyboard.mjs`, `lib.mjs`, `prod-surfaces.mjs`, `routes.mjs`, `visual.mjs` |
+| `tests/focus-data-states.vitest.ts` | `tests/focus-data-states.vitest.ts` |
+| `tests/focus-flows.vitest.ts` | `tests/focus-flows.vitest.ts` |
+| `tests/focus-scope.vitest.ts` | `tests/focus-scope.vitest.ts` |
+| `tests/focus-work.vitest.ts` | `tests/focus-work.vitest.ts` |
 
-## 5. Test evidence (measured at `93f2182`)
+## 6. Boundary confirmation — backend, API, DB, migrations, pkg1 untouched
+
+- Everything outside the Focus folders: `1 file changed, 3 insertions(+)` (`.gitignore` only).
+- `git diff --name-only e35a189..d93d1a4 -- lib/db app/api drizzle db migrations` → empty. No API route, schema, migration, seed or production configuration changed.
+- `auto/work-pkg1` was read only, as a contract source; nothing was merged or cherry-picked from it.
+- Nothing under Focus makes network calls; external actions (Gmail, Meta, ClickUp, AI) are simulated by the demo store, in the demo scope only.
+
+## 7. Test evidence (measured at `d93d1a4`)
 
 | Check | Result | Command |
 |---|---|---|
 | Typecheck | ✓ 0 errors | `npx tsc --noEmit -p .` |
-| Focus lint | ✓ 0 errors / 0 warnings | `npx eslint app/focus components/focus lib/focus scripts/focus tests/focus-*.ts` |
-| Focus unit tests | ✓ 45 / 45 (3 files) | `node node_modules/vitest/vitest.mjs run --config tests/route-vitest.config.mjs tests/focus-*.vitest.ts` |
-| Full existing suite | ✓ 219 / 219 (23 files) + `ops-security` node tests | `npm test` (dummy DB env) |
-| Production build | ✓ 125 pages, 49 `/focus` routes | `next build` with dummy `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `SECRETS_MASTER_KEY`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` |
-| Whole-repo lint (context) | 56 errors / 604 warnings, **all pre-existing in files this branch never touched** | `npx eslint` + per-file `git diff e35a189..HEAD` |
+| Focus lint | ✓ 0 errors / 0 warnings | `npx eslint "app/(focus)" components/focus lib/focus scripts/focus tests/focus-*.ts` |
+| Focus unit tests | ✓ 99 / 99 (4 files) | `node node_modules/vitest/vitest.mjs run --config tests/route-vitest.config.mjs tests/focus-*.vitest.ts` |
+| Full existing suite | ✓ 273 / 273 vitest (24 files) + 28 / 28 `ops-security` node tests | `npm test` (dummy DB env) |
+| Production build | ✓ 49 Focus routes under `/[businessSlug]/focus` | `next build` (dummy DB env + dummy `QSTASH_*`) |
+| Production isolation | ✓ 18 / 18 | `prod-surfaces.mjs --expect production` against `next start` |
+| Preview QA surfaces | ✓ 6 / 6 | `prod-surfaces.mjs --expect preview` (`VERCEL_ENV=preview next start`) |
+| Routes · console · responsive | ✓ 53 / 53 (111 internal links, all inside the scope) | `routes.mjs` |
+| Accessibility (axe, serious + critical) | ✓ 150 / 150 — light + dark at 1440, light at 390 | `axe.mjs` |
+| Keyboard-only walkthrough | ✓ 54 / 54 | `keyboard.mjs` |
+| Flows end to end | ✓ 36 / 36 (incl. guard, Back/Forward, history, listeners, drafts, send guard, unknown outcomes, review regressions) | `flows.mjs` |
+| Mutation | ✓ 26 / 26 caught | scratch script, one mutation at a time on a copy |
 
-The unit tests cover:
-- approval rules and the mandatory reason;
-- the execution state machine (confirm → sending → sent / failed, retry);
-- the undo window;
-- processing jobs;
-- My Tasks buckets;
-- Kanban transitions;
-- parent / sub-task rules;
-- dependency blocking (same project, no cycles);
-- timer start / pause / resume / switch, and nothing logged under 30s;
-- unknown vs zero;
-- unavailable vs empty vs error;
-- theme preference;
-- permissions hiding actions;
-- keyboard shortcuts never firing in text fields;
-- optimistic patches with a version token (a conflict overwrites nothing).
+**Mutation testing.** One mutation at a time applied to a copy of the tree, Focus unit tests run against it:
+26 / 26 mutants caught — tenant guard removed, no-session not redirected, prototype surfaces on in production, fixtures for a business, notFound ignored, a page losing its scope guard, scoped links not scoped, block guard removed, block guard + invariant removed, non-canonical status accepted, Kanban storing "blocked", mandatory reason bypassed, "sent" before target confirmation, version conflict ignored, unknown rendered as 0, dependency cycle allowed, parent completing with an open child, undo after the window, retry / first submit skipping the approved-amount guard, proposal amount check never blocking, interrupted send counted as done, reload not marking external jobs unknown, drawer adopting another writer's write, planned capability allowed outside the demo, Hebrew-layout shortcut.
 
-## 6. Browser QA evidence (Chromium via Playwright, dev server, `scripts/focus/qa/`)
+## 8. Visual QA summary
 
-| Script | Result | What it asserts |
-|---|---|---|
-| `routes.mjs` | ✓ 52 / 52 | 50 routes × 1440 / 1280 / 1024 / 768 / 390: no console errors, no horizontal scroll, no `href="#"` or placeholder links, 109 internal links resolve, no product route imports the reference |
-| `axe.mjs` | ✓ 150 / 150 | axe-core serious + critical, light and dark at 1440, light at 390 |
-| `keyboard.mjs` | ✓ 54 / 54 | skip link first (or the deep-linked dialog), visible focus on every stop, accessible names, menus / palette / dialogs open by keyboard, Esc closes, focus returns |
-| `flows.mjs` | ✓ 20 / 20 (three consecutive runs) | mandatory reason, confirmation before the red action, processing → success / failure with the draft kept, retry, format selection, undo window, one-by-one focus queue, unsaved-change guards, Kanban keyboard with refused moves explained, version conflict, blocked task cannot complete, theme persisted with no flash + system follows the OS, typed LTR text keeps its order |
-| `visual.mjs` | 59 captures (below) | pixel diff vs the handoff frames |
-
-Also checked:
-- **Reduced motion:** one global rule removes all transitions and animations under `.focus-app`.
-- **RTL with LTR content:** 169 mixed nodes on 45 routes were scanned; they are single LTR tokens, and e-mails, phones
-  and numbers use `<bdi>` / `dir="ltr"`.
-- **Theme:** light / dark / system.
-
-## 7. Visual QA summary
-
-- **Method:** ±1px shift-tolerant pixel diff.
-  - Desktop: full page at 1440.
-  - Phone: the reference's phone screen vs the product at 390×794.
-- **Light theme:**
-  - median 5.5% on desktop and 15.5% on phone;
-  - 20 of 59 captures are ≤ 5%, and 43 are ≤ 10%.
-- **Dark theme:** indicative only (median 13.8%), because the reference conversion hard-codes some light surfaces.
-- **Verdicts:** 1 match · 40 intended · 9 fixed during QA · 9 remaining deviations (all in §8).
-- **Why the high numbers are mostly state, not layout:**
-  - all screens read one shared fixture set;
-  - some jobs were captured mid-run;
-  - drawers and popovers the frame shows open are closed in the product;
-  - rules the frame ignores, e.g. a blocked task cannot be completed.
-- **Pass 2 (product quality):** hierarchy, density, readability, discoverability, permissions, error states and
-  dangerous actions are reviewed in `docs/focus/QA.md` §3.
+Pixel diff (±1px shift tolerance) re-run during the self-review (at `f8fb20c`; later commits change behaviour and copy, not layout): 118 captures; light desktop median 5.5%, phone 15.5%; dark desktop 13.0% (indicative only — the reference hard-codes some light surfaces). Only two captures moved by more than 1 point against the per-screen table below (measured at `4548020`): F5 dark 40.8 → 51.0 (data: blocked/derived rows) and M4 light 58.4 → 59.4. Verdicts per frame and reasons: `docs/focus/QA.md` §2.
 
 | Frame | Route | Width | Light Δ% | Dark Δ% | Verdict |
 |---|---|---|---:|---:|---|
@@ -498,83 +308,38 @@ Also checked:
 | W5 | `/focus/work/time` | 1440 | 12.21 | 9.47 | deviation |
 | W6 | `/focus/work/states` | 1440 | 12.93 | 51.67 | deviation |
 
-Per-screen reasons, interaction state and accessibility state: `docs/focus/QA.md` §2.
+## 9. Remaining issues by severity
 
-## 8. Known deviations (all Medium / Low items from `docs/focus/QA.md` §4)
+No P1 is open. P2: none open from the review rounds. Remaining items (design deviations and P3s) are listed with their reasons in `docs/focus/QA.md` §4:
 
-No critical or high issues are open in the Focus UI.
+- **Medium** — Design deviations: H15 notifications as a page; E5 formats row; single-fixture sales detail routes; G3/G4/G1 cross-screen story; M10 sheet height.
+- **P3** — The Focus layout's client bundle (demo store, fixtures) is downloaded on a business's "not connected" page too (nothing rendered, fictional data) — give the demo shell its own route tree before real data.
+- **P3** — History edges of the guard: a multi-step jump of several entries cannot be held (in-memory draft lost; store drafts survive); a jump onto an earlier same-URL entry is treated as one Back; a discarded draft's state stays as a forward entry; 'leave' with only another origin behind goes home.
+- **P3** — Mail thread switch while dirty uses the guard entry up (drafts kept per thread, nothing lost).
+- **P3** — Timer across two tabs of one browser can log twice (server timer removes it).
+- **P3** — Dense-table title links are 22px tall (WCAG 2.5.8 met by spacing); a held menu link may leave its menu open behind the dialog (not reproduced).
+- **Low** — Native date inputs follow the browser locale; F5/M6 completion via quick action; small layout deviations (D8, W3, W5, W6, M5, M9); shared-pattern duplication (ActionCard, content board); Chromium date-picker focus ring; build needs dummy QSTASH keys.
+- **P3** — A refused time write during a timer switch drops the previous timer's elapsed time (not reachable in the demo: logged minutes are capped and invalid tasks are discarded).
 
-**Medium**
-1. H15: notifications render as a page; the frame designs a bell popover over the current screen.
-2. E5 "all formats":
-   - the formats are arranged in one row of solid cards, where the frame has the story as hero plus a dashed stacked column;
-   - Brand Kit moved to the side panel.
-3. Sales detail routes are single fixtures (`/focus/sales/leads/noa-cohen`, `/focus/sales/proposals/corporate-hosting`);
-   the other leads and proposals have no dynamic route yet.
-4. Cross-screen data consistency:
-   - G3 / G4 tell the content-approval story differently from the approvals queue state;
-   - G1's Instagram row does not read the reconnect state set in G6.
-5. M10: the task drawer on phones is near full height (the frame shows a half sheet with a grabber) and has no
-   "תגובה" footer action.
+## 10. Backend boundary and integration prerequisites
 
-**Low**
-1. Native date inputs follow the browser locale format (D3, E7, W4, M10).
-2. F5 / M6:
-   - no per-row completion checkbox (completion is the quick action);
-   - M6 has a header plus a full-width "+ משימה" instead of a FAB.
-3. Smaller layout deviations:
-   - D8 "פרטי התקלה" sits inline instead of below;
-   - W3 is missing "קבץ לפי";
-   - the W5 report card styling is flatter;
-   - W6 quick create is the inline bar, not the frame's modal;
-   - M5 shows nested pending cards;
-   - M9 has its FAB on its own row.
-4. Shared patterns:
-   - `ActionCard` has no tag / footer slots (D8 copies its markup);
-   - H5's content board duplicates the TaskBoard keyboard / drag model instead of sharing it.
-5. Chromium's date-picker button inside a date field draws its own focus ring, which author CSS cannot reach. It is
-   visible, but it is not the 3px ink ring.
-6. Repo-level context:
-   - `next build` needs dummy `QSTASH_*` keys because an unrelated API route checks them at build time;
-   - whole-repo lint has 56 pre-existing errors outside this branch.
-7. The task drawer shows a dev-only "remote edit" demo control (`NODE_ENV !== "production"`; absent from the build).
-
-## 9. Backend boundary and integration prerequisites
-
-The Focus branch is **fixture / demo-store backed**. None of the following is implemented yet:
+The Focus branch is fixture / demo-store backed, in the demo scope only. Not implemented yet (contract §12):
 
 1. Work read API returning the neutral `WorkItem` with its concurrency token, for "mine" and per project.
-2. Governed write API under `/work` with `expectedVersion` + `requestId` and a conflict (409) response.
-3. Concurrency integration: the UI's `version: number` becomes an opaque `concurrencyToken` string.
-4. Assignee, start-date and estimate writes for Mytiv tasks.
-5. Checklist, dependencies (`blocks`, same project), sub-task creation (`parent_id`), move with `move_blocked`.
-6. Comments and activity per task.
-7. Timers, manual time entries and the time report for Mytiv tasks. The timer is in `localStorage` today.
-8. Per-business permissions (viewer role, per-project `work_authorize`) and the per-business status vocabulary
-   (`work_statuses` labels).
-9. Fields with no column yet: participants, next action, follow-up date, blocked reason.
+2. Governed write API under `/work` with `expectedVersion` + `requestId` and a 409 conflict response (the UI's token is already an opaque string).
+3. Assignee, start-date and estimate writes for Mytiv tasks.
+4. Checklist, dependencies (`blocks`, same project), sub-task creation (`parent_id`), move with `move_blocked`.
+5. Comments and activity per task.
+6. Timers, manual time entries and the time report (the timer is in `localStorage` today).
+7. Per-business permissions (viewer, per-project `work_authorize`) and the per-business status vocabulary.
+8. Fields with no column yet: participants, next action, follow-up date, blocked reason.
+9. Focus adapters behind `requireBusinessScope(scope)` replacing the "not connected" page per area.
 
-Contract mismatches, resolved in the contract rather than in pkg1:
-- pkg1 has no `blocked` status. Blocked is derived from an open dependency, or from a business key under `waiting`.
-- pkg1's `review` maps to `in_progress` with the label "בבדיקה".
+## 11. Owner gates (before any integration)
 
-Proposed integration order (`mytiv-work-contract.md` §13):
-1. Read adapter.
-2. Status and assignee writes.
-3. Create + due date, with the string token.
-4. Hierarchy + checklist.
-5. Dependencies + move.
-6. Comments.
-7. Timers.
-8. Remove the demo store.
+- **Migration `0012_work_expand`** (pkg1): additive, not applied anywhere. Staging first, then production, before any deploy of the dual-write code.
+- **Role split:** the runtime connects as the DB owner; a least-privilege app role needs owner approval.
+- **Production report:** the read-only legacy tasks report (pkg1 PR 2) must run against production, with owner approval, before the backfill.
+- **Merge / deploy of this PR:** owner decision after the independent review; the PR stays a draft until then.
 
-## 10. Owner gates (pkg1, before any integration)
-
-- **Migration `0012_work_expand`:** additive, not applied anywhere yet. Staging first, then production, before any
-  deploy of the dual-write code.
-- **Role split:** the runtime still connects as `neondb_owner` (staging and production), so the DB guards are
-  guardrails only; a least-privilege app role (`mytiv_app`) needs owner approval.
-- **Production report:** the read-only legacy tasks data report (pkg1 PR 2) has to be run against production, with
-  owner approval, before the backfill.
-
-Until these are cleared, this PR stays a draft and frontend-only.
+No merge, deploy, shared migration, secrets change, or production write was performed.
