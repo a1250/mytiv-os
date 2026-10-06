@@ -4,7 +4,6 @@ import Link from "@/components/focus/ui/link";
 import { Suspense, useState, type ReactNode } from "react";
 import type { Task, TaskPatch } from "@/lib/focus/contracts/work";
 import { HOURS_SYNC } from "@/lib/focus/fixtures/projects";
-import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
 import { daysBetween, fmtAgo, fmtDayMonth } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { bucketsFor, canComplete, canDo, displayStatus, type WorkAction } from "@/lib/focus/state/work";
@@ -28,6 +27,7 @@ type Filter = "mine" | "today" | "overdue" | "blocked" | "waiting";
 
 function Inner() {
   const demo = useDemo();
+  const PEOPLE_BY_ID = demo.directory.peopleById;
   const toast = useToast();
   const undo = useTaskUndo();
   const gate = useTaskGate();
@@ -93,7 +93,8 @@ function Inner() {
         ]} />
         <span className="f-grow" />
         <Tabs label="קיבוץ" value={group} onChange={setGroup} size="sm" items={[{ key: "project", label: "לפי פרויקט" }, { key: "owner", label: "לפי אחראי" }]} />
-        <span className="f-meta-sm">ClickUp · {fmtAgo(HOURS_SYNC.at, now)}</span>
+        {/* the demo's ClickUp read stamp; a business's Mytiv tasks are read live from its Work API */}
+        {!demo.remote && <span className="f-meta-sm">ClickUp · {fmtAgo(HOURS_SYNC.at, now)}</span>}
       </div>
       {list.length === 0 ? <EmptyState glyph="✓" title="אין משימות בסינון הזה" hint="נסה סינון אחר." /> : (
         <table className="f-tl f-alltasks__table">

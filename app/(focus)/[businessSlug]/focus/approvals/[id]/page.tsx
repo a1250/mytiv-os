@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AreaNotConnected } from "@/components/focus/shell/area-not-connected";
 import { notFound } from "next/navigation";
 import { APPROVALS } from "@/lib/focus/fixtures/approvals";
 import { rendersFixtures } from "@/lib/focus/scope.server";
@@ -16,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function Page({ params }: Props) {
-  if (!(await rendersFixtures(params))) return null;
+  if (!(await rendersFixtures(params))) return <AreaNotConnected businessSlug={(await params).businessSlug} />;
   const { id } = await params;
   if (!APPROVALS.some((a) => a.id === id)) notFound();
   return <ApprovalScreen id={id} />;

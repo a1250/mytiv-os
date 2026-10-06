@@ -24,8 +24,12 @@ export function assertWriter(role: string) {
 export function assertOwner(role: string) {
   if (role !== 'owner') throw new OpsPolicyError('owner_role_required', 403);
 }
-export function assertConfirmation(req: Request, body: Record<string, unknown>) {
+/** A state-changing request must come from this app's own origin (browsers always send Origin on non-GET fetches). */
+export function assertSameOrigin(req: Request) {
   if (req.headers.get('origin') !== new URL(req.url).origin) throw new OpsPolicyError('same_origin_required', 403);
+}
+export function assertConfirmation(req: Request, body: Record<string, unknown>) {
+  assertSameOrigin(req);
   if (body.confirmed !== true) throw new OpsPolicyError('explicit_confirmation_required');
   if (typeof body.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId)) throw new OpsPolicyError('invalid_request_id');
 }

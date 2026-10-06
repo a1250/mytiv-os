@@ -41,6 +41,22 @@ export async function rendersFixtures(params: FocusPageProps["params"]): Promise
   return fixturesAllowed(await getFocusScope((await params).businessSlug));
 }
 
+/**
+ * Mytiv Work is connected for business scopes only where its API (and migrations 0012–0013) are live: the flag is
+ * server-side and off by default. Everything else in Focus stays "not connected yet" for a business.
+ */
+export const workConnected = () => process.env.WORK_API_ENABLED === "true";
+/** Approvals read the Marketing OS contracts already in Mytiv; on where the marketing module is (its own flag). */
+export const approvalsConnected = () => process.env.MARKETING_MODULE_ENABLED === "true";
+/** Business mail in Focus: Gmail sends only through backend-owned attempts (migration 0014). Off by default. */
+export { externalActionsEnabled as mailConnected } from "@/lib/external/flag";
+
+/** Page-level guard for the Work screens: the demo renders them on fixtures; a business when Work is connected. */
+export async function rendersWork(params: FocusPageProps["params"]): Promise<boolean> {
+  const scope = await getFocusScope((await params).businessSlug);
+  return fixturesAllowed(scope) || workConnected();
+}
+
 /** Metadata for a fixture screen: its own title in the demo scope; a neutral one for a business (no fixture names). */
 export function fixtureMetadata(metadata: Metadata) {
   return async ({ params }: FocusPageProps): Promise<Metadata> => ((await rendersFixtures(params)) ? metadata : { title: "Focus — Mytiv OS", robots: { index: false } });

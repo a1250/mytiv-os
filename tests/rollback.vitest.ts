@@ -344,3 +344,24 @@ test('a readback that FAILS (ClickUp unavailable) records nothing — it is neve
   expect(eventsOf(action.id).some((e) => e.event === 'reconciled')).toBe(false); // still open
   vi.stubGlobal('fetch', realFetch);
 });
+
+// Mytiv Work package 1: the task table now sends neutral person refs; the audited patch stays ClickUp's own ids.
+test('neutral person refs are translated by the adapter: same audit payload, a foreign-provider ref is refused before any claim', async () => {
+  const { res, action } = await governedUpdate(40, { assignee: { add: [{ provider: 'clickup', id: '2' }], rem: [{ provider: 'clickup', id: '1' }] }, expectedUpdatedAt: new Date(task.updated).toISOString() });
+  expect(res.status).toBe(200);
+  expect(JSON.parse(writes[0])).toEqual({ assignees: { add: [2], rem: [1] } });
+  expect(eventsOf(action.id)[1].detail.post_state).toMatchObject({ assigneeIds: [2] });
+  const claims = mocks.actions.length;
+  const refused = await patchReq({ requestId: rid(41), assignee: { add: [{ provider: 'mytiv', id: '2' }] } });
+  expect(refused.status).toBe(400);
+  expect(await refused.json()).toEqual({ error: 'invalid_assignee' });
+  expect(mocks.actions.length).toBe(claims);
+  expect(writes).toHaveLength(1);
+});
+
+test('a malformed concurrency marker is a 400 before anything is claimed', async () => {
+  const res = await patchReq({ requestId: rid(42), status: 'review', expectedUpdatedAt: 'not-a-date' });
+  expect(res.status).toBe(400);
+  expect(mocks.actions).toHaveLength(0);
+  expect(writes).toHaveLength(0);
+});

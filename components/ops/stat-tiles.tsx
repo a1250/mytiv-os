@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { OpsStats } from "@/lib/clickup";
+import type { WorkStats } from "@/lib/work-source/types";
 
 /**
  * Four numbers, no decoration. A tile turns colour only when its number is
@@ -10,7 +10,7 @@ import type { OpsStats } from "@/lib/clickup";
  * That is unknown, and unknown is rendered as "—", never as 0 — a zero here would read as
  * "nothing stuck, nothing open", which is exactly what nobody knows.
  */
-export function StatTiles({ stats }: { stats: OpsStats | null }) {
+export function StatTiles({ stats }: { stats: WorkStats | null }) {
   const tiles = stats
     ? [
         { label: "Stuck", value: stats.stuck, tone: stats.stuck > 0 ? "text-warning" : undefined },

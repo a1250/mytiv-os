@@ -19,6 +19,8 @@ import {
   foreignKey,
   primaryKey,
   check,
+  date,
+  numeric,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -54,6 +56,8 @@ export const businessMemberships = pgTable(
     role: text("role").notNull().default("member"), // owner | admin | member
     invitedAt: timestamp("invited_at", { withTimezone: true }).defaultNow(),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    /** Mytiv Work: a member who left is deactivated, never deleted — their history and assignments keep a valid FK. */
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
   },
   (t) => [uniqueIndex("business_memberships_business_user_uq").on(t.businessId, t.userId)]
 );
@@ -90,6 +94,39 @@ export const settings = pgTable(
 // Tasks & Ops
 // ---------------------------------------------------------------------------
 
+/** Mytiv Work: the system status catalogue. Global, contains no tenant data; copied into every business. */
+export const workStatusTemplates = pgTable("work_status_templates", {
+  key: text("key").primaryKey(),
+  category: text("category").notNull(),
+  labelHe: text("label_he").notNull(),
+  position: integer("position").notNull(),
+}, (t) => [
+  check("work_status_templates_category_ck", sql`${t.category} in ('open','active','waiting','review','done','cancelled')`),
+]);
+
+/**
+ * Mytiv Work: statuses per business (ADR-0001 decision 4). The same key may exist in two businesses; a task
+ * can only point at a status of its own business, with that status's category (composite FK on tasks).
+ * key/category/business are immutable (trigger); renames change label_he and are appended to revisions.
+ */
+export const workStatuses = pgTable("work_statuses", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  templateKey: text("template_key").references(() => workStatusTemplates.key),
+  category: text("category").notNull(),
+  labelHe: text("label_he").notNull(),
+  position: integer("position").notNull(),
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("work_statuses_business_key_uq").on(t.businessId, t.key),
+  uniqueIndex("work_statuses_business_id_category_uq").on(t.businessId, t.id, t.category),
+  check("work_statuses_category_ck", sql`${t.category} in ('open','active','waiting','review','done','cancelled')`),
+  check("work_statuses_key_ck", sql`${t.key} ~ '^[a-z][a-z0-9_]{0,39}$'`),
+]);
+
 export const tasks = pgTable(
   "tasks",
   {
@@ -97,18 +134,206 @@ export const tasks = pgTable(
     businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     notes: text("notes").default(""),
-    status: text("status").notNull().default("todo"), // backlog | todo | in_progress | waiting | done
+    status: text("status").notNull().default("todo"), // legacy: backlog | todo | in_progress | waiting | done (until the contract step)
     priority: text("priority").notNull().default("medium"), // low | medium | high | urgent
     category: text("category").default(""),
-    dueDate: text("due_date"), // YYYY-MM-DD
+    dueDate: text("due_date"), // legacy YYYY-MM-DD text (until the contract step); due_on is the typed column
     leadId: uuid("lead_id"),
     projectId: uuid("project_id"),
     doneAt: timestamp("done_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    // ── Mytiv Work expand (0012): new columns only; nothing here constrains a legacy value ──
+    /** Per-business status row; with status_category it must match work_statuses (composite FK). */
+    statusId: uuid("status_id"),
+    statusCategory: text("status_category"),
+    dueOn: date("due_on"),
+    startOn: date("start_on"),
+    parentId: uuid("parent_id"),
+    position: numeric("position"),
+    ownerUserId: uuid("owner_user_id"),
+    createdBy: uuid("created_by").references(() => users.id),
+    type: text("type").notNull().default("task"),
+    waitingOn: text("waiting_on"),
+    estimateMinutes: integer("estimate_minutes"),
+    billable: boolean("billable"),
+    source: text("source").notNull().default("legacy"),
+    externalStatus: text("external_status"),
+    version: integer("version").notNull().default(1),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedBy: uuid("deleted_by").references(() => users.id),
+    trashBatchId: uuid("trash_batch_id"),
+    // ── Mytiv Work functions (0013): fields the Work UI writes, only through the work_* DB functions ──
+    /** Manual block: only on a 'waiting' task and never blank (blocked is otherwise derived from open dependencies). */
+    blockedReason: text("blocked_reason"),
+    nextAction: text("next_action"),
+    followUpOn: date("follow_up_on"),
   },
-  (t) => [index("tasks_business_idx").on(t.businessId)]
+  (t) => [
+    index("tasks_business_idx").on(t.businessId),
+    uniqueIndex("tasks_business_id_uq").on(t.businessId, t.id),
+    index("tasks_business_project_idx").on(t.businessId, t.projectId),
+    index("tasks_business_owner_idx").on(t.businessId, t.ownerUserId),
+    index("tasks_business_parent_idx").on(t.businessId, t.parentId),
+    foreignKey({ name: "tasks_status_fk", columns: [t.businessId, t.statusId, t.statusCategory], foreignColumns: [workStatuses.businessId, workStatuses.id, workStatuses.category] }),
+    foreignKey({ name: "tasks_parent_fk", columns: [t.businessId, t.parentId], foreignColumns: [t.businessId, t.id] }),
+    foreignKey({ name: "tasks_owner_member_fk", columns: [t.businessId, t.ownerUserId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+    check("tasks_type_ck", sql`${t.type} in ('task','bug','decision')`),
+    check("tasks_waiting_on_ck", sql`${t.waitingOn} is null or ${t.waitingOn} in ('client','contractor','internal')`),
+    check("tasks_source_ck", sql`${t.source} in ('legacy','manual','proposal','comment','copilot','import_clickup')`),
+    check("tasks_estimate_ck", sql`${t.estimateMinutes} is null or ${t.estimateMinutes} between 0 and 1000000`),
+    check("tasks_version_ck", sql`${t.version} >= 1`),
+    check("tasks_status_pair_ck", sql`(${t.statusId} is null) = (${t.statusCategory} is null)`),
+    check("tasks_not_own_parent_ck", sql`${t.parentId} is null or ${t.parentId} <> ${t.id}`),
+    check("tasks_blocked_reason_ck", sql`${t.blockedReason} is null or (${t.statusCategory} = 'waiting' and btrim(${t.blockedReason}) <> '')`),
+  ]
 );
+
+/** "A waits for B" (blocks), same business and same project only (checked by work_task_update); no self edge. */
+export const taskDependencies = pgTable(
+  "task_dependencies",
+  {
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull(),
+    dependsOnId: uuid("depends_on_id").notNull(),
+    kind: text("kind").notNull().default("blocks"),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: "task_dependencies_pk", columns: [t.businessId, t.taskId, t.dependsOnId] }),
+    index("task_dependencies_on_idx").on(t.businessId, t.dependsOnId),
+    foreignKey({ name: "task_dependencies_task_fk", columns: [t.businessId, t.taskId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "task_dependencies_on_fk", columns: [t.businessId, t.dependsOnId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "task_dependencies_creator_fk", columns: [t.businessId, t.createdBy], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+    check("task_dependencies_kind_ck", sql`${t.kind} = 'blocks'`),
+    check("task_dependencies_not_self_ck", sql`${t.taskId} <> ${t.dependsOnId}`),
+  ]
+);
+
+/** Participants of a task (besides its owner). */
+export const taskMembers = pgTable(
+  "task_members",
+  {
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: "task_members_pk", columns: [t.businessId, t.taskId, t.userId] }),
+    foreignKey({ name: "task_members_task_fk", columns: [t.businessId, t.taskId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "task_members_member_fk", columns: [t.businessId, t.userId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  ]
+);
+
+/**
+ * The Work write ledger (plan §3.10): one row per client request id, written by the work_* function that performed
+ * it, with the result it returned. A replay with the same actor + operation + payload returns that result; anything
+ * else reusing the id is refused. Append-only.
+ */
+export const workRequests = pgTable(
+  "work_requests",
+  {
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    requestId: uuid("request_id").notNull(),
+    actorId: uuid("actor_id").notNull(),
+    operation: text("operation").notNull(),
+    targetId: uuid("target_id"),
+    payloadHash: text("payload_hash").notNull(),
+    result: jsonb("result").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: "work_requests_pk", columns: [t.businessId, t.requestId] }),
+    foreignKey({ name: "work_requests_actor_fk", columns: [t.businessId, t.actorId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  ]
+);
+
+/** Append-only activity of a task (who did what, when) — the drawer's history and the audit of every Work write. */
+export const workEvents = pgTable(
+  "work_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull(),
+    actorId: uuid("actor_id").notNull(),
+    requestId: uuid("request_id"),
+    event: text("event").notNull(),
+    detail: jsonb("detail").notNull().default(sql`'{}'::jsonb`),
+    version: integer("version"),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("work_events_task_idx").on(t.businessId, t.taskId, t.at),
+    foreignKey({ name: "work_events_task_fk", columns: [t.businessId, t.taskId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "work_events_actor_fk", columns: [t.businessId, t.actorId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+  ]
+);
+
+/**
+ * Task comments (migration 0015). Append-only: written only by work_add_comment (authorized, ledgered); never
+ * edited or deleted in place. A comment does not change the task's version — it never conflicts with an edit.
+ */
+export const taskComments = pgTable(
+  "task_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull(),
+    authorId: uuid("author_id").notNull(),
+    requestId: uuid("request_id").notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("task_comments_task_idx").on(t.businessId, t.taskId, t.createdAt),
+    foreignKey({ name: "task_comments_task_fk", columns: [t.businessId, t.taskId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "task_comments_author_fk", columns: [t.businessId, t.authorId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+    check("task_comments_body_len", sql`char_length(${t.body}) between 1 and 5000`),
+  ]
+);
+
+/**
+ * Logged time per task and person (migration 0015). Append-only, written only by work_log_time. `source` says how
+ * it was measured (a Focus timer or a manual entry); `minutes` is bounded to one day per entry.
+ */
+export const taskTimeEntries = pgTable(
+  "task_time_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    requestId: uuid("request_id").notNull(),
+    minutes: integer("minutes").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    source: text("source").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("task_time_entries_task_idx").on(t.businessId, t.taskId),
+    foreignKey({ name: "task_time_entries_task_fk", columns: [t.businessId, t.taskId], foreignColumns: [tasks.businessId, tasks.id] }).onDelete("cascade"),
+    foreignKey({ name: "task_time_entries_user_fk", columns: [t.businessId, t.userId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+    check("task_time_entries_minutes", sql`${t.minutes} between 1 and 1440`),
+    check("task_time_entries_source", sql`${t.source} in ('timer', 'manual')`),
+  ]
+);
+
+/** Append-only history of every status definition change (rename, reorder, retire). */
+export const workStatusRevisions = pgTable("work_status_revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  statusId: uuid("status_id").notNull().references(() => workStatuses.id),
+  labelHe: text("label_he").notNull(),
+  position: integer("position").notNull(),
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
+  changedBy: uuid("changed_by"),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("work_status_revisions_status_idx").on(t.businessId, t.statusId)]);
 
 // Project Hub. One row per client project; the Ops module's spine.
 export const projects = pgTable(
@@ -127,10 +352,15 @@ export const projects = pgTable(
      * Replaces the hardcoded map in lib/ops-config.ts once Phase 1 lands.
      */
     clickupFolderId: text("clickup_folder_id"),
+    /** Mytiv Work: which source holds this project's work. Flipped per project at cutover (ADR-0001 decision 1, 10). */
+    workSource: text("work_source").notNull().default("clickup"),
+    cutoverAt: timestamp("cutover_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check("projects_work_source_ck", sql`${t.workSource} in ('clickup','mytiv')`),
     index("projects_business_idx").on(t.businessId),
     uniqueIndex("projects_business_id_uq").on(t.businessId, t.id),
     /**
@@ -173,7 +403,10 @@ export const leads = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("leads_business_idx").on(t.businessId)]
+  (t) => [
+    index("leads_business_idx").on(t.businessId),
+    uniqueIndex("leads_business_id_uq").on(t.businessId, t.id),
+  ]
 );
 
 export const leadNotes = pgTable(
@@ -1142,3 +1375,37 @@ export const marketingImportFences = pgTable('marketing_import_fences', {
   fencedBy: uuid('fenced_by').notNull().references(() => users.id),
   fencedAt: timestamp('fenced_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.businessId, t.requestId] })]);
+
+/**
+ * External actions performed for a business (a Gmail send, a Meta schedule) — one row per attempt, written by the
+ * server before it calls the provider and settled with the provider's answer. The gate in external_attempt_admit
+ * (0014) is the only way in: per target, an attempt in flight or confirmed blocks a new one, and after an UNKNOWN
+ * outcome a new attempt needs the user's explicit check of the target for that attempt (attested_unknown_attempt_id).
+ * Rows only move forward (in_flight → confirmed | failed | unknown); nothing else changes.
+ */
+export const externalAttempts = pgTable(
+  "external_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    target: text("target").notNull(),
+    requestId: uuid("request_id").notNull(),
+    actorId: uuid("actor_id").notNull(),
+    payloadHash: text("payload_hash").notNull(),
+    payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+    state: text("state").notNull().default("in_flight"),
+    attestedUnknownAttemptId: uuid("attested_unknown_attempt_id"),
+    providerRef: text("provider_ref"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("external_attempts_request_uq").on(t.businessId, t.requestId),
+    index("external_attempts_target_idx").on(t.businessId, t.target, t.createdAt),
+    foreignKey({ name: "external_attempts_actor_fk", columns: [t.businessId, t.actorId], foreignColumns: [businessMemberships.businessId, businessMemberships.userId] }),
+    check("external_attempts_kind_ck", sql`${t.kind} in ('gmail_send','meta_schedule')`),
+    check("external_attempts_state_ck", sql`${t.state} in ('in_flight','confirmed','failed','unknown')`),
+  ]
+);

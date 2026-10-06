@@ -4,7 +4,7 @@ import Link from "@/components/focus/ui/link";
 import { useRef, useState, type KeyboardEvent } from "react";
 import type { BoardColumn, Task } from "@/lib/focus/contracts/work";
 import { fmtDayMonth } from "@/lib/focus/format";
-import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
+import { useDirectory } from "@/components/focus/shell/directory";
 import { R } from "@/lib/focus/routes";
 import { BOARD_ORDER, columnOf, isManuallyBlocked, manualBlockText, openBlockers } from "@/lib/focus/state/work";
 import { cx } from "@/components/focus/ui/cx";
@@ -31,6 +31,7 @@ export function TaskBoard({
   tasks: Task[]; all: Task[]; onMove: (taskId: string, to: BoardColumn, expectedVersion: string) => { ok: boolean; reason?: string };
   timerTaskId?: string | null; timerLabel?: string; canEdit?: boolean;
 }) {
+  const PEOPLE_BY_ID = useDirectory().peopleById;
   const [picked, setPicked] = useState<{ id: string; from: BoardColumn; to: BoardColumn } | null>(null);
   const [announce, setAnnounce] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);

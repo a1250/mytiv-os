@@ -5,8 +5,8 @@ import { useId, useRef, useState, type ReactNode } from "react";
 import type { Priority, WorkStatus } from "@/lib/focus/contracts/status";
 import type { ActiveTimer, CapabilityMap, Task, TaskPatch, TimeEntry, WorkRole } from "@/lib/focus/contracts/work";
 import { fmtAgo, fmtDate, fmtDayMonth, fmtDuration, fmtTime } from "@/lib/focus/format";
-import { demoIso } from "@/lib/focus/fixtures/clock";
-import { PEOPLE, PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
+import { useDirectory } from "@/components/focus/shell/directory";
+import type { Person } from "@/lib/focus/contracts/common";
 import { R } from "@/lib/focus/routes";
 import { blocking, canComplete, canDepend, canDo, childrenOf, displayStatus, isManuallyBlocked, manualBlockText, openBlockers, parseDuration, type WorkAction } from "@/lib/focus/state/work";
 import { Button } from "@/components/focus/ui/button";
@@ -51,6 +51,8 @@ function Section({ title, count, planned, children, className }: { title: string
 }
 
 export function TaskDrawerBody(p: DrawerProps) {
+  const directory = useDirectory();
+  const PEOPLE_BY_ID = directory.peopleById;
   const { task: t, all, now, role, caps } = p;
   const id = useId();
   const edit = canDo(role, "edit");
@@ -99,8 +101,8 @@ export function TaskDrawerBody(p: DrawerProps) {
             <b className="f-conflict__h"><span aria-hidden>⧗</span> {p.conflict.by} עדכן/ה משימה זו בזמן שערכת</b>
             <span className="f-conflict__d">השינוי שלך לא נשמר. בחר איזו גרסה לשמור — שום דבר לא נדרס עד שתחליט.</span>
             <div className="f-conflict__cols">
-              <div className="f-conflict__col"><span className="f-meta-sm">שלך</span><b>{describePatch(p.conflict.mine)}</b></div>
-              <div className="f-conflict__col f-conflict__col--theirs"><span className="f-meta-sm">של {p.conflict.by} · חדש יותר</span><b>{describeTask(p.conflict.theirs, Object.keys(p.conflict.mine) as (keyof TaskPatch)[])}</b></div>
+              <div className="f-conflict__col"><span className="f-meta-sm">שלך</span><b>{describePatch(p.conflict.mine, PEOPLE_BY_ID)}</b></div>
+              <div className="f-conflict__col f-conflict__col--theirs"><span className="f-meta-sm">של {p.conflict.by} · חדש יותר</span><b>{describeTask(p.conflict.theirs, Object.keys(p.conflict.mine) as (keyof TaskPatch)[], PEOPLE_BY_ID)}</b></div>
             </div>
             <div className="f-conflict__actions">
               <Button variant="primary" size="sm" onClick={() => p.onResolveConflict("mine")}>שמור את שלי</Button>
@@ -147,7 +149,7 @@ export function TaskDrawerBody(p: DrawerProps) {
             {edit && can("assign") ? (
               <select className="f-td__pill" value={t.assigneeId ?? ""} onChange={(e) => patch({ assigneeId: e.target.value || null })}>
                 <option value="">ללא אחראי</option>
-                {Object.values(PEOPLE).filter((x) => x.role !== "viewer").map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                {directory.people.filter((x) => x.role !== "viewer").map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
               </select>
             ) : <span className="f-td__text">{t.assigneeId ? PEOPLE_BY_ID[t.assigneeId]?.name : "ללא אחראי"}</span>}
           </label>
@@ -309,7 +311,8 @@ export function TaskDrawerBody(p: DrawerProps) {
 
         <Section className="f-td__sec--links" title="מקושר אל">
           <div className="f-td__links">
-            {t.links.projectId && <Link href={t.links.projectId === AUTUMN_PROJECT_ID ? R.project(AUTUMN_PROJECT_ROUTE_ID) : R.projects} className="f-td__link f-td__link--project"><Icon name="folder" size={13} /> פרויקט: {t.context.project ?? t.context.client}</Link>}
+            {t.links.projectId && t.links.projectId !== AUTUMN_PROJECT_ID && <span className="f-td__link f-td__link--project"><Icon name="folder" size={13} /> פרויקט: {t.context.project ?? t.context.client}</span>}
+            {t.links.projectId === AUTUMN_PROJECT_ID && <Link href={R.project(AUTUMN_PROJECT_ROUTE_ID)} className="f-td__link f-td__link--project"><Icon name="folder" size={13} /> פרויקט: {t.context.project ?? t.context.client}</Link>}
             {t.links.campaignId && <Link href={R.campaign(t.links.campaignId)} className="f-td__link"><Icon name="megaphone" size={13} /> קמפיין: יום חמישי</Link>}
             {t.links.leadId && <Link href={R.lead(t.links.leadId)} className="f-td__link">ליד</Link>}
             {t.links.proposalId && <Link href={R.proposal(t.links.proposalId)} className="f-td__link">הצעת מחיר</Link>}
@@ -330,7 +333,7 @@ export function TaskDrawerBody(p: DrawerProps) {
             <form className="f-td__newcomment" onSubmit={(e) => {
               e.preventDefault();
               if (!commentDraft.trim()) return;
-              patch({ addComment: { id: `c-${Date.now()}`, authorId: p.viewerId, at: demoIso(), text: commentDraft.trim() } });
+              patch({ addComment: { id: `c-${Date.now()}`, authorId: p.viewerId, at: new Date(Date.parse(now) || Date.now()).toISOString(), text: commentDraft.trim() } });
               setCommentDraft(""); setDirty("", subDraft, checkDraft, manual);
             }}>
               <span className={cx("f-tl__av", `f-tl__av--${p.viewerId}`)} aria-hidden>{PEOPLE_BY_ID[p.viewerId]?.initial}</span>
@@ -369,7 +372,7 @@ export function TaskDrawerBody(p: DrawerProps) {
   );
 }
 
-function describePatch(p: TaskPatch) {
+function describePatch(p: TaskPatch, PEOPLE_BY_ID: Record<string, Person>) {
   if (p.assigneeId !== undefined) return `אחראי: ${p.assigneeId ? PEOPLE_BY_ID[p.assigneeId]?.name : "ללא"}`;
   if (p.block) return `חסום: ${p.block.reason}`;
   if (p.unblock) return "הסרת חסימה";
@@ -378,7 +381,7 @@ function describePatch(p: TaskPatch) {
   if (p.dueDate !== undefined) return `יעד: ${p.dueDate ? fmtDate(p.dueDate) : "—"}`;
   return "שינוי שלך";
 }
-function describeTask(t: Task, keys: (keyof TaskPatch)[]) {
+function describeTask(t: Task, keys: (keyof TaskPatch)[], PEOPLE_BY_ID: Record<string, Person>) {
   if (keys.includes("assigneeId")) return `אחראי: ${t.assigneeId ? PEOPLE_BY_ID[t.assigneeId]?.name : "ללא"}`;
   if (keys.includes("block") || keys.includes("unblock")) return isManuallyBlocked(t) ? `חסום: ${manualBlockText(t)}` : `סטטוס: ${WORK[t.status].word}`;
   if (keys.includes("status")) return `סטטוס: ${WORK[t.status].word}`;

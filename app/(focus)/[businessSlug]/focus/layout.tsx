@@ -14,7 +14,9 @@ import "@/components/focus/patterns/clients/clients.css";
 import "@/components/focus/patterns/comms/comms.css";
 import "@/components/focus/patterns/marketing/marketing.css";
 import { fixturesAllowed, requireBusinessScope } from "@/lib/focus/scope";
-import { getFocusScope } from "@/lib/focus/scope.server";
+import { approvalsConnected, getFocusScope, mailConnected, workConnected } from "@/lib/focus/scope.server";
+import { BusinessShell } from "@/components/focus/shell/business-shell";
+import { loadBusinessWork } from "@/lib/work/focus-shell";
 import { DemoStoreProvider } from "@/components/focus/shell/demo-store";
 import { FocusNotConnected } from "@/components/focus/shell/not-connected";
 import { NavGuardProvider } from "@/components/focus/shell/nav-guard";
@@ -39,8 +41,11 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
  * server first (lib/focus/scope.server.ts — same trust model as lib/api-guard.ts): no session → /login, not a member
  * → 404, demo scope → only where prototype surfaces are on.
  *
- * Data boundary: Focus has no adapters yet, so only the demo scope renders the screens (fixtures + demo store).
- * A verified business gets an honest "not connected yet" page — fixtures are never shown as a business's data.
+ * Data boundary: only the demo scope renders fixtures (fixtures + demo store). A verified business gets the areas
+ * that are connected to its real data — Mytiv Work (WORK_API_ENABLED) through the same store in remote mode,
+ * approvals from the Marketing OS contracts (MARKETING_MODULE_ENABLED), mail through backend-owned Gmail attempts
+ * (EXTERNAL_ACTIONS_ENABLED) — and an honest "not connected yet" page everywhere else. Fixtures are never shown as a
+ * business's data.
  *
  * Self-contained and RTL: its own typefaces, tokens (on :root while mounted) and theme, so the legacy dark app is
  * untouched. ThemeScript runs before any content paints (no theme flash).
@@ -63,6 +68,8 @@ export default async function FocusLayout({ children, params }: { children: Reac
               </NavGuardProvider>
             </ToastProvider>
           </DemoStoreProvider>
+        ) : workConnected() || approvalsConnected() || mailConnected() ? (
+          <BusinessShell remote={await loadBusinessWork(requireBusinessScope(scope))} areas={{ work: workConnected(), approvals: approvalsConnected(), mail: mailConnected() }}>{children}</BusinessShell>
         ) : (
           <main id="main" tabIndex={-1} className="f-main"><FocusNotConnected scope={requireBusinessScope(scope)} /></main>
         )}

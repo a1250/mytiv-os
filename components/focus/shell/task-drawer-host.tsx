@@ -4,8 +4,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useFocusRouter } from "@/components/focus/ui/link";
 import { useState } from "react";
 import type { Task, TaskPatch } from "@/lib/focus/contracts/work";
-import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
-import { CAPABILITIES } from "@/lib/focus/fixtures/work";
 import { WORK } from "@/components/focus/ui/status";
 import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
@@ -65,7 +63,8 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
   if (!task || !base) return null;
   const version = base.version;
 
-  const caps = CAPABILITIES[task.source];
+  const caps = demo.directory.capabilities[task.source];
+  const PEOPLE_BY_ID = demo.directory.peopleById;
   const writer = (t: Task) => (t.updatedBy && t.updatedBy !== "system" ? PEOPLE_BY_ID[t.updatedBy]?.name : undefined) ?? "משתמש אחר";
   const onPatch = (patch: TaskPatch, expected: string) => {
     const r = demo.patchTask(task.id, patch, expected);
@@ -140,14 +139,14 @@ export function TaskDrawerHost({ defaultTaskId }: { defaultTaskId?: string }) {
             const r = demo.timerStop();
             if (!r) return;
             if (r.minutes > 0 && !r.write?.ok) { demo.timerRestore(r.stopped, r.elapsedMs); toast.push({ kind: "error", title: "הזמן לא נרשם · הטיימר נשאר מושהה", detail: r.write && "refused" in r.write ? r.write.refused : "המשימה עודכנה בינתיים." }); return; }
-            toast.push({ title: r.minutes > 0 ? `נרשמו ${r.minutes} דק׳` : "הטיימר נעצר", detail: r.minutes > 0 ? `${r.task?.title ?? ""}${caps.trackTime === "planned" ? " · יכולת מתוכננת — בהדגמה בלבד" : ""}` : "פחות מחצי דקה — לא נרשם זמן.", undo: { onUndo: stopUndo(r) } });
+            toast.push({ title: r.minutes > 0 ? `נרשמו ${r.minutes} דק׳` : "הטיימר נעצר", detail: r.minutes > 0 ? `${r.task?.title ?? ""}${caps.trackTime === "planned" ? " · יכולת מתוכננת — בהדגמה בלבד" : ""}` : "פחות מחצי דקה — לא נרשם זמן.", ...(demo.remote ? {} : { undo: { onUndo: stopUndo(r) } }) }); // business scope: logged time is append-only on the server
           },
         }}
         entries={demo.state.timeEntries}
         onLogTime={(m) => {
           const r = demo.logTime(task.id, m);
           if (!r.result.ok || !r.entry) { toast.push({ kind: "error", title: "הזמן לא נרשם", detail: "refused" in r.result ? r.result.refused : "המשימה עודכנה בינתיים." }); return; }
-          toast.push({ title: `נרשמו ${m} דק׳ ידנית`, detail: caps.trackTime === "planned" ? `${task.title} · יכולת מתוכננת — בהדגמה בלבד` : task.title, undo: { onUndo: undo(r.previous!, r.result.task.version, () => demo.removeTimeEntry(r.entry!.id)) } });
+          toast.push({ title: `נרשמו ${m} דק׳ ידנית`, detail: caps.trackTime === "planned" ? `${task.title} · יכולת מתוכננת — בהדגמה בלבד` : task.title, ...(demo.remote ? {} : { undo: { onUndo: undo(r.previous!, r.result.task.version, () => demo.removeTimeEntry(r.entry!.id)) } }) });
         }}
         onDuplicate={() => {
           // a copy starts fresh: open, unblocked, no history — and it is a local Mytiv task (creating at ClickUp is

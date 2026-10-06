@@ -2,7 +2,6 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { CLIENTS, PEOPLE } from "@/lib/focus/fixtures/people";
 import { fmtLongDate } from "@/lib/focus/format";
 import { bucketsFor, canDo, elapsedOf, openCount } from "@/lib/focus/state/work";
 import { MyTasksView } from "@/components/focus/patterns/work/my-tasks";
@@ -72,8 +71,8 @@ function Inner() {
         <div className={createOpen ? "f-wmy__create f-wmy__create--open" : "f-wmy__create"}><QuickCreate
           now={now}
           autoFocus={params.get("create") === "1"}
-          people={Object.values(PEOPLE).map((p) => ({ id: p.id, name: p.name }))}
-          clients={Object.values(CLIENTS).map((c) => c.name)}
+          people={demo.directory.people.map((p) => ({ id: p.id, name: p.name }))}
+          clients={[...new Set(demo.directory.projects.map((p) => p.client).filter((c): c is string => !!c))]}
           onCreate={(d, keep) => {
             // "?project=…" (from a project screen) creates the task inside that project
             const t = demo.createTask({ title: d.title, dueDate: d.dueDate ?? null, priority: d.priority, assigneeId: d.assigneeId ?? viewer.id, context: projectId && sibling ? { ...sibling.context } : d.client ? { client: d.client } : {}, ...(projectId ? { links: { projectId } } : {}) });
