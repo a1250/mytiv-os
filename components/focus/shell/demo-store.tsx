@@ -10,7 +10,7 @@ import { ACTIVE_TIMER, TASKS, TIME_ENTRIES } from "@/lib/focus/fixtures/work";
 import { checkDecision } from "@/lib/focus/state/approvals";
 import { execReducer, initialExec, type ExecEvent, type ExecState } from "@/lib/focus/state/execution";
 import { jobStatus, type Job } from "@/lib/focus/state/jobs";
-import { applyPatch, checkMove, minutesToLog, pauseTimer, resumeTimer, statusForColumn, switchTimer, type PatchResult } from "@/lib/focus/state/work";
+import { applyPatch, checkMove, minutesToLog, pauseTimer, resumeTimer, statusForColumn, switchTimer, taskInvariant, type PatchResult } from "@/lib/focus/state/work";
 
 /**
  * Demo store — the temporary stand-in for the backend. It holds every stateful flow on fixtures so screens behave for
@@ -104,7 +104,7 @@ function reducer(s: State, a: Action): State {
   }
 }
 
-const SESSION_KEY = "mytiv-focus-demo-v2";
+const SESSION_KEY = "mytiv-focus-demo-v3"; // v3: "blocked" is derived, never stored
 const TIMER_KEY = "mytiv-focus-timer-v1";
 
 function readJson<T>(storage: () => Storage, key: string): T | null {
@@ -131,6 +131,8 @@ function useStoreValue() {
     const executions = Object.fromEntries(Object.entries(session.executions ?? {}).map(([k, v]) => [k, v.step === "sending" ? { step: "failed", at: Date.now(), message: "החיבור נקטע לפני שהתקבל אישור. דבר לא סומן כנשלח." } as ExecState : v]));
     const { hydrated: _h, clock: _c, ...rest } = session;
     void _h; void _c;
+    // persisted tasks must satisfy the stored-task invariant; otherwise fall back to the fixtures
+    if (rest.tasks && !rest.tasks.every((t) => taskInvariant(t).ok)) delete rest.tasks;
     dispatch({ type: "hydrate", state: { ...rest, executions, timer: t, clock: Date.now() } });
   }, []);
 
@@ -215,7 +217,10 @@ function useStoreValue() {
     if (!cur) return { ok: false, reason: "המשימה לא נמצאה." };
     const gate = checkMove(cur, to, s.tasks);
     if (!gate.ok) return gate;
-    dispatch({ type: "replaceTask", task: { ...cur, status: statusForColumn(cur, to), version: cur.version + 1, updatedAt: demoIso() } });
+    // the same write path as the drawer: applyPatch keeps the stored-task invariant (e.g. leaving "waiting" drops a block reason)
+    const r = applyPatch(cur, { status: statusForColumn(cur, to) }, cur.version, demoIso(), s.tasks);
+    if (!r.ok) return { ok: false, reason: "refused" in r ? r.refused : "המשימה עודכנה בינתיים. נסו שוב." };
+    dispatch({ type: "replaceTask", task: r.task });
     return { ok: true, previous: cur };
   }, [s.tasks]);
 

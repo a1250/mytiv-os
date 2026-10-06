@@ -1,6 +1,6 @@
 import type { IsoDate, IsoDateTime, PersonId } from "./common";
 import type { Loadable } from "./loadable";
-import type { Priority, WorkStatus } from "./status";
+import type { Priority, WorkDisplayStatus, WorkStatus } from "./status";
 
 /**
  * Mytiv Work — UI contract (handoff README → "חוזה רכיבים"). This is the meeting point with `auto/work-pkg1`:
@@ -13,7 +13,8 @@ export type TaskSource = "mytiv" | "clickup";
 /** `planned` = the backend for this capability does not exist yet: rendered in full, labelled "מתוכנן", fed by fixtures. */
 export type CapabilityState = "live" | "planned";
 
-export type TaskRef = { id: string; title: string; status: WorkStatus };
+/** A summary of another task as shown (its display status, which may be the derived "blocked"). */
+export type TaskRef = { id: string; title: string; status: WorkDisplayStatus };
 
 export type Subtask = { id: string; title: string; done: boolean; assigneeId?: PersonId; dueDate?: IsoDate; estimateMinutes?: number; spentMinutes?: number };
 export type ChecklistItem = { id: string; label: string; checked: boolean };
@@ -51,7 +52,11 @@ export type Task = {
   nextAction?: string;
   /** who we are waiting for (status `waiting`) — pkg1 `waiting_on` + a label */
   waitingFor?: string;
-  /** a blocked task always carries its reason (handoff: "בסיכון" / "חסום" only with a written reason) */
+  /**
+   * Manual block (handoff: "חסום" only with a written reason). Only on a `waiting` task and never blank — enforced by
+   * `taskInvariant` on every patch. pkg1: the business status key `blocked` under category `waiting`, reason in
+   * `waiting_on`. A task blocked by an open dependency derives its block from `dependsOn` and carries no reason here.
+   */
   blockedReason?: string;
   /** follow-up date for blocked/waiting items */
   followUp?: IsoDate | null;
@@ -86,6 +91,10 @@ export type TaskPatch = Partial<Pick<Task, "title" | "notes" | "status" | "prior
   addChecklistItem?: { id: string; label: string };
   addComment?: Comment;
   addDependency?: TaskRef;
+  /** manual block: sets status `waiting` + the written reason (required, non-blank) */
+  block?: { reason: string };
+  /** lifts a manual block (the task stays `waiting` until its status changes) */
+  unblock?: true;
 };
 
 export type BoardColumn = "todo" | "in_progress" | "blockedOrWaiting" | "done";

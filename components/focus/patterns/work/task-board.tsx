@@ -6,7 +6,7 @@ import type { BoardColumn, Task } from "@/lib/focus/contracts/work";
 import { fmtDayMonth } from "@/lib/focus/format";
 import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
 import { R } from "@/lib/focus/routes";
-import { BOARD_ORDER, columnOf, openBlockers } from "@/lib/focus/state/work";
+import { BOARD_ORDER, columnOf, isManuallyBlocked, openBlockers } from "@/lib/focus/state/work";
 import { cx } from "@/components/focus/ui/cx";
 import { Icon } from "@/components/focus/ui/icon";
 import { SourceDot, WORK } from "@/components/focus/ui/status";
@@ -104,7 +104,8 @@ export function TaskBoard({
                 <h3 className="f-kcard__title"><Link href={R.task(t.id, "board")} className="f-tcard__link">{t.title}</Link></h3>
                 {isPicked && <span className="f-kcard__sub">מועבר ל{COLUMN_TITLES[picked.to].title} · נבחר</span>}
                 {!isPicked && blockers.length > 0 && <span className="f-kcard__sub">חסום ע״י {blockers[0].title.split(" ")[0]}</span>}
-                {!isPicked && !blockers.length && t.status === "waiting" && <span className="f-kcard__sub">ממתין ל: {t.waitingFor}</span>}
+                {!isPicked && !blockers.length && isManuallyBlocked(t) && <span className="f-kcard__sub"><span aria-hidden>{WORK.blocked.glyph}</span> חסום: {t.blockedReason}</span>}
+                {!isPicked && !blockers.length && !isManuallyBlocked(t) && t.status === "waiting" && t.waitingFor && <span className="f-kcard__sub">ממתין ל: {t.waitingFor}</span>}
                 {t.status !== "done" && (
                   <div className="f-kcard__foot">
                     <span className={cx("f-tl__av", t.assigneeId && `f-tl__av--${t.assigneeId}`, !who && "f-tl__av--none")} title={who?.name ?? "ללא אחראי"} aria-label={who?.name ?? "ללא אחראי"}>{who?.initial ?? "?"}</span>

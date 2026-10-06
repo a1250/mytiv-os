@@ -8,7 +8,7 @@ import { fmtAgo, fmtDate, fmtDayMonth, fmtDuration, fmtTime } from "@/lib/focus/
 import { demoIso } from "@/lib/focus/fixtures/clock";
 import { PEOPLE, PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
 import { R } from "@/lib/focus/routes";
-import { blocking, canComplete, canDepend, canDo, childrenOf, openBlockers, parseDuration } from "@/lib/focus/state/work";
+import { blocking, canComplete, canDepend, canDo, childrenOf, displayStatus, isManuallyBlocked, openBlockers, parseDuration } from "@/lib/focus/state/work";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
 import { Banner } from "@/components/focus/ui/feedback";
@@ -33,7 +33,9 @@ export type DrawerProps = {
   onDuplicate: () => void; onClose: () => void; onDirtyChange?: (dirty: boolean) => void;
 };
 
-const STATUS_OPTIONS: WorkStatus[] = ["todo", "in_progress", "waiting", "blocked", "done"];
+/** Canonical statuses only. "חסום" is not a status: it is offered as an action that needs a written reason (see BLOCK). */
+const STATUS_OPTIONS: WorkStatus[] = ["todo", "in_progress", "waiting", "done"];
+const BLOCK = "__block";
 const PRIORITY_OPTIONS: Priority[] = ["low", "medium", "high", "urgent"];
 
 function Section({ title, count, planned, children, className }: { title: string; count?: ReactNode; planned?: boolean; children: ReactNode; className?: string }) {
@@ -56,6 +58,10 @@ export function TaskDrawerBody(p: DrawerProps) {
   const [manualErr, setManualErr] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [depPick, setDepPick] = useState("");
+  const [blocking_, setBlocking] = useState(false);
+  const [blockDraft, setBlockDraft] = useState("");
+  const [blockErr, setBlockErr] = useState<string | null>(null);
+  const manualBlock = isManuallyBlocked(t);
   const blockers = openBlockers(t, all);
   const kids = childrenOf(t, all);
   const done = t.status === "done";
@@ -65,7 +71,8 @@ export function TaskDrawerBody(p: DrawerProps) {
   const timerHere = p.timer.active?.taskId === t.id;
   const loggedHere = p.entries.filter((e) => e.taskId === t.id).reduce((a, e) => a + e.minutes, 0);
 
-  const setDirty = (d: string, s: string, c: string, m: string) => p.onDirtyChange?.(!!(d.trim() || s.trim() || c.trim() || m.trim()));
+  const setDirty = (d: string, s: string, c: string, m: string, b: string = blockDraft) => p.onDirtyChange?.(!!(d.trim() || s.trim() || c.trim() || m.trim() || b.trim()));
+  const closeBlock = () => { setBlocking(false); setBlockDraft(""); setBlockErr(null); setDirty(commentDraft, subDraft, checkDraft, manual, ""); };
   const patch = (pt: TaskPatch) => {
     const r = p.onPatch(pt, p.baseVersion);
     if (!r.ok) setError(r.refused ?? null); else setError(null);
@@ -105,11 +112,13 @@ export function TaskDrawerBody(p: DrawerProps) {
           <label className="f-td__field">
             <span className="f-td__fl">סטטוס</span>
             {edit && canDo(role, "changeStatus") ? (
-              <select className={cx("f-td__pill", `f-td__pill--${t.status}`)} value={t.status} onChange={(e) => patch({ status: e.target.value as WorkStatus })}>
+              <select className={cx("f-td__pill", `f-td__pill--${manualBlock ? "blocked" : t.status}`)} value={manualBlock ? BLOCK : t.status}
+                onChange={(e) => (e.target.value === BLOCK ? setBlocking(true) : (closeBlock(), patch({ status: e.target.value as WorkStatus })))}>
                 {t.status === "unknown" && <option value="unknown">{WORK.unknown.glyph} {WORK.unknown.word}</option>}
                 {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{WORK[s].glyph} {WORK[s].word}</option>)}
+                {t.status !== "unknown" && <option value={BLOCK}>{WORK.blocked.glyph} {manualBlock ? WORK.blocked.word : `${WORK.blocked.word}…`}</option>}
               </select>
-            ) : <WorkStatusTag status={t.status} />}
+            ) : <WorkStatusTag status={manualBlock || blockers.length ? "blocked" : t.status} />}
           </label>
           <label className="f-td__field">
             <span className="f-td__fl">עדיפות</span>
@@ -138,6 +147,29 @@ export function TaskDrawerBody(p: DrawerProps) {
             </span>
           </div>
         </div>
+
+        {manualBlock && !blocking_ && (
+          <div className="f-td__blockwhy">
+            <span><span aria-hidden>{WORK.blocked.glyph}</span> חסום: {t.blockedReason}</span>
+            {edit && canDo(role, "changeStatus") && <Button variant="link" size="sm" onClick={() => patch({ unblock: true })}>הסר חסימה</Button>}
+          </div>
+        )}
+        {blocking_ && (
+          <form className="f-td__blockform" onSubmit={(e) => {
+            e.preventDefault();
+            if (!blockDraft.trim()) { setBlockErr("כתבו למה המשימה חסומה. חסימה בלי סיבה לא נשמרת."); return; }
+            if (patch({ block: { reason: blockDraft } })) closeBlock();
+          }}>
+            <label htmlFor={`${id}-block`} className="f-field__label">סיבת החסימה <span className="f-field__label-note">(חובה)</span></label>
+            <textarea id={`${id}-block`} rows={2} className="f-input" value={blockDraft} aria-required aria-invalid={blockErr ? true : undefined} aria-describedby={blockErr ? `${id}-block-e` : undefined} autoFocus
+              onChange={(e) => { setBlockDraft(e.target.value); setBlockErr(null); setDirty(commentDraft, subDraft, checkDraft, manual, e.target.value); }} />
+            {blockErr && <span id={`${id}-block-e`} className="f-field__error" role="alert"><span aria-hidden>!</span>{blockErr}</span>}
+            <div className="f-td__blockactions">
+              <Button type="submit" variant="primary" size="sm">סמן כחסום</Button>
+              <Button variant="neutral" size="sm" onClick={closeBlock}>ביטול</Button>
+            </div>
+          </form>
+        )}
 
         <div className="f-td__dates">
           <label className="f-td__date">
@@ -220,7 +252,7 @@ export function TaskDrawerBody(p: DrawerProps) {
 
         <Section className="f-td__sec--subs" title="תת־משימות" planned={caps.nest === "planned"} count={<span className="f-meta-sm f-num">{subDone + kids.filter((k) => k.status === "done").length}/{t.subtasks.length + kids.length}</span>}>
           {kids.map((k) => (
-            <Link key={k.id} href={R.task(k.id)} className="f-td__sub"><WorkStatusTag status={k.status} size="xs" glyphOnly /><span className="f-td__item">{k.title}</span></Link>
+            <Link key={k.id} href={R.task(k.id)} className="f-td__sub"><WorkStatusTag status={displayStatus(k, all)} size="xs" glyphOnly /><span className="f-td__item">{k.title}</span></Link>
           ))}
           {t.subtasks.map((s) => (
             <label key={s.id} className="f-td__sub">
@@ -321,6 +353,8 @@ export function TaskDrawerBody(p: DrawerProps) {
 
 function describePatch(p: TaskPatch) {
   if (p.assigneeId !== undefined) return `אחראי: ${p.assigneeId ? PEOPLE_BY_ID[p.assigneeId]?.name : "ללא"}`;
+  if (p.block) return `חסום: ${p.block.reason}`;
+  if (p.unblock) return "הסרת חסימה";
   if (p.status) return `סטטוס: ${WORK[p.status].word}`;
   if (p.priority) return `עדיפות: ${PRIORITY[p.priority].word}`;
   if (p.dueDate !== undefined) return `יעד: ${p.dueDate ? fmtDate(p.dueDate) : "—"}`;
@@ -328,6 +362,7 @@ function describePatch(p: TaskPatch) {
 }
 function describeTask(t: Task, keys: (keyof TaskPatch)[]) {
   if (keys.includes("assigneeId")) return `אחראי: ${t.assigneeId ? PEOPLE_BY_ID[t.assigneeId]?.name : "ללא"}`;
+  if (keys.includes("block") || keys.includes("unblock")) return t.blockedReason ? `חסום: ${t.blockedReason}` : `סטטוס: ${WORK[t.status].word}`;
   if (keys.includes("status")) return `סטטוס: ${WORK[t.status].word}`;
   if (keys.includes("priority")) return `עדיפות: ${PRIORITY[t.priority].word}`;
   if (keys.includes("dueDate")) return `יעד: ${t.dueDate ? fmtDate(t.dueDate) : "—"}`;

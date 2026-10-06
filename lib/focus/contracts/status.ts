@@ -5,10 +5,18 @@
  */
 
 /**
- * Work state — rectangular tag (r:6). `unknown` = the source status could not be mapped safely (pkg1
- * WorkStatusCategory "unknown"): never counted as done or active, shown as unmapped, no action branches on it.
+ * Work state — rectangular tag (r:6). `WorkStatus` is the canonical, storable status (pkg1 WorkStatusCategory): the
+ * only values a task holds and a write may set. `unknown` = the source status could not be mapped safely: never
+ * counted as done or active, shown as unmapped, no action branches on it.
+ *
+ * "blocked" is NOT a status (pkg1 has no blocked category). It is derived for display — `WorkDisplayStatus` — from
+ * an open dependency, or from a manual block = status `waiting` + a written `blockedReason` (pkg1: a business status
+ * key under category `waiting`). See `displayStatus()` in lib/focus/state/work.ts.
  */
-export type WorkStatus = "todo" | "in_progress" | "waiting" | "blocked" | "done" | "cancelled" | "unknown";
+export type WorkStatus = "todo" | "in_progress" | "waiting" | "done" | "cancelled" | "unknown";
+export const WORK_STATUSES: readonly WorkStatus[] = ["todo", "in_progress", "waiting", "done", "cancelled", "unknown"];
+/** What the UI shows for a task: its canonical status, or "blocked" when derived. Never stored, never written. */
+export type WorkDisplayStatus = WorkStatus | "blocked";
 
 /** Approval state — outlined pill. */
 export type ApprovalStatus = "draft" | "pending" | "approved" | "changes_requested" | "rejected";

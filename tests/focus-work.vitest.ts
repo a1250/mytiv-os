@@ -6,9 +6,11 @@ import { describe, expect, it } from "vitest";
 import type { ActiveTimer, Task } from "@/lib/focus/contracts/work";
 import { TASKS } from "@/lib/focus/fixtures/work";
 import {
-  applyPatch, boardColumns, bucketsFor, canComplete, canDepend, canDo, canStart, checkMove, columnOf, elapsedOf, isBlocked,
-  minutesToLog, openCount, parseDuration, parseQuickTask, pauseTimer, resumeTimer, startTimer, statusForColumn, switchTimer,
+  applyPatch, BOARD_ORDER, blockedWhy, boardColumns, bucketsFor, canComplete, canDepend, canDo, canStart, checkMove, columnOf,
+  displayStatus, elapsedOf, isBlocked, minutesToLog, openCount, parseDuration, parseQuickTask, pauseTimer, resumeTimer, startTimer,
+  statusForColumn, switchTimer, taskInvariant, type PatchResult,
 } from "@/lib/focus/state/work";
+import type { TaskPatch } from "@/lib/focus/contracts/work";
 
 const NOW = "2026-10-01T08:10:00+03:00";
 const base = (s: Partial<Task> & Pick<Task, "id">): Task => ({
@@ -21,7 +23,7 @@ describe("My Tasks buckets", () => {
   it("places tasks by time and state, never by hand", () => {
     const t = [
       base({ id: "today", dueDate: "2026-10-01" }), base({ id: "late", dueDate: "2026-09-29" }), base({ id: "soon", dueDate: "2026-10-03" }),
-      base({ id: "nodate" }), base({ id: "wait", status: "waiting" }), base({ id: "blk", status: "blocked" }),
+      base({ id: "nodate" }), base({ id: "wait", status: "waiting" }), base({ id: "blk", status: "waiting", blockedReason: "ממתין לצלם" }),
       base({ id: "dep", dueDate: "2026-10-01", dependsOn: [{ id: "blk", title: "", status: "blocked" }] }),
       base({ id: "unk", status: "unknown" }), base({ id: "done", status: "done" }), base({ id: "other", assigneeId: "x" }),
     ];
@@ -60,7 +62,8 @@ describe("Kanban transitions", () => {
   it("sets the status the column means; waiting stays waiting", () => {
     expect(statusForColumn(base({ id: "x" }), "in_progress")).toBe("in_progress");
     expect(statusForColumn(base({ id: "x", status: "waiting" }), "blockedOrWaiting")).toBe("waiting");
-    expect(statusForColumn(base({ id: "x" }), "blockedOrWaiting")).toBe("blocked");
+    // "blocked" is never a stored status: the column stores waiting, and a move creates no block without a reason
+    expect(statusForColumn(base({ id: "x" }), "blockedOrWaiting")).toBe("waiting");
   });
   it("refuses moves that break the rules, with a reason", () => {
     expect(checkMove(dependent, "in_progress", all).ok).toBe(false);
@@ -177,5 +180,81 @@ describe("timer", () => {
     const same = switchTimer(pauseTimer(running, 60_000), task, new Date(120_000).toISOString());
     expect(same.conflict).toBe(false);
     expect(same.next.running).toBe(true);
+  });
+});
+
+describe("blocked is derived, never stored (Work contract §5)", () => {
+  const dep = base({ id: "dep", title: "צילום", status: "in_progress" });
+  const waiting = base({ id: "w", status: "waiting" });
+  const manual = base({ id: "m", status: "waiting", blockedReason: "ממתין לצלם חיצוני" });
+  const byDep = base({ id: "bd", dependsOn: [{ id: "dep", title: "צילום", status: "in_progress" }] });
+  const all = [dep, waiting, manual, byDep];
+
+  it("shows blocked only for an open dependency or a manual block with its reason", () => {
+    expect(displayStatus(byDep, all)).toBe("blocked");
+    expect(displayStatus(manual, all)).toBe("blocked");
+    expect(displayStatus(waiting, all)).toBe("waiting");
+    expect(displayStatus(base({ id: "x", status: "done", dependsOn: byDep.dependsOn }), all)).toBe("done");
+    expect(blockedWhy(manual, all)).toBe("ממתין לצלם חיצוני");
+    expect(blockedWhy(byDep, all)).toContain("צילום");
+    expect(blockedWhy(waiting, all)).toBeNull();
+  });
+
+  it("refuses to store status \"blocked\" from any (untyped) input", () => {
+    const r = applyPatch(waiting, { status: "blocked" } as unknown as TaskPatch, 1, NOW, all);
+    expect(r.ok).toBe(false);
+    expect("refused" in r && r.refused).toBeTruthy();
+  });
+
+  it("a manual block needs a written reason; blank or whitespace is refused", () => {
+    for (const reason of ["", "   ", "\n\t"]) {
+      const r = applyPatch(waiting, { block: { reason } }, 1, NOW, all);
+      expect(r.ok, JSON.stringify(reason)).toBe(false);
+    }
+    const ok = applyPatch(base({ id: "t" }), { block: { reason: "  אין צלם  " } }, 1, NOW, all);
+    expect(ok.ok && ok.task.status).toBe("waiting");
+    expect(ok.ok && ok.task.blockedReason).toBe("אין צלם");
+    expect(applyPatch(base({ id: "c", status: "done" }), { block: { reason: "x" } }, 1, NOW, all).ok).toBe(false);
+  });
+
+  it("leaving waiting or unblocking drops the reason (no stale block)", () => {
+    const moved = applyPatch(manual, { status: "todo" }, 1, NOW, all);
+    expect(moved.ok && moved.task.blockedReason).toBeUndefined();
+    const lifted = applyPatch(manual, { unblock: true }, 1, NOW, all);
+    expect(lifted.ok && lifted.task.status).toBe("waiting");
+    expect(lifted.ok && lifted.task.blockedReason).toBeUndefined();
+    expect(lifted.ok && displayStatus(lifted.task, all)).toBe("waiting");
+  });
+
+  it("no column maps to a non-canonical status", () => {
+    for (const col of BOARD_ORDER) expect(["todo", "in_progress", "waiting", "done"]).toContain(statusForColumn(manual, col));
+  });
+
+  it("every fixture task satisfies the stored-task invariant", () => {
+    for (const t of TASKS) expect(taskInvariant(t), t.id).toEqual({ ok: true });
+    expect(taskInvariant({ ...waiting, status: "blocked" } as unknown as Task).ok).toBe(false);
+    expect(taskInvariant({ ...waiting, blockedReason: " " }).ok).toBe(false);
+    expect(taskInvariant({ ...base({ id: "z" }), blockedReason: "x" }).ok).toBe(false);
+  });
+
+  it("no sequence of patches and moves produces blocked-without-reason (randomised)", () => {
+    let seed = 7;
+    const rnd = (n: number) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
+    const patches: TaskPatch[] = [
+      { status: "todo" }, { status: "in_progress" }, { status: "waiting" }, { status: "done" }, { unblock: true },
+      { block: { reason: "" } }, { block: { reason: "  " } }, { block: { reason: "סיבה" } }, { status: "blocked" } as unknown as TaskPatch,
+    ];
+    let tasks = TASKS.map((t) => ({ ...t }));
+    for (let i = 0; i < 2000; i++) {
+      const t = tasks[rnd(tasks.length)];
+      let r: PatchResult;
+      if (rnd(2)) r = applyPatch(t, patches[rnd(patches.length)], t.version, NOW, tasks);
+      else {
+        const to = BOARD_ORDER[rnd(BOARD_ORDER.length)];
+        r = checkMove(t, to, tasks).ok ? applyPatch(t, { status: statusForColumn(t, to) }, t.version, NOW, tasks) : { ok: false, refused: "move" };
+      }
+      if (r.ok) tasks = tasks.map((x) => (x.id === t.id ? r.task : x));
+      for (const x of tasks) expect(taskInvariant(x).ok).toBe(true);
+    }
   });
 });

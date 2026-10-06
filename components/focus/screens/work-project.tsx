@@ -6,7 +6,7 @@ import { PROJECT_UMINO } from "@/lib/focus/fixtures/projects";
 import { PEOPLE } from "@/lib/focus/fixtures/people";
 import { fmtDuration } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
-import { canComplete, canDo, elapsedOf, type Gate } from "@/lib/focus/state/work";
+import { canComplete, canDo, elapsedOf, type Gate, displayStatus } from "@/lib/focus/state/work";
 import { ProjectHeader } from "@/components/focus/patterns/project/project-parts";
 import { TaskBoard } from "@/components/focus/patterns/work/task-board";
 import { TaskListView } from "@/components/focus/patterns/work/task-list";
@@ -33,7 +33,7 @@ function Inner({ view, defaultTaskId }: { view: "list" | "board"; defaultTaskId?
   const [owner, setOwner] = useState("all");
   const tick = useTicker(view === "board" && !!state.timer?.running, 1000);
   const project = state.tasks.filter((t) => t.links.projectId === PROJECT_ID);
-  const tasks = project.filter((t) => (status === "all" || t.status === status) && (owner === "all" || (owner === "none" ? !t.assigneeId : t.assigneeId === owner)));
+  const tasks = project.filter((t) => (status === "all" || displayStatus(t, state.tasks) === status) && (owner === "all" || (owner === "none" ? !t.assigneeId : t.assigneeId === owner)));
   const counts = { mytiv: project.filter((t) => t.source === "mytiv").length, clickup: project.filter((t) => t.source === "clickup").length };
   const role = state.role;
 

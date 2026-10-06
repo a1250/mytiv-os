@@ -1,5 +1,5 @@
 import type { ActiveTimer, BoardColumn, MyTasksBuckets, Task, TaskPatch, WorkCapabilities, WorkRole } from "@/lib/focus/contracts/work";
-import type { Priority } from "@/lib/focus/contracts/status";
+import { WORK_STATUSES, type Priority, type WorkDisplayStatus, type WorkStatus } from "@/lib/focus/contracts/status";
 import { daysBetween } from "@/lib/focus/format";
 
 /**
@@ -15,7 +15,7 @@ export function bucketsFor(tasks: Task[], viewerId: string, now: string): MyTask
   const b: MyTasksBuckets = { today: [], overdue: [], soon: [], blocked: [], waitingOnOthers: [], noDate: [], unmapped: [] };
   for (const t of mine) {
     if (t.status === "unknown") b.unmapped.push(t);
-    else if (t.status === "blocked" || isBlocked(t, tasks)) b.blocked.push(t);
+    else if (displayStatus(t, tasks) === "blocked") b.blocked.push(t);
     else if (t.status === "waiting") b.waitingOnOthers.push(t);
     else if (!t.dueDate) b.noDate.push(t);
     else {
@@ -32,16 +32,40 @@ export function bucketsFor(tasks: Task[], viewerId: string, now: string): MyTask
 
 export const openCount = (b: MyTasksBuckets) => b.today.length + b.overdue.length + b.soon.length + b.blocked.length + b.waitingOnOthers.length + b.noDate.length + b.unmapped.length;
 
+export type Gate = { ok: true } | { ok: false; reason: string };
+
 // ---------- dependencies & hierarchy ----------
 /** Unfinished tasks this one depends on. */
 export const openBlockers = (t: Task, all: Task[]) =>
   t.dependsOn.map((d) => all.find((x) => x.id === d.id)).filter((d): d is Task => !!d && OPEN(d));
 export const isBlocked = (t: Task, all: Task[]) => openBlockers(t, all).length > 0;
+/** A manual block: status `waiting` + a written reason (pkg1: business status key `blocked` under category `waiting`). */
+export const isManuallyBlocked = (t: Task) => t.status === "waiting" && !!t.blockedReason?.trim();
+/** What the UI shows. "blocked" is derived — from an open dependency or a manual block — and never stored. */
+export function displayStatus(t: Task, all: Task[]): WorkDisplayStatus {
+  if (!OPEN(t) || t.status === "unknown") return t.status;
+  return isBlocked(t, all) || isManuallyBlocked(t) ? "blocked" : t.status;
+}
+/** Why a task shows as blocked, in words: the manual reason, else the open dependency; null when it is not blocked. */
+export function blockedWhy(t: Task, all: Task[]): string | null {
+  if (isManuallyBlocked(t)) return t.blockedReason!.trim();
+  const b = openBlockers(t, all);
+  return b.length ? `ממתין ל״${b[0].title}״${b.length > 1 ? ` ועוד ${b.length - 1}` : ""}.` : null;
+}
+
+const CANONICAL: ReadonlySet<string> = new Set<WorkStatus>(WORK_STATUSES);
+/**
+ * Invariant of every stored task (checked on every patch, and over the fixtures in tests): the status is canonical,
+ * and a block reason exists only on a `waiting` task and is never blank. "blocked + no reason" cannot be stored.
+ */
+export function taskInvariant(t: Task): Gate {
+  if (!CANONICAL.has(t.status)) return { ok: false, reason: `"${t.status}" אינו סטטוס שנשמר. חסימה נגזרת מתלות פתוחה או מסיבה כתובה.` };
+  if (t.blockedReason !== undefined && (t.status !== "waiting" || !t.blockedReason.trim())) return { ok: false, reason: "סיבת חסימה קיימת רק במשימה ממתינה ואינה ריקה." };
+  return { ok: true };
+}
 export const childrenOf = (t: Task, all: Task[]) => all.filter((x) => x.parentId === t.id);
 /** Tasks that wait for this one (reverse dependency) — "חוסם: …". */
 export const blocking = (t: Task, all: Task[]) => all.filter((x) => x.dependsOn.some((d) => d.id === t.id) && OPEN(x));
-
-export type Gate = { ok: true } | { ok: false; reason: string };
 
 /** Can the task be completed? Not while a dependency is open, an own child task is open, or the status is unmapped. */
 export function canComplete(t: Task, all: Task[]): Gate {
@@ -77,7 +101,7 @@ export function canDepend(t: Task, on: Task, all: Task[]): Gate {
 // ---------- board ----------
 export function columnOf(t: Task, all: Task[] = []): BoardColumn {
   if (t.status === "done" || t.status === "cancelled") return "done";
-  if (t.status === "blocked" || t.status === "waiting" || isBlocked(t, all)) return "blockedOrWaiting";
+  if (t.status === "waiting" || isBlocked(t, all)) return "blockedOrWaiting";
   if (t.status === "in_progress") return "in_progress";
   return "todo";
 }
@@ -90,12 +114,15 @@ export function boardColumns(tasks: Task[]): Record<BoardColumn, Task[]> {
 
 export const BOARD_ORDER: BoardColumn[] = ["todo", "in_progress", "blockedOrWaiting", "done"];
 
-/** The status a column means. Moving into "blocked/waiting" keeps a waiting task waiting. */
-export function statusForColumn(t: Task, to: BoardColumn): Task["status"] {
+/**
+ * The canonical status a column means. "חסום / ממתין" stores `waiting` — a card shows as blocked there only when it
+ * is (an open dependency, or a manual block with its reason); a move never creates a block without a reason.
+ */
+export function statusForColumn(_t: Task, to: BoardColumn): WorkStatus {
   if (to === "todo") return "todo";
   if (to === "in_progress") return "in_progress";
   if (to === "done") return "done";
-  return t.status === "waiting" ? "waiting" : "blocked";
+  return "waiting";
 }
 
 /** Validate a Kanban move (pkg1 plan: POST tasks/[id]/move → 409 move_blocked). */
@@ -103,7 +130,6 @@ export function checkMove(t: Task, to: BoardColumn, all: Task[]): Gate {
   if (columnOf(t, all) === to) return { ok: false, reason: "המשימה כבר בעמודה הזו." };
   if (to === "done") return canComplete(t, all);
   if (to === "in_progress") return canStart(t, all);
-  if (to === "blockedOrWaiting" && !t.blockedReason && t.status !== "waiting") return { ok: true };
   return { ok: true };
 }
 
@@ -113,12 +139,18 @@ export type PatchResult = { ok: true; task: Task } | { ok: false; conflict: Task
 /** Apply a patch only if the caller saw the current version; otherwise report a conflict (nothing is overwritten). */
 export function applyPatch(current: Task, patch: TaskPatch, expectedVersion: number, now: string, all: Task[] = [current]): PatchResult {
   if (current.version !== expectedVersion) return { ok: false, conflict: current };
+  // the type already excludes "blocked"; this guards untyped input (adapters, persisted demo state)
+  if (patch.status !== undefined && !CANONICAL.has(patch.status)) return { ok: false, refused: `"${patch.status}" אינו סטטוס שאפשר לשמור. לחסימה ידנית יש לכתוב סיבה.` };
+  if (patch.block) {
+    if (!patch.block.reason?.trim()) return { ok: false, refused: "חסימה ידנית דורשת סיבה כתובה." };
+    if (!OPEN(current) || current.status === "unknown") return { ok: false, refused: "אפשר לחסום רק משימה פתוחה עם סטטוס ממופה." };
+  }
   if (patch.status === "done") { const g = canComplete(current, all); if (!g.ok) return { ok: false, refused: g.reason }; }
   if (patch.status === "in_progress") { const g = canStart(current, all); if (!g.ok) return { ok: false, refused: g.reason }; }
   if (patch.title !== undefined && !patch.title.trim()) return { ok: false, refused: "כותרת היא שדה חובה." };
   if (patch.startDate && (patch.dueDate ?? current.dueDate) && patch.startDate > (patch.dueDate ?? current.dueDate)!) return { ok: false, refused: "תאריך ההתחלה אחרי היעד." };
   if (patch.dueDate && current.startDate && patch.dueDate < current.startDate) return { ok: false, refused: "היעד לפני תאריך ההתחלה." };
-  const { subtask, addSubtask, checklistItem, addChecklistItem, addComment, addDependency, ...fields } = patch;
+  const { subtask, addSubtask, checklistItem, addChecklistItem, addComment, addDependency, block, unblock, ...fields } = patch;
   if (addDependency) {
     const on = all.find((x) => x.id === addDependency.id);
     if (on) { const g = canDepend(current, on, all); if (!g.ok) return { ok: false, refused: g.reason }; }
@@ -130,6 +162,11 @@ export function applyPatch(current: Task, patch: TaskPatch, expectedVersion: num
   if (addChecklistItem) next.checklist = [...current.checklist, { id: addChecklistItem.id, label: addChecklistItem.label, checked: false }];
   if (addComment) next.comments = [...current.comments, addComment];
   if (addDependency) next.dependsOn = [...current.dependsOn, addDependency];
+  // a block reason lives only on a waiting task: leaving `waiting` or unblocking drops it; blocking sets both together
+  if (unblock || (fields.status !== undefined && fields.status !== "waiting")) delete next.blockedReason;
+  if (block) { next.status = "waiting"; next.blockedReason = block.reason.trim(); }
+  const inv = taskInvariant(next);
+  if (!inv.ok) return { ok: false, refused: inv.reason };
   return { ok: true, task: next };
 }
 

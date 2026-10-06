@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Reading } from "@/lib/focus/contracts/common";
-import type { ApprovalStatus, ContentOrigin, RiskLevel, SystemStatus, Verification, WorkStatus } from "@/lib/focus/contracts/status";
+import type { ApprovalStatus, ContentOrigin, RiskLevel, SystemStatus, Verification, WorkDisplayStatus } from "@/lib/focus/contracts/status";
 import { formatNumber } from "@/lib/focus/format";
 import { cx } from "./cx";
 
@@ -14,7 +14,7 @@ export const RISK: Record<RiskLevel, { glyph: string; word: string; long: string
   high: { glyph: "▲", word: "גבוה", long: "סיכון גבוה" },
   connection: { glyph: "!", word: "תקלה", long: "תקלה בחיבור" },
 };
-export const WORK: Record<WorkStatus, { glyph: string; word: string }> = {
+export const WORK: Record<WorkDisplayStatus, { glyph: string; word: string }> = {
   todo: { glyph: "○", word: "לא התחיל" },
   in_progress: { glyph: "◐", word: "בתהליך" },
   waiting: { glyph: "⏸", word: "ממתין" },
@@ -67,7 +67,7 @@ export function riskText(level: RiskLevel, long = false) {
   return `${RISK[level].glyph} ${long ? RISK[level].long : RISK[level].word}`;
 }
 
-export function WorkStatusTag({ status, label, size = "sm", glyphOnly, className }: { status: WorkStatus; label?: string; size?: Size; glyphOnly?: boolean; className?: string }) {
+export function WorkStatusTag({ status, label, size = "sm", glyphOnly, className }: { status: WorkDisplayStatus; label?: string; size?: Size; glyphOnly?: boolean; className?: string }) {
   const w = WORK[status];
   return (
     <span className={cx("f-work", `f-work--${status}`, size === "xs" && "f-work--xs", className)} title={glyphOnly ? w.word : undefined}>

@@ -7,7 +7,7 @@ import { HOURS_SYNC } from "@/lib/focus/fixtures/projects";
 import { PEOPLE_BY_ID } from "@/lib/focus/fixtures/people";
 import { daysBetween, fmtAgo, fmtDayMonth } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
-import { bucketsFor, canComplete, canDo, openBlockers } from "@/lib/focus/state/work";
+import { bucketsFor, canComplete, canDo, displayStatus } from "@/lib/focus/state/work";
 import { Page, PageHeader } from "@/components/focus/patterns/page";
 import { useDemo } from "@/components/focus/shell/demo-store";
 import { TaskDrawerHost } from "@/components/focus/shell/task-drawer-host";
@@ -45,7 +45,7 @@ function Inner() {
 
   const action = (t: Task): ReactNode => {
     if (!canDo(state.role, "edit")) return <Link href={R.task(t.id)} className="f-link">פתח</Link>;
-    if ((t.status === "blocked" || openBlockers(t, state.tasks).length) && !t.assigneeId) {
+    if (displayStatus(t, state.tasks) === "blocked" && !t.assigneeId) {
       return <Button variant="link" size="sm" onClick={() => { const r = demo.patchTask(t.id, { assigneeId: viewer.id }, t.version); if (r.ok) toast.push({ title: "הוקצה לך", detail: t.title, undo: { onUndo: () => demo.restoreTask({ ...r.previous!, version: r.task.version + 1 }) } }); }}>הקצה לי</Button>;
     }
     if (t.links.campaignId && t.status === "in_progress") return <Link href={R.designEdit(t.links.campaignId)} className="f-link">פתח בעורך</Link>;
@@ -98,7 +98,7 @@ function Inner() {
                       </span>
                     </th>
                     <td className="f-alltasks__proj">{[t.context.client, t.context.project].filter(Boolean).join(" · ") || "—"}</td>
-                    <td><WorkStatusTag status={openBlockers(t, state.tasks).length && t.status !== "done" ? "blocked" : t.status} size="xs" /></td>
+                    <td><WorkStatusTag status={displayStatus(t, state.tasks)} size="xs" /></td>
                     <td className={cx("f-num", late && "f-tl__late")}>{t.dueDate ? `${fmtDayMonth(t.dueDate)}${late ? " · באיחור" : ""}` : "—"}</td>
                     <td><SourceDot source={t.source} />{t.source === "mytiv" ? <span className="f-meta-sm"> בלבד</span> : null}</td>
                     <td className="f-alltasks__act">{action(t)}</td>

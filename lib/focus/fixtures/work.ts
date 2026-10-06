@@ -29,10 +29,10 @@ export const TASKS: Task[] = [
   }),
   task({ id: "t-brief-done", title: "כתיבת בריף", status: "done", priority: "medium", assigneeId: PEOPLE.dana.id, dueDate: "2026-09-29", estimateMinutes: 120, spentMinutes: 120, links: P_AUTUMN, context: C_AUTUMN, parentId: "t-content" }),
   task({
-    id: "t-post45", title: "לעצב פוסט 4:5 לקמפיין", status: "blocked", priority: "medium", assigneeId: PEOPLE.yoav.id,
+    // blocked by its open dependency on t-photo-shoot (derived) — canonical status stays "todo", no manual reason
+    id: "t-post45", title: "לעצב פוסט 4:5 לקמפיין", status: "todo", priority: "medium", assigneeId: PEOPLE.yoav.id,
     participantIds: [PEOPLE.dana.id, PEOPLE.ron.id], startDate: "2026-10-03", dueDate: "2026-10-06", estimateMinutes: 240, spentMinutes: 0,
     links: { ...P_AUTUMN, campaignId: "thursday-sushi" }, context: { ...C_AUTUMN }, parentId: "t-content",
-    blockedReason: "ממתין לצילום מנת הספיישל.",
     notes: "גרסה אנכית לפיד לפי מדריך המותג של UMINO. להשתמש בצילום מנת הספיישל ברגע שיאושר. טקסט ראשי + הנעה לפעולה \"הזמינו שולחן\".",
     dependsOn: [{ id: "t-photo-shoot", title: "צילום מנת הספיישל", status: "blocked" }],
     subtasks: [{ id: "p1", title: "גרסת טקסט ראשית", done: false }, { id: "p2", title: "התאמת צבעי מותג", done: false }],
@@ -56,7 +56,8 @@ export const TASKS: Task[] = [
     subtasks: [{ id: "s1", title: "גרסה ראשית", done: true }, { id: "s2", title: "גרסה קצרה", done: true }, { id: "s3", title: "וריאציה לסטורי", done: false }],
   }),
   task({
-    id: "t-photo-shoot", title: "צילום מנת הספיישל", status: "blocked", priority: "high", assigneeId: null, dueDate: "2026-10-03",
+    // a manual block: canonical "waiting" + the written reason (pkg1: business key "blocked" under category waiting)
+    id: "t-photo-shoot", title: "צילום מנת הספיישל", status: "waiting", priority: "high", assigneeId: null, dueDate: "2026-10-03",
     links: P_AUTUMN, context: C_AUTUMN, waitingFor: "צלם חיצוני", estimateMinutes: 360, spentMinutes: null, source: "clickup",
     blockedReason: "ממתין לצלם חיצוני. לא נקבע מועד.", nextAction: "לתאם צילום עם הצלם עד 3.10", followUp: null,
     notes: "ממתין לצלם חיצוני. לא נקבע מועד.", updatedAt: at("2026-09-19", "10:00"),

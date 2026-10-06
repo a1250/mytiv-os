@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from "react";
 import type { Task } from "@/lib/focus/contracts/work";
 import { daysBetween, fmtDayMonth, fmtDays } from "@/lib/focus/format";
 import { PEOPLE } from "@/lib/focus/fixtures/people";
-import { blocking } from "@/lib/focus/state/work";
+import { blocking, blockedWhy, displayStatus } from "@/lib/focus/state/work";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
 import { Banner } from "@/components/focus/ui/feedback";
@@ -41,13 +41,13 @@ export function BlockedTaskPanel({
       <div className="f-bpanel__meta"><span className="f-meta-sm">משימה · מקור: <SourceDot source={task.source} /></span></div>
       <h2 id={`${id}-h`} className="f-bpanel__title">{task.title}</h2>
       <div className="f-bpanel__chips">
-        <WorkStatusTag status={task.status} size="xs" />
+        <WorkStatusTag status={displayStatus(task, all)} size="xs" />
         <span className={cx("f-risk", "f-risk--xs", `f-risk--${PRIORITY[task.priority].tone}`)}>עדיפות {PRIORITY[task.priority].word}</span>
         <span className="f-meta-sm">ללא עדכון {fmtDays(idle)}</span>
       </div>
       <div className="f-bpanel__reason" role="note">
         <b>סיבת החסימה</b>
-        <span>{task.blockedReason ?? "לא נכתבה סיבה — יש להוסיף לפני שממשיכים."}</span>
+        <span>{blockedWhy(task, all) ?? "המשימה אינה חסומה כרגע."}</span>
         {impacts.length > 0 && <span>משפיע על: {impacts.map((x) => x.title).join(", ")}{task.links.projectId === "umino-autumn" ? ", השקה 8.10" : ""}</span>}
       </div>
       {canEdit ? (

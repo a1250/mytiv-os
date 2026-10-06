@@ -1,6 +1,6 @@
 import type { ClientRef, IsoDateTime, Metric, Person, PersonId, SourceRef, SourceSystem } from "./common";
 import type { Loadable } from "./loadable";
-import type { ApprovalStatus, RiskLevel, Verification, WorkStatus } from "./status";
+import type { ApprovalStatus, RiskLevel, Verification, WorkDisplayStatus } from "./status";
 
 /**
  * Communication area (handoff F6 mail, H10 calendar, H15 notifications, D8 manager's day). Types only — fixtures in
@@ -114,7 +114,7 @@ export type ManagerColumn = "now" | "today" | "others";
 
 export type ManagerTag =
   | { family: "approval"; status: ApprovalStatus }
-  | { family: "work"; status: WorkStatus }
+  | { family: "work"; status: WorkDisplayStatus }
   | { family: "risk"; level: RiskLevel };
 
 export type ManagerAction =

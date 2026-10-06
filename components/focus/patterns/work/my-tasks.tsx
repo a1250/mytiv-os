@@ -31,7 +31,7 @@ export function MyTasksView({ buckets, now, timer, limit = 3 }: { buckets: MyTas
       <section key={k} className={cx("f-mytasks__sec", !first && "f-mytasks__sec--gap", `f-mytasks__sec--${k}`)} aria-label={TITLES[k].title} data-bucket={k}>
         <SectionHead title={TITLES[k].title} count={list.length} tone={TITLES[k].tone} level={2} />
         {list.length === 0 && <p className="f-mytasks__none">אין כאן משימות.</p>}
-        {shown.map((t: Task, i) => <TaskCard key={t.id} task={t} now={now} timer={timer} compact={k === "soon" || k === "noDate" || (k === "today" && i >= 2) || (k === "overdue" && i >= 1)} />)}
+        {shown.map((t: Task, i) => <TaskCard key={t.id} task={t} now={now} timer={timer} blocked={k === "blocked"} compact={k === "soon" || k === "noDate" || (k === "today" && i >= 2) || (k === "overdue" && i >= 1)} />)}
         {list.length > shown.length && (
           <button type="button" className="f-mytasks__more f-hit" onClick={() => setExpanded((e) => ({ ...e, [k]: true }))}>הצג עוד {list.length - shown.length}</button>
         )}

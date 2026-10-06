@@ -104,7 +104,7 @@ export default function TodayScreen() {
             <section key={title} className="f-stack-9" aria-label={title}>
               <SectionHead title={title} count={list.length} tone={tone} size="sm" level={3} />
               {list.slice(0, 2).map((t, i) => (
-                <TaskCard key={t.id} task={t} compact={i > 0} now={now} size="sm" timer={timer} />
+                <TaskCard key={t.id} task={t} compact={i > 0} now={now} size="sm" timer={timer} blocked={list === buckets.blocked} />
               ))}
             </section>
           ))}
