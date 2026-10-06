@@ -38,7 +38,9 @@ export function DecisionBlock({
   const id = useId();
   const required = reasonRequired(risk, "approve");
 
-  useEffect(() => { if (result) nextRef.current?.focus(); }, [result]);
+  // move focus once per recorded decision (keyed by its time), not on every re-render that rebuilds `result`
+  const decidedAt = result?.at;
+  useEffect(() => { if (decidedAt) nextRef.current?.focus(); }, [decidedAt]);
   useEffect(() => { onDirtyChange?.(!result && reason.trim().length > 0); }, [reason, result, onDirtyChange]);
 
   // keyboard: A = approve, R = request changes (never while typing). A on medium+ still demands the reason.

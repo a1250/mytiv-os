@@ -83,7 +83,7 @@ export default function ApprovalScreen({ id }: { id: string }) {
     if (r.ok && o === "defer") { router.push(nextHref ?? R.approvals); return r; }
     if (r.ok) {
       const what = o === "approve" ? "אושר" : o === "request_changes" ? "נשלח לתיקון" : "נדחה";
-      toast.push({ title: `${what}: ${a.title}`, detail: o === "approve" && reason ? "הנימוק נשמר במוח העסק." : "ההחלטה נרשמה ביומן הפעולות.", undo: a.impact.reversibility.kind !== "none" ? { onUndo: () => q.undo(id) } : undefined });
+      toast.push({ title: `${what}: ${a.title}`, detail: o === "approve" && reason ? "הנימוק נשמר במוח העסק." : "ההחלטה נרשמה ביומן הפעולות.", undo: a.impact.reversibility.kind !== "none" ? { onUndo: () => q.undo(id, r.decidedAt) } : undefined });
     }
     return r;
   };

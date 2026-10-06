@@ -64,6 +64,7 @@ type Action =
   | { type: "cancelJob"; id: string; at: number }
   | { type: "formats"; designId: string; formats: string[] }
   | { type: "draft"; key: string; value: unknown }
+  | { type: "draftUpdate"; key: string; fn: (prev: unknown) => unknown }
   | { type: "notify"; n: Notification }
   | { type: "readNotifications" }
   | { type: "failNext"; value: boolean }
@@ -97,6 +98,7 @@ function reducer(s: State, a: Action): State {
     case "cancelJob": return { ...s, jobs: s.jobs.map((j) => (j.id === a.id ? { ...j, cancelledAt: a.at } : j)) };
     case "formats": return { ...s, formats: { ...s.formats, [a.designId]: a.formats } };
     case "draft": { const drafts = { ...s.drafts }; if (a.value === undefined) delete drafts[a.key]; else drafts[a.key] = a.value; return { ...s, drafts }; }
+    case "draftUpdate": { const drafts = { ...s.drafts }; const v = a.fn(s.drafts[a.key]); if (v === undefined) delete drafts[a.key]; else drafts[a.key] = v; return { ...s, drafts }; }
     case "notify": return { ...s, notifications: [a.n, ...s.notifications.filter((n) => n.id !== a.n.id)] };
     case "readNotifications": return { ...s, notifications: s.notifications.map((n) => ({ ...n, read: true })) };
     case "failNext": return { ...s, failNext: a.value };
@@ -123,6 +125,9 @@ function useStoreValue() {
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const latestTasks = useRef(s.tasks);
   useEffect(() => { latestTasks.current = s.tasks; }, [s.tasks]);
+  // the latest committed state, for actions that run later (toast undo) and must not act on a stale render
+  const latestState = useRef(s);
+  useEffect(() => { latestState.current = s; }, [s]);
 
   // hydrate after mount (server render = fixtures, so no hydration mismatch)
   useEffect(() => {
@@ -130,7 +135,9 @@ function useStoreValue() {
     const timer = readJson<ActiveTimer | null | "none">(() => localStorage, TIMER_KEY);
     const t = timer === "none" ? null : timer ?? { ...ACTIVE_TIMER, startedAt: new Date().toISOString() };
     // executions that were "sending" when the page closed are resolved as failed-safe: nothing is marked sent
-    const executions = Object.fromEntries(Object.entries(session.executions ?? {}).map(([k, v]) => [k, v.step === "sending" ? { step: "failed", at: Date.now(), message: "החיבור נקטע לפני שהתקבל אישור. דבר לא סומן כנשלח." } as ExecState : v]));
+    // a send interrupted by a reload has an UNKNOWN outcome: nothing is marked sent, and a resend needs a fresh,
+    // explicit confirmation (never a one-click retry that could send twice)
+    const executions = Object.fromEntries(Object.entries(session.executions ?? {}).map(([k, v]) => [k, v.step === "sending" ? { step: "summary", confirmed: false, attempted: false, notice: "השליחה הקודמת נקטעה לפני שהתקבל אישור, ולכן לא ידוע אם נשלחה. בדקו במערכת היעד לפני שליחה חוזרת, ואשרו מחדש." } as ExecState : v]));
     const { hydrated: _h, clock: _c, ...rest } = session;
     void _h; void _c;
     // persisted tasks must satisfy the stored-task invariant; otherwise fall back to the fixtures
@@ -157,23 +164,32 @@ function useStoreValue() {
       if (!j || j.cancelledAt) return;
       const st = jobStatus(j, Date.now());
       dispatch({ type: "notify", n: { id: `job-${j.id}`, title: st.state === "done" ? `מוכן: ${j.label.replace(/^יוצר |^מסנכרן |^בודק /, "")}` : `נכשל: ${j.label}`, detail: st.state === "done" ? "התוצאה ממתינה לך." : "מה שנשמר לא נמחק. אפשר לנסות שוב.", href: j.href, at: Date.now(), read: false } });
-    }, job.durationMs + 50);
+    }, Math.max(0, job.startedAt + job.durationMs - Date.now()) + 50); // the remaining time (also after a reload)
   }, []);
+
+  // jobs still running when the page was reloaded: their completion tick/notice is scheduled again, so a send or a
+  // sync never stays "running" forever (the outcome is derived from the clock, so it settles exactly once)
+  useEffect(() => {
+    if (!hydrated) return;
+    for (const j of jobsRef.current) if (!j.cancelledAt && jobStatus(j, Date.now()).state === "running") scheduleJobNotice(j);
+  }, [hydrated, scheduleJobNotice]);
 
   const approval = useCallback((id: string): Approval | undefined => {
     const base = APPROVALS.find((a) => a.id === id);
     return base ? { ...base, ...s.approvals[id] } : undefined;
   }, [s.approvals]);
 
-  const decide = useCallback((id: string, outcome: DecisionOutcome, reason: string): DecisionCheck => {
+  /** Records a decision; returns its `decidedAt`, so an undo can target exactly this decision and no later one. */
+  const decide = useCallback((id: string, outcome: DecisionOutcome, reason: string): DecisionCheck & { decidedAt?: string } => {
     const a = approval(id);
     if (!a) return { ok: false, field: "reason", error: "הפריט לא נמצא." };
     const check = checkDecision(a, outcome, reason);
     if (!check.ok) return check;
     if (outcome === "defer") return check;
     const status = outcome === "approve" ? "approved" : outcome === "request_changes" ? "changes_requested" : "rejected";
-    dispatch({ type: "decide", decision: { approvalId: id, outcome, reason: reason.trim(), decidedAt: demoIso(), decidedBy: VIEWER.id }, status });
-    return check;
+    const decidedAt = demoIso();
+    dispatch({ type: "decide", decision: { approvalId: id, outcome, reason: reason.trim(), decidedAt, decidedBy: VIEWER.id }, status });
+    return { ...check, decidedAt };
   }, [approval]);
 
   const undoDecision = useCallback((id: string) => dispatch({ type: "undoDecision", id }), []);
@@ -192,7 +208,8 @@ function useStoreValue() {
         if (fail) dispatch({ type: "exec", id, event: { type: "targetFailed", now: Date.now(), message: a.execution?.failureDetail ?? "המערכת לא אישרה." } });
         else {
           dispatch({ type: "exec", id, event: { type: "targetConfirmed", now: Date.now() } });
-          dispatch({ type: "decide", decision: { approvalId: id, outcome: "approve", reason: "", decidedAt: demoIso(), decidedBy: VIEWER.id }, status: "approved" });
+          // the decision behind an external action is the explicit confirmation itself — recorded as its reason
+          dispatch({ type: "decide", decision: { approvalId: id, outcome: "approve", reason: `אישור מפורש לפני ביצוע: ${a.execution?.confirmText ?? ""}`.trim(), decidedAt: demoIso(), decidedBy: VIEWER.id }, status: "approved" });
         }
       }, a.simulate.latencyMs);
     }
@@ -323,10 +340,13 @@ function useStoreValue() {
   /** dispatch-only actions — stable identities, safe in effect dependencies */
   const stable = useMemo(() => ({
     resetExec: (id: string) => dispatch({ type: "resetExec", id }),
+    getLatest: () => latestState.current,
     restoreEntry: (entry: TimeEntry) => dispatch({ type: "timeEntry", entry }),
     setRole: (role: WorkRole) => dispatch({ type: "role", role }),
     setFormats: (designId: string, formats: string[]) => dispatch({ type: "formats", designId, formats }),
     setDraft: (key: string, value: unknown) => dispatch({ type: "draft", key, value }),
+    /** functional update on the latest stored draft (safe from toasts / undo that run later) */
+    updateDraft: <T,>(key: string, fn: (prev: T | undefined) => T | undefined) => dispatch({ type: "draftUpdate", key, fn: fn as (prev: unknown) => unknown }),
     readNotifications: () => dispatch({ type: "readNotifications" }),
     setFailNext: (value: boolean) => dispatch({ type: "failNext", value }),
     reset: () => dispatch({ type: "reset" }),

@@ -46,7 +46,8 @@ export function PreExecSummary({
     <section className={cx("f-pre", mobile && "f-pre--sheet")} aria-labelledby="pre-title">
       <div className="f-pre__trail">
         <StepTrail steps={["בדיקה", "סיכום סופי", action.target.label === "Gmail" ? "שליחה" : "ביצוע"]} current={state.step === "sent" ? 3 : step} />
-        <Link href={backHref} className="f-pre__cancel">✕ ביטול</Link>
+        {/* while sending, leaving does not cancel anything — say so instead of offering a "cancel" that isn't */}
+        <Link href={backHref} className="f-pre__cancel">{state.step === "sending" ? "יציאה · השליחה ממשיכה" : "✕ ביטול"}</Link>
       </div>
       <div className="f-pre__body">
         <div className="f-pre__head">
@@ -75,10 +76,13 @@ export function PreExecSummary({
         <ul className="f-pre__checks" aria-label="בדיקות לפני ביצוע">
           {action.checks.map((c) => (
             <li key={c.id} className={cx("f-pre__check", `f-pre__check--${c.tone}`)}>
-              <span aria-hidden>{c.tone === "ok" ? "✓" : "◆"}</span> {c.text}{c.link && <> · <Link href={c.link} className="f-pre__checklink">הצג טקסט</Link></>}
+              <span aria-hidden>{c.tone === "ok" ? "✓" : "◆"}</span><span className="f-sr">{c.tone === "ok" ? "תקין: " : "אזהרה: "}</span> {c.text}{c.link && <> · <Link href={c.link} className="f-pre__checklink">הצג טקסט</Link></>}
             </li>
           ))}
         </ul>
+        {state.step === "summary" && state.notice && (
+          <p className="f-field__error f-pre__notice" role="alert"><span aria-hidden>!</span>{state.notice}</p>
+        )}
         <Checkbox checked={state.step !== "summary" || state.confirmed} onChange={onToggle} disabled={locked} className="f-pre__confirm" aria-describedby={state.step === "summary" && state.attempted ? "pre-confirm-err" : undefined}>
           {action.confirmText}
         </Checkbox>

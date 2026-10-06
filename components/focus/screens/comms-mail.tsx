@@ -41,6 +41,7 @@ type DraftLocal = {
   send?: { jobId: string; text: string };
 };
 
+const MAIL_DRAFTS = "mail-drafts";
 const initialDraft = (t: MailThread): DraftLocal => ({ base: t.draft, text: t.draft?.text ?? "", savedText: t.draft?.text ?? null, alt: 0 });
 
 function Inner() {
@@ -55,7 +56,10 @@ function Inner() {
   const [filter, setFilter] = useState<MailFilter | null>(null);
   const [read, setRead] = useState<string[]>([]);
   const [links, setLinks] = useState<Record<string, MailLink>>({});
-  const [drafts, setDrafts] = useState<Record<string, DraftLocal>>({});
+  // drafts (and the send job of each) live in the demo store — they survive leaving the screen, so a reply that is
+  // being sent / was sent stays so when you come back, and "save and leave" really saves
+  const drafts = (state.drafts[MAIL_DRAFTS] as Record<string, DraftLocal> | undefined) ?? {};
+  const setDrafts = (fn: (xs: Record<string, DraftLocal>) => Record<string, DraftLocal>) => demo.updateDraft<Record<string, DraftLocal>>(MAIL_DRAFTS, (xs) => fn(xs ?? {}));
   const [sendOpen, setSendOpen] = useState(false);
   const [linkFor, setLinkFor] = useState<string | null>(null);
   const [linkChoice, setLinkChoice] = useState<string>(CLIENTS.umino.id);
@@ -133,6 +137,8 @@ function Inner() {
   const confirmSend = () => {
     if (!thread || !d) return;
     setSendOpen(false);
+    // never a second send of the same reply: refused while one is in flight or after Gmail confirmed
+    if (sending || sent) { toast.push({ kind: "error", title: sent ? "התשובה כבר נשלחה" : "התשובה כבר בשליחה", detail: "לא נשלח שוב." }); return; }
     const fail = state.failNext;
     if (fail) demo.setFailNext(false);
     const cur = committed();

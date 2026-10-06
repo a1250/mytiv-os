@@ -8,6 +8,7 @@ import { fmtTime } from "@/lib/focus/format";
 import { R } from "@/lib/focus/routes";
 import { canQuickApprove, queueOrder } from "@/lib/focus/state/approvals";
 import { jobStatus } from "@/lib/focus/state/jobs";
+import { canUndo } from "@/lib/focus/state/undo";
 import type { CardPhase } from "@/components/focus/patterns/action-card";
 import { useToast } from "@/components/focus/ui/toast";
 import { useDemo } from "./demo-store";
@@ -24,17 +25,35 @@ export function useQueue() {
   const toast = useToast();
   const { state, approval } = demo;
 
-  const undo = (approvalId: string) => {
-    demo.cancelJob(`schedule-${approvalId}`);
+  /**
+   * Undo a decision — checked against the latest state (it may run later, from a toast):
+   * - only the decision the caller announced (`decidedAt`), never a later one made meanwhile;
+   * - only inside its reversibility window ("עד 18:00" ends at 18:00; an irreversible external action never);
+   * - undoing an approval also cancels its Meta schedule, whichever screen made it (focus mode or publish),
+   *   and the toast says so.
+   */
+  const undo = (approvalId: string, decidedAt?: string) => {
+    const st = demo.getLatest();
+    const base = APPROVALS.find((x) => x.id === approvalId);
+    const d = st.decisions[approvalId];
+    if (!base || !d) { toast.push({ kind: "info", title: "אין החלטה לבטל", detail: "הפריט כבר בתור." }); return; }
+    const a = { ...base, ...st.approvals[approvalId] };
+    if (decidedAt && d.decidedAt !== decidedAt) { toast.push({ kind: "error", title: "הביטול לא בוצע", detail: "ההחלטה השתנתה מאז. בטלו מתוך הפריט עצמו." }); return; }
+    const rev = a.impact.reversibility;
+    if (a.status === "approved" && rev.kind === "none" && st.executions[approvalId]?.step === "sent") { toast.push({ kind: "error", title: "לא ניתן לבטל", detail: rev.label }); return; }
+    if (rev.kind === "until" && !canUndo({ startedAt: 0, endsAt: Date.parse(rev.until) }, Date.parse(demoIso()))) { toast.push({ kind: "error", title: "חלון הביטול נסגר", detail: rev.label }); return; }
+    const scheduleJobs = [`schedule-${approvalId}`, a.content ? `publish-${a.content.designId}` : null].filter((x): x is string => !!x);
+    const confirmedAtMeta = scheduleJobs.some((id) => { const j = st.jobs.find((x) => x.id === id && !x.cancelledAt); return !!j && jobStatus(j, Date.now()).state === "done"; });
+    for (const id of scheduleJobs) demo.cancelJob(id);
     demo.undoDecision(approvalId);
-    toast.push({ kind: "info", title: "ההחלטה בוטלה", detail: "הפריט חזר לתור. דבר לא פורסם." });
+    toast.push({ kind: "info", title: "ההחלטה בוטלה", detail: confirmedAtMeta ? "התזמון ב־Meta בוטל והפריט חזר לתור. דבר לא פורסם." : "הפריט חזר לתור. דבר לא פורסם." });
   };
 
-  const scheduleWithMeta = (approvalId: string, withToast = true) => {
+  const scheduleWithMeta = (approvalId: string, withToast = true, decidedAt?: string) => {
     const fail = state.failNext;
     if (fail) demo.setFailNext(false);
     demo.startJob({ id: `schedule-${approvalId}`, kind: "schedule_meta", label: "מבקש תזמון מ־Meta", detail: "", durationMs: META_SCHEDULE_MS, outcome: fail ? "failure" : "success", href: R.today });
-    if (withToast) toast.push({ title: "האישור נשמר", detail: "מבקש תזמון מ־Meta. \"מתוזמן\" יוצג רק אחרי ש־Meta תאשר.", undo: { onUndo: () => undo(approvalId) } });
+    if (withToast) toast.push({ title: "האישור נשמר", detail: "מבקש תזמון מ־Meta. \"מתוזמן\" יוצג רק אחרי ש־Meta תאשר.", undo: { onUndo: () => undo(approvalId, decidedAt) } });
   };
 
   /** Quick approve — only for low risk without an external irreversible action. */
@@ -42,7 +61,7 @@ export function useQueue() {
     const a = approval(approvalId);
     if (!a || !canQuickApprove(a)) return;
     const r = demo.decide(approvalId, "approve", "");
-    if (r.ok) scheduleWithMeta(approvalId);
+    if (r.ok) scheduleWithMeta(approvalId, true, r.decidedAt);
   };
 
   const phaseOf = (item: ActionItem): CardPhase => {

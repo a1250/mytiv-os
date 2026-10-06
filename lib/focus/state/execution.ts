@@ -7,7 +7,8 @@
  * "Sent" exists only after the target system confirmed. A failure never looks like success and nothing is marked sent.
  */
 export type ExecState =
-  | { step: "summary"; confirmed: boolean; attempted: boolean }
+  /** `notice`: why the summary is shown again (e.g. an interrupted send whose outcome is unknown — re-confirm) */
+  | { step: "summary"; confirmed: boolean; attempted: boolean; notice?: string }
   | { step: "sending"; startedAt: number }
   | { step: "sent"; at: number }
   | { step: "failed"; at: number; message: string };
