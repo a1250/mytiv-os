@@ -21,6 +21,9 @@ const INDEX: Hit[] = [
   ...APPROVALS.map((a) => ({ id: `a-${a.id}`, group: "אישורים", title: a.title, meta: a.summary, href: R.approval(a.id) })),
   ...TASKS.map((t) => ({ id: `t-${t.id}`, group: "משימות", title: t.title, meta: [t.context.client, t.context.project].filter(Boolean).join(" · "), href: R.task(t.id) })),
   ...SCREENS.filter((s) => s.mode !== "mobile").map((s) => ({ id: `s-${s.id}`, group: "מסכים", title: s.title, meta: s.subtitle || undefined, href: s.route })),
+  // Plan views (not handoff frames, so not in SCREENS)
+  ...([["מה מקדמים", R.plan], ["ציר זמן", R.planTimeline], ["מפת המהלכים", R.planMoves], ["נכסים", R.planAssets], ["תקציב", R.planBudget]] as const)
+    .map(([title, href]) => ({ id: `p-${href}`, group: "תוכנית", title: `תוכנית · ${title}`, href })),
 ];
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {

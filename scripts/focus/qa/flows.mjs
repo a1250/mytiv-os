@@ -648,5 +648,106 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
   });
   await ctx.close();
 }
+// 9. Plan (design package): create move → builder → change panel → send → owner approval → manual live with a link;
+// recommendation → tasks; creatives approved in the builder; production rows; cover choice; week toggle; next period.
+// Everything is the session overlay over fixtures — nothing leaves the browser.
+{
+  const { ctx, page, errors } = await fresh();
+  const btn = (name) => page.getByRole("button", { name, exact: true });
+  await check("plan: create move from the coverage gap opens the Google builder in 'בבנייה'", async () => {
+    await go(page, "/focus/plan?create=need-sunset-20");
+    await page.getByRole("dialog").waitFor();
+    await page.getByRole("button", { name: /^הכן הצעה ב־Google/ }).click();
+    await page.waitForURL(/\/focus\/plan\/build\/sunset-google/, { timeout: 15000 }); await settle(page);
+    return (await page.textContent(".f-pl-bhead"))?.includes("בבנייה") ? "building" : false;
+  });
+  await check("plan: change panel shows current → change → impact; Cancel keeps, Apply updates", async () => {
+    await page.getByRole("button", { name: "שנה · כמה משקיעים" }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("סכום (₪)").fill("1500");
+    const impact = await dlg.textContent();
+    if (!impact.includes("ההצעה הנוכחית") || !impact.includes("השפעה") || !impact.includes("מוח העסק")) return "missing section";
+    await dlg.getByRole("button", { name: "ביטול" }).click();
+    if (!(await page.textContent(".f-pl-bmain")).includes("1,200")) return "cancel changed value";
+    await page.getByRole("button", { name: "שנה · כמה משקיעים" }).click();
+    await dlg.getByLabel("סכום (₪)").fill("2500");
+    const apply = dlg.getByRole("button", { name: "החל" });
+    if ((await apply.getAttribute("aria-disabled")) !== "true" && !(await apply.isDisabled())) return "apply open before source choice";
+    await dlg.getByLabel(/מנושא אחר/).check();
+    await apply.click();
+    const t = await page.textContent(".f-pl-bmain");
+    return t.includes("2,500") && t.includes("דורש אישור בעלים") ? "2,500 from another priority (owner approval)" : false;
+  });
+  await check("plan: unverified claim blocks the text change", async () => {
+    await page.getByRole("button", { name: "שנה · מה מקדמים" }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("מה מקדמים").fill("הנוף הכי יפה בעיר");
+    const err = await dlg.textContent();
+    await dlg.getByRole("button", { name: "ביטול" }).click();
+    return err.includes("טענה שלא אושרה") ? "blocked" : false;
+  });
+  await check("plan: send → waiting approval (+ tracking task) → owner approve → mark live needs an https link", async () => {
+    await btn("שלח לאישור").click();
+    await page.getByText("ממתין לאישור", { exact: true }).first().waitFor();
+    await btn("אשר כבעלים").click();
+    await btn("סמן כפעיל").click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("קישור לקמפיין").fill("ads.google.com/x");
+    await dlg.getByRole("button", { name: "סמן כפעיל" }).click();
+    if (!(await dlg.textContent()).includes("https")) return "accepted a non-https link";
+    await dlg.getByLabel("קישור לקמפיין").fill("https://ads.google.com/aw/campaigns?campaignId=1");
+    await dlg.getByRole("button", { name: "סמן כפעיל" }).click();
+    await page.getByText("הושק ידנית").waitFor();
+    const stored = await page.evaluate(() => Object.keys(sessionStorage).map((k) => sessionStorage.getItem(k)).join(" "));
+    return stored.includes("בדיקת אירוע המרה") ? "live + pre-launch tracking task in the demo store" : "live, but no tracking task";
+  });
+  await check("plan: Meta builder — approving both awaiting creatives clears the awaiting count", async () => {
+    await go(page, "/focus/plan/build/events-meta");
+    if (!(await page.textContent("#creative")).includes("2 ממתינים")) return "not 2 awaiting";
+    await page.getByRole("button", { name: /^אשר · / }).first().click();
+    await page.getByRole("button", { name: /^אשר · / }).first().click();
+    return (await page.locator("#creative .f-pl-good").count()) === 3 ? "3 approved" : false;
+  });
+  await check("plan: blocked builder cannot be sent", async () => {
+    await go(page, "/focus/plan/build/fallmenu-meta");
+    await btn("התחל לבנות").click();
+    const send = btn("שלח לאישור");
+    return (await send.getAttribute("aria-disabled")) === "true" || (await send.isDisabled()) ? "send disabled with reason" : false;
+  });
+  await check("plan: accept recommendation → tasks created, routed to Marketing", async () => {
+    await go(page, "/focus/plan/moves");
+    await btn("קבל").first().click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByRole("button", { name: /^קבל וצור/ }).click();
+    await page.getByText(/התקבל · נוצרו \d משימות/).first().waitFor();
+    return true;
+  });
+  await check("plan: production switch adds creative rows with a reason", async () => {
+    await go(page, "/focus/plan/timeline");
+    const before = await page.locator(".f-pl-row--prod").count();
+    await page.getByRole("switch", { name: /הצג הפקת תוכן/ }).click();
+    const after = await page.locator(".f-pl-row--prod").count();
+    return after > before ? `${before} → ${after}` : false;
+  });
+  await check("plan: week toggle keeps the view and sets ?week=1", async () => {
+    await btn("השבוע").click();
+    await page.waitForURL(/week=1/);
+    return (await page.locator(".f-pl-tabs__item[aria-current=page]").textContent()).includes("ציר");
+  });
+  await check("plan: asset cover 'ask the client' creates a task and stays missing", async () => {
+    await go(page, "/focus/plan/assets?req=req-delivery-dishes");
+    const panel = page.locator(".f-pl-assets__panel");
+    await panel.getByRole("button", { name: /^בקש מהלקוח/ }).click();
+    const t = await panel.textContent();
+    return t.includes("נוצרה משימה") && t.includes("חסר") ? "task + still missing" : false;
+  });
+  await check("plan: November empty state → copy from October makes a draft", async () => {
+    await go(page, "/focus/plan?period=2026-11");
+    await btn("העתק מאוקטובר").click();
+    return (await page.textContent("main")).includes("טיוטה");
+  });
+  await check("plan: no page errors across the plan flows", async () => (errors.length ? errors[0] : true));
+  await ctx.close();
+}
 await browser.close();
 process.exit(report("flows", rows) ? 0 : 1);

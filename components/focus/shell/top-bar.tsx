@@ -19,14 +19,16 @@ import { useFocusScope, useIsDemo } from "./scope";
 import { THEME_OPTIONS, useTheme } from "./theme";
 
 /**
- * Global navigation (handoff TopBar.dc.html + §6.3): ≤7 words-only items, scope switcher, search, notifications with a
+ * Global navigation (handoff TopBar.dc.html + §6.3): words-only items (Plan added after "היום שלי" — the Plan
+ * package's own nav reorganisation is out of this scope), scope switcher, search, notifications with a
  * count, "+ יצירה", avatar. Tablet: items move into "עוד". Mobile: a compact header + 5-item bottom nav with icons
  * (icons only on mobile, always with a word). Hidden in focus mode.
  */
-export type NavKey = "today" | "projects" | "marketing" | "sales" | "work" | "comms" | "reports" | "settings";
+export type NavKey = "today" | "plan" | "projects" | "marketing" | "sales" | "work" | "comms" | "reports" | "settings";
 
 export const NAV: { key: NavKey; label: string; href: string }[] = [
   { key: "today", label: "היום שלי", href: R.today },
+  { key: "plan", label: "תוכנית", href: R.plan },
   { key: "projects", label: "לקוחות ופרויקטים", href: R.projects },
   { key: "marketing", label: "שיווק ותוכן", href: R.studio },
   { key: "sales", label: "מכירות", href: R.sales },
@@ -38,6 +40,7 @@ const SETTINGS = { key: "settings" as NavKey, label: "הגדרות", href: R.set
 
 export function navKeyFor(path: string): NavKey {
   const p = path.replace(/\/$/, "");
+  if (p === "/focus/plan" || p.startsWith("/focus/plan/")) return "plan";
   if (/^\/focus\/(projects|clients)/.test(p)) return "projects";
   if (/^\/focus\/(marketing|studio)/.test(p)) return "marketing";
   if (p.startsWith("/focus/sales")) return "sales";

@@ -128,6 +128,13 @@ export type CampaignBrief = { label: string; value: string; note: string; verifi
 export type Campaign = {
   id: string;
   name: string;
+  /**
+   * Plan links (Plan spec §8): the E1 campaign page is the detail page of a Move, which serves exactly one Priority
+   * and one Goal of it. Optional while the E1 demo campaign predates a Plan record.
+   */
+  moveId?: string;
+  priorityId?: string;
+  goalId?: string;
   client: ClientRef;
   projectId: string;
   projectName: string;

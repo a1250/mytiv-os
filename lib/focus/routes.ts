@@ -13,6 +13,16 @@ export const R = {
   projectExecution: (id: string) => `/focus/projects/${id}/execution`,
   client: (id: string) => `/focus/clients/${id}`,
   clientBrain: (id: string) => `/focus/clients/${id}/brain`,
+  /** Plan — five views of the same records (Plan spec §5–§13) */
+  plan: "/focus/plan",
+  planTimeline: "/focus/plan/timeline",
+  planMoves: "/focus/plan/moves",
+  planAssets: "/focus/plan/assets",
+  planBudget: "/focus/plan/budget",
+  /** the Create Move panel, opened on the Plan view that holds the Plan need */
+  planCreateMove: (needId: string, view: "overview" | "moves" = "overview") => `${view === "moves" ? "/focus/plan/moves" : "/focus/plan"}?create=${encodeURIComponent(needId)}`,
+  /** a channel builder (Google / Meta) for one move */
+  planBuilder: (builderId: string) => `/focus/plan/build/${builderId}`,
   marketingPlan: "/focus/marketing/plan",
   marketingBoard: "/focus/marketing/board",
   inspiration: "/focus/marketing/inspiration",

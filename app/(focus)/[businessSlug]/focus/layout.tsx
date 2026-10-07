@@ -13,6 +13,7 @@ import "@/components/focus/patterns/reports/reports.css";
 import "@/components/focus/patterns/clients/clients.css";
 import "@/components/focus/patterns/comms/comms.css";
 import "@/components/focus/patterns/marketing/marketing.css";
+import "@/components/focus/patterns/plan/plan.css";
 import { fixturesAllowed, requireBusinessScope } from "@/lib/focus/scope";
 import { getFocusScope } from "@/lib/focus/scope.server";
 import { DemoStoreProvider } from "@/components/focus/shell/demo-store";

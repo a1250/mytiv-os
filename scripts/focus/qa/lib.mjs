@@ -41,6 +41,7 @@ export function focusRoutes() {
   walk(join(ROOT, APP_FOCUS), "/focus");
   const expand = {
     "/focus/approvals/[id]": ["proposal-noa", "promo-1plus1", "content-sushi-story", "plan-october"].map((x) => `/focus/approvals/${x}`),
+    "/focus/plan/build/[builderId]": ["sunset-google", "events-meta", "fallmenu-meta"].map((x) => `/focus/plan/build/${x}`),
     "/focus/m/[n]": [],
     "/focus/reference/[id]": [],
   };
