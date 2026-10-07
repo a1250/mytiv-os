@@ -231,7 +231,8 @@ export type Creative = { id: string; label: string; origin: Extract<ContentOrigi
 
 /* ---------- timeline ---------- */
 
-export type TimelineKind = "live" | "build" | "review" | "planned" | "waiting_flight" | "launch" | "approval" | "optimization" | "post" | "send" | "warning" | "production";
+/** A flight bar: period context only (what is running / being built). Execution sits on exact days (`DayItem`). */
+export type TimelineKind = "live" | "build" | "review" | "planned" | "waiting_flight";
 
 export type TimelineItem = {
   id: string;
@@ -240,10 +241,34 @@ export type TimelineItem = {
   startDay: number;
   endDay: number;
   label?: string;
-  /** posts: published (filled) / scheduled (ring) / planned (faint ring) */
-  postState?: "published" | "scheduled" | "planned";
-  /** an item shown in the mobile agenda (changes only) */
+  /** a bar that starts inside a week shows once on that day in the mobile agenda ("בנייה מתחילה") */
   agenda?: string;
+};
+
+/** Content and execution placed on one exact calendar day (a post, a send, a launch, a review…). */
+export type DayItemType =
+  | "post" | "story" | "reel" | "email" | "whatsapp"
+  | "creative_due" | "approval_due" | "launch" | "campaign_review" | "optimization_review" | "creative_refresh"
+  | "milestone" | "moment";
+
+/** done = published / sent / completed (worded per type); blocked carries its reason. */
+export type DayItemStatus = "planned" | "in_progress" | "ready" | "scheduled" | "done" | "blocked";
+
+export type DayItem = {
+  id: string;
+  day: number;
+  type: DayItemType;
+  title: string;
+  /** null = the whole plan (a business moment, the weekly review) */
+  priorityId: string | null;
+  /** the campaign / move it belongs to; null = the priority in general */
+  moveId: string | null;
+  status: DayItemStatus;
+  blockedReason?: string;
+  /** what must be true before this day: an asset requirement covered, an approval item completed */
+  needs?: { requirementId?: string; approvalItemId?: string };
+  /** added in this demo session (browser only) */
+  added?: boolean;
 };
 
 /** A content-production row under a move, hidden by default (shown with a reason). */
@@ -255,17 +280,6 @@ export type ProductionRow = {
   warning: boolean;
   approvalDue: boolean;
   deadlineDay: number;
-};
-
-export type PlanWarning = {
-  id: string;
-  severity: "high" | "medium";
-  /** the day the warning is about (week chip ▲) */
-  dueDay: number;
-  title: string;
-  text: string;
-  /** where "פתח" goes (scope-relative route) */
-  href: string;
 };
 
 /** A channel option in the Create Move panel: why, how much it may bring, and the proposed move it creates. */

@@ -34,7 +34,7 @@ function Moves() {
   if (period.month !== "2026-10") return <PlanFrame view="moves"><p className="f-pl-meta">לתוכנית של נובמבר עוד אין מהלכים. <Link className="f-pl-link" href={`${R.plan}?period=2026-11`}>למה מקדמים בנובמבר ‹</Link></p></PlanFrame>;
   const pendingRecs = plan.moves.filter((m) => m.recommendationId).length;
   const alerts = PLAN_OCTOBER.priorities.reduce((n, pp) => n + openNeeds(pp, plan.moves).length, 0) + plan.moves.filter((m) => m.attention).length;
-  const weekIds = week ? weekMoveIds(plan.moves) : null;
+  const weekIds = week ? weekMoveIds(plan.moves, plan.dayItems) : null;
   return (
     <PlanFrame view="moves" controls={<span className="f-pl-meta">{alerts} התראות כיסוי · {pendingRecs} המלצות ממתינות</span>}>
       {week && <WeekNote>מוצגים מהלכים עם פעילות השבוע; הכיסוי נשאר חודשי.</WeekNote>}

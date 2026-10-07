@@ -6,10 +6,10 @@
 import { describe, expect, it } from "vitest";
 import type { Move, Plan } from "@/lib/focus/contracts/plan";
 import {
-  ASSET_SUMMARIES, BUILDERS, MOVES, PLAN_MONTH_DAYS, PLAN_OCTOBER, PLAN_TODAY, PLAN_WEEK, PRODUCTION, PROPOSED_MOVES, RECOMMENDATIONS, REQUIREMENTS, TIMELINE,
+  ASSET_SUMMARIES, BUILDERS, MOVES, PLAN_MONTH_DAYS, PLAN_OCTOBER, PLAN_TODAY, PLAN_WEEK, PRODUCTION, PROPOSED_MOVES, RECOMMENDATIONS, REQUIREMENTS, TIMELINE, DAY_ITEMS, PLAN_WEEKS,
 } from "@/lib/focus/fixtures/plan";
 import {
-  EMPTY_OVERLAY, LIFECYCLE, agendaForWeek, applyMove, budgetOverflow, canReschedule, canTransition, collapsedPriority, countSlots, coverage,
+  EMPTY_OVERLAY, LIFECYCLE, agendaWeek, canMoveDayItem, dayItemsView, dayLoad, dayStatusWord, dayWarnings, applyMove, budgetOverflow, canReschedule, canTransition, collapsedPriority, countSlots, coverage,
   expectedRange, isHttpsUrl, missingFor, movePriorityViolations, moveBudget, nextAction, openNeeds, pace, periodViolations, planBudget,
   planMoves, priorityBudget, productionVisibility, readOverlay, requirementSlots, requirementWord, sendBlocked, tooManyPriorities,
   unverifiedClaim, type PlanFixtures, type PlanOverlay,
@@ -155,21 +155,75 @@ describe("timeline", () => {
     expect(productionVisibility(sunset, { today: PLAN_TODAY, expanded: true, switchOn: false })).toBe("expanded");
     expect(productionVisibility(sunset, { today: PLAN_TODAY, expanded: false, switchOn: true })).toBe("switch");
   });
-  it("only items that are not live move freely; live or approval-gated items open an approval", () => {
+  it("flight bars: only bars of a move that is not live move freely; live or approval-gated bars open an approval", () => {
     const linkedinBuild = TIMELINE.find((t) => t.id === "tl-el-build")!;
     const googleLive = TIMELINE.find((t) => t.id === "tl-eg-live")!;
-    const launch = TIMELINE.find((t) => t.id === "tl-em-launch")!;
+    const flight = TIMELINE.find((t) => t.id === "tl-em-flight")!;
     expect(canReschedule(linkedinBuild, "planned")).toBe("move");
     expect(canReschedule(googleLive, "live")).toBe("approval");
-    expect(canReschedule(launch, "building")).toBe("approval");
+    expect(canReschedule(flight, "building")).toBe("approval");
   });
-  it("mobile agenda = changes only; live bars collapse into a count", () => {
+  it("bars are period context only; execution sits on exact days", () => {
+    expect(TIMELINE.every((t) => ["live", "build", "review", "planned", "waiting_flight"].includes(t.kind))).toBe(true);
+    expect(DAY_ITEMS.every((it) => Number.isInteger(it.day) && it.day >= 1 && it.day <= PLAN_MONTH_DAYS)).toBe(true);
+    // every item belongs to a known priority / move (or to the whole plan), one move → one priority
+    const all = [...MOVES, ...PROPOSED_MOVES];
+    for (const it of DAY_ITEMS) {
+      if (it.moveId) expect(all.find((m) => m.id === it.moveId)?.priorityId).toBe(it.priorityId);
+      if (it.priorityId) expect(PLAN_OCTOBER.priorities.some((p) => p.priorityId === it.priorityId)).toBe(true);
+      else expect(["moment", "milestone"]).toContain(it.type);
+    }
+    // the plan's moments are day items on their days
+    for (const mo of PLAN_OCTOBER.moments) expect(DAY_ITEMS.some((it) => it.type === "moment" && it.day === mo.day)).toBe(true);
+  });
+  it("a day holds several items; an added item lands on its exact day; a moved item changes day only", () => {
+    const o = { ...EMPTY_OVERLAY, dayItems: [{ id: "u1", day: 12, type: "reel" as const, title: "רילס", priorityId: "p-sunset", moveId: "m-sunset-organic", status: "planned" as const, added: true }], dayMoves: { "di-so-post-9": 11 } };
+    const v = dayItemsView(DAY_ITEMS, o);
+    expect(v.filter((it) => it.day === 12).map((it) => it.id)).toEqual(expect.arrayContaining(["di-so-story-12", "u1"]));
+    expect(v.find((it) => it.id === "di-so-post-9")!.day).toBe(11);
+    expect(dayLoad(v, 14).count).toBeGreaterThanOrEqual(2);
+  });
+  it("moving a day item: content moves freely, done items and moments stay, a gated launch asks approval", () => {
+    const it = (id: string) => DAY_ITEMS.find((x) => x.id === id)!;
+    expect(canMoveDayItem(it("di-so-post-20"), "live")).toBe("move");
+    expect(canMoveDayItem(it("di-so-post-2"), "live")).toBe("fixed");
+    expect(canMoveDayItem(it("di-mo-fall"), null)).toBe("fixed");
+    expect(canMoveDayItem(it("di-em-launch"), "building")).toBe("move");
+    expect(canMoveDayItem(it("di-em-launch"), "waiting_approval")).toBe("approval");
+  });
+  it("warnings are derived: approval before launch, missing asset, overdue, refresh, blocked, launch clash", () => {
+    const ctx = (o = EMPTY_OVERLAY) => ({ today: PLAN_TODAY, overlay: o, requirements: REQUIREMENTS, builders: BUILDERS, moveStateOf: (id: string) => MOVES.find((m) => m.id === id)?.state ?? null });
+    const w = dayWarnings(DAY_ITEMS, ctx());
+    const has = (itemId: string, kind: string) => w.some((x) => x.itemId === itemId && x.kind === kind);
+    expect(has("di-em-launch", "approval_incomplete")).toBe(true); // 2 creatives awaiting (never "missing")
+    expect(has("di-em-launch", "missing_asset")).toBe(false);
+    expect(has("di-dm-launch", "missing_asset")).toBe(true);
+    expect(has("di-dm-launch", "blocked")).toBe(true);
+    expect(has("di-so-reel-shoot", "overdue")).toBe(true);
+    expect(has("di-sm-refresh", "missing_asset")).toBe(true);
+    expect(w.some((x) => x.kind === "launch_clash")).toBe(false);
+    // approving the creatives and the move clears the launch's approval warning
+    const ok = dayWarnings(DAY_ITEMS, { ...ctx({ ...EMPTY_OVERLAY, creatives: { "cr-table": "approved", "cr-toast": "approved" } }), moveStateOf: () => "approved" });
+    expect(ok.some((x) => x.itemId === "di-em-launch")).toBe(false);
+    // a second launch on 13.10 = a clash on both
+    const clash = dayWarnings(dayItemsView(DAY_ITEMS, { ...EMPTY_OVERLAY, dayMoves: { "di-el-launch": 13 } }), ctx());
+    expect(clash.filter((x) => x.kind === "launch_clash").map((x) => x.itemId).sort()).toEqual(["di-el-launch", "di-em-launch"]);
+    expect(dayLoad(dayItemsView(DAY_ITEMS, { ...EMPTY_OVERLAY, dayMoves: { "di-el-launch": 13 } }), 13).overloaded).toBe(true);
+  });
+  it("status words follow the type", () => {
+    expect(dayStatusWord("post", "done")).toBe("פורסם");
+    expect(dayStatusWord("whatsapp", "done")).toBe("נשלח");
+    expect(dayStatusWord("optimization_review", "done")).toBe("הושלם");
+    expect(dayStatusWord("story", "scheduled")).toBe("מתוזמן");
+  });
+  it("mobile agenda: every day of the week, every item on its exact date; live moves collapse into a count", () => {
     const live = moves().filter((m) => m.state === "live").length;
-    const a = agendaForWeek(TIMELINE, PLAN_WEEK, PLAN_TODAY, live);
+    const a = agendaWeek(DAY_ITEMS, TIMELINE, PLAN_WEEK, live);
     expect(a.liveAllWeek).toBe(4);
-    expect(a.days.map((d) => d.day)).toEqual([7, 8, 9, 10]);
-    expect(a.days.find((d) => d.day === 7)!.items.map((i) => i.agenda)).toContain("Meta לידים · בבנייה");
-    expect(a.days.flatMap((d) => d.items).some((i) => i.kind === "live")).toBe(false);
+    expect(a.days.map((d) => d.day)).toEqual([4, 5, 6, 7, 8, 9, 10]);
+    expect(a.days.find((d) => d.day === 9)!.items.map((i) => i.id)).toEqual(expect.arrayContaining(["di-so-post-9", "di-em-creatives"]));
+    expect(a.days.find((d) => d.day === 9)!.starts.map((b) => b.id)).toEqual(expect.arrayContaining(["tl-em-review", "tl-sc-build"]));
+    expect(PLAN_WEEKS.length).toBeGreaterThan(3);
   });
 });
 

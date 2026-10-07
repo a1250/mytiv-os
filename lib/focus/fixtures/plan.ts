@@ -1,7 +1,6 @@
 import type {
-  AssetSummary, BuilderProposal, Client, ContentRequirement, CreateMoveNeed, Goal, Move, Plan, PlanWarning, Priority, ProductionRow, Recommendation, TimelineItem,
+  AssetSummary, BuilderProposal, Client, ContentRequirement, CreateMoveNeed, DayItem, Goal, Move, Plan, Priority, ProductionRow, Recommendation, TimelineItem,
 } from "@/lib/focus/contracts/plan";
-import { R } from "@/lib/focus/routes";
 import { CLIENTS, PEOPLE } from "./people";
 
 /**
@@ -287,30 +286,67 @@ export const REQUIREMENTS: ContentRequirement[] = [
 
 /* ---------- timeline ---------- */
 
+/** Flight bars — period context only (what is running, being built, waiting). Execution is in `DAY_ITEMS`. */
 export const TIMELINE: TimelineItem[] = [
   { id: "tl-eg-live", moveId: "m-events-google", kind: "live", startDay: 1, endDay: 31, label: "פעיל" },
-  ...[8, 15, 22, 29].map((d): TimelineItem => ({ id: `tl-eg-opt-${d}`, moveId: "m-events-google", kind: "optimization", startDay: d, endDay: d, label: "בדיקת אופטימיזציה Google", agenda: "בדיקת Google Search" })),
-  { id: "tl-em-build", moveId: "m-events-meta", kind: "build", startDay: 1, endDay: 8, label: "בנייה", agenda: "Meta לידים · בבנייה" },
-  { id: "tl-em-review", moveId: "m-events-meta", kind: "review", startDay: 9, endDay: 10, label: "בדיקה", agenda: "Meta לידים · בדיקה" },
-  { id: "tl-em-approval", moveId: "m-events-meta", kind: "approval", startDay: 11, endDay: 11, label: "אישור", agenda: "אישור Meta לידים" },
+  { id: "tl-em-build", moveId: "m-events-meta", kind: "build", startDay: 1, endDay: 8, label: "בנייה" },
+  { id: "tl-em-review", moveId: "m-events-meta", kind: "review", startDay: 9, endDay: 10, label: "בדיקה", agenda: "Meta לידים · בדיקה מתחילה" },
   { id: "tl-em-flight", moveId: "m-events-meta", kind: "waiting_flight", startDay: 13, endDay: 31, label: "ממתין לאישור · עולה 13.10" },
-  { id: "tl-em-launch", moveId: "m-events-meta", kind: "launch", startDay: 13, endDay: 13, label: "השקה", agenda: "השקת Meta לידים" },
-  ...[20, 27].map((d): TimelineItem => ({ id: `tl-em-opt-${d}`, moveId: "m-events-meta", kind: "optimization", startDay: d, endDay: d, label: "בדיקת אופטימיזציה Meta", agenda: "בדיקת Meta לידים" })),
   { id: "tl-el-build", moveId: "m-events-linkedin", kind: "build", startDay: 12, endDay: 18, label: "בנייה", agenda: "LinkedIn · בנייה מתחילה" },
   { id: "tl-el-planned", moveId: "m-events-linkedin", kind: "planned", startDay: 19, endDay: 31, label: "מתוכנן" },
   { id: "tl-sm-live", moveId: "m-sunset-meta", kind: "live", startDay: 1, endDay: 31, label: "פעיל" },
-  ...[10, 24].map((d): TimelineItem => ({ id: `tl-sm-opt-${d}`, moveId: "m-sunset-meta", kind: "optimization", startDay: d, endDay: d, label: "בדיקת אופטימיזציה Meta", agenda: "בדיקת Meta חשיפה" })),
-  { id: "tl-sm-refresh", moveId: "m-sunset-meta", kind: "warning", startDay: 14, endDay: 14, label: "רענון קריאייטיב" },
-  ...([[2, "published"], [6, "published"], [9, "scheduled"], [13, "scheduled"], [16, "scheduled"], [20, "planned"], [23, "planned"], [27, "planned"], [30, "planned"]] as const).map(([d, st]): TimelineItem => ({
-    id: `tl-so-post-${d}`, moveId: "m-sunset-organic", kind: "post", startDay: d, endDay: d, postState: st,
-    label: d === 9 ? "שקיעה על המרפסת" : "פוסט", agenda: d === 9 ? "פוסט · שקיעה על המרפסת" : "פוסט",
-  })),
+  { id: "tl-so-live", moveId: "m-sunset-organic", kind: "live", startDay: 1, endDay: 31, label: "סדרה אורגנית" },
   { id: "tl-sc-build", moveId: "m-sunset-crm", kind: "build", startDay: 9, endDay: 15, label: "בנייה", agenda: "רצף CRM · בנייה מתחילה" },
-  ...[16, 23].map((d): TimelineItem => ({ id: `tl-sc-send-${d}`, moveId: "m-sunset-crm", kind: "send", startDay: d, endDay: d, label: "שליחה", agenda: "שליחת WhatsApp" })),
+  { id: "tl-sc-planned", moveId: "m-sunset-crm", kind: "planned", startDay: 16, endDay: 31, label: "מתוכנן" },
   { id: "tl-dg-live", moveId: "m-delivery-google", kind: "live", startDay: 1, endDay: 31, label: "פעיל" },
-  ...[10, 24].map((d): TimelineItem => ({ id: `tl-dg-opt-${d}`, moveId: "m-delivery-google", kind: "optimization", startDay: d, endDay: d, label: "בדיקת אופטימיזציה Google", agenda: "בדיקת Google · משלוחים" })),
-  { id: "tl-dm-photos", moveId: "m-delivery-meta", kind: "warning", startDay: 16, endDay: 21, label: "צילום מנות · חסר, לא קיים" },
   { id: "tl-dm-planned", moveId: "m-delivery-meta", kind: "planned", startDay: 22, endDay: 31, label: "מתוכנן" },
+];
+
+const day = (id: string, d: number, type: DayItem["type"], title: string, priorityId: string | null, moveId: string | null, status: DayItem["status"], extra: Partial<DayItem> = {}): DayItem =>
+  ({ id, day: d, type, title, priorityId, moveId, status, ...extra });
+
+/**
+ * Execution on exact days (UMINO, October; today = 7.10). Past items are done unless something is late; the three
+ * situations the package calls out stay true: Meta לידים launches 13.10 with its approval and 2 creatives still open,
+ * Sunset's Meta creative is 6 weeks old (refresh 14.10), and the fall-menu dishes do not exist yet (22.10).
+ */
+export const DAY_ITEMS: DayItem[] = [
+  // the whole plan: business moments and the weekly review
+  day("di-mo-sukkot", 1, "moment", "סוף סוכות", null, null, "done"),
+  day("di-mo-events", 13, "moment", "עונת אירועי סוף שנה נפתחת", null, null, "planned"),
+  day("di-mo-fall", 22, "moment", "השקת תפריט סתיו", null, null, "planned"),
+  ...[4, 11, 18, 25].map((d) => day(`di-review-${d}`, d, "milestone", "סקירה שבועית של התוכנית", null, null, d < 7 ? "done" : "planned")),
+
+  // אירועים עסקיים
+  ...[8, 15, 22, 29].map((d) => day(`di-eg-opt-${d}`, d, "optimization_review", "בדיקת אופטימיזציה · Google Search", "p-events", "m-events-google", "planned")),
+  day("di-eg-review-15", 15, "campaign_review", "סקירת אמצע חודש · Google Search", "p-events", "m-events-google", "planned"),
+  day("di-em-creatives", 9, "creative_due", "3 קריאייטיבים אנכיים 9:16", "p-events", "m-events-meta", "in_progress", { needs: { requirementId: "req-events-vertical" } }),
+  day("di-em-approval", 11, "approval_due", "אישור בעלים · Meta לידים", "p-events", "m-events-meta", "planned"),
+  day("di-em-launch", 13, "launch", "השקת Meta לידים", "p-events", "m-events-meta", "planned", { needs: { requirementId: "req-events-vertical", approvalItemId: "di-em-approval" } }),
+  day("di-em-testimonial", 18, "creative_due", "סרטון המלצה מלקוח עסקי", "p-events", "m-events-meta", "planned", { needs: { requirementId: "req-events-testimonial" } }),
+  day("di-em-next", 20, "creative_refresh", "קריאייטיב חדש לשבוע השני", "p-events", "m-events-meta", "planned", { needs: { requirementId: "req-events-next" } }),
+  ...[20, 27].map((d) => day(`di-em-opt-${d}`, d, "optimization_review", "בדיקת אופטימיזציה · Meta לידים", "p-events", "m-events-meta", "planned")),
+  day("di-el-launch", 19, "launch", "השקת LinkedIn · מנהלות HR", "p-events", "m-events-linkedin", "planned"),
+
+  // הזמנות שקיעה — organic series (posts, stories, reels), the Meta reach campaign, the CRM sequence
+  ...([[2, "done"], [6, "done"], [9, "scheduled"], [13, "scheduled"], [16, "scheduled"], [20, "planned"], [23, "planned"], [27, "planned"], [30, "planned"]] as const)
+    .map(([d, st]) => day(`di-so-post-${d}`, d, "post", d === 9 ? "שקיעה על המרפסת" : "פוסט שקיעה שבועי", "p-sunset", "m-sunset-organic", st)),
+  ...([[5, "done"], [7, "scheduled"], [12, "planned"], [19, "planned"], [26, "planned"]] as const)
+    .map(([d, st]) => day(`di-so-story-${d}`, d, "story", "סטורי · השולחן של הערב", "p-sunset", "m-sunset-organic", st)),
+  day("di-so-reel-shoot", 5, "creative_due", "צילום רילס שקיעה", "p-sunset", "m-sunset-organic", "in_progress"),
+  day("di-so-reel", 14, "reel", "רילס · 30 שניות של שקיעה", "p-sunset", "m-sunset-organic", "planned"),
+  day("di-sm-refresh", 14, "creative_refresh", "רענון קריאייטיב · Meta חשיפה", "p-sunset", "m-sunset-meta", "planned", { needs: { requirementId: "req-sunset-fresh" } }),
+  ...[10, 24].map((d) => day(`di-sm-opt-${d}`, d, "optimization_review", "בדיקת אופטימיזציה · Meta חשיפה", "p-sunset", "m-sunset-meta", "planned")),
+  day("di-sc-wa-16", 16, "whatsapp", "WhatsApp · הזמנה לשקיעה לחוזרים", "p-sunset", "m-sunset-crm", "planned"),
+  day("di-sc-email-18", 18, "email", "ניוזלטר · ערבי שקיעה באוקטובר", "p-sunset", "m-sunset-crm", "planned"),
+  day("di-sc-wa-23", 23, "whatsapp", "WhatsApp · תזכורת לסוף השבוע", "p-sunset", "m-sunset-crm", "planned"),
+
+  // משלוחים
+  ...[10, 24].map((d) => day(`di-dg-opt-${d}`, d, "optimization_review", "בדיקת אופטימיזציה · Google משלוחים", "p-delivery", "m-delivery-google", "planned")),
+  day("di-dm-dishes", 21, "creative_due", "צילום 4 מנות תפריט סתיו", "p-delivery", "m-delivery-meta", "planned", { needs: { requirementId: "req-delivery-dishes" } }),
+  day("di-dm-launch", 22, "launch", "השקת תפריט סתיו · Meta", "p-delivery", "m-delivery-meta", "blocked", {
+    blockedReason: "המבצע לא אושר לפרסום במוח העסק", needs: { requirementId: "req-delivery-dishes" },
+  }),
 ];
 
 /** Content-production rows: hidden unless a warning, an approval due, a near deadline, an expanded move or the switch. */
@@ -320,12 +356,6 @@ export const PRODUCTION: ProductionRow[] = [
   { moveId: "m-sunset-meta", startDay: 10, endDay: 14, label: "2 קריאייטיבים רעננים 4:5", warning: false, approvalDue: false, deadlineDay: 14 },
   { moveId: "m-sunset-organic", startDay: 1, endDay: 31, label: "צילום שבועי לסדרה", warning: false, approvalDue: false, deadlineDay: 31 },
   { moveId: "m-delivery-meta", startDay: 15, endDay: 21, label: "צילום מנות סתיו", warning: false, approvalDue: false, deadlineDay: 21 },
-];
-
-export const WARNINGS: PlanWarning[] = [
-  { id: "w-events-creatives", severity: "high", dueDay: 13, title: "2 קריאייטיבים ל־Meta לידים", text: "ממתינים לאישורך, 6 ימים לפני ההשקה", href: `${R.planBuilder("events-meta")}#creative` },
-  { id: "w-sunset-refresh", severity: "medium", dueDay: 14, title: "Meta חשיפה · שקיעה", text: "בלי רענון קריאייטיב 6 שבועות", href: `${R.planMoves}#move-m-sunset-meta` },
-  { id: "w-delivery-photos", severity: "medium", dueDay: 22, title: "תמונות מנות סתיו", text: "חסרות לפני השקת התפריט ב־22.10", href: `${R.planAssets}?req=req-delivery-dishes` },
 ];
 
 /* ---------- builders ---------- */

@@ -724,15 +724,88 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
   });
   await check("plan: production switch adds creative rows with a reason", async () => {
     await go(page, "/focus/plan/timeline");
-    const before = await page.locator(".f-pl-row--prod").count();
+    const before = await page.locator(".f-pl-cal__row--prod").count();
     await page.getByRole("switch", { name: /הצג הפקת תוכן/ }).click();
-    const after = await page.locator(".f-pl-row--prod").count();
+    const after = await page.locator(".f-pl-cal__row--prod").count();
     return after > before ? `${before} → ${after}` : false;
   });
-  await check("plan: week toggle keeps the view and sets ?week=1", async () => {
+  await check("plan timeline: every day of October is its own column (1…31, exact numbers)", async () => {
+    await go(page, "/focus/plan/timeline");
+    const nums = await page.locator(".f-pl-cal__row--head .f-pl-cal__dnum").allTextContents();
+    return nums.join(",") === Array.from({ length: 31 }, (_, i) => i + 1).join(",") ? "31 day columns" : nums.join(",");
+  });
+  await check("plan timeline: campaign bars still span date ranges (grid columns), not single days", async () => {
+    const col = await page.locator(".f-pl-flight--live").first().evaluate((el) => getComputedStyle(el).gridColumn);
+    return /2 \/ 33/.test(col) ? `live bar spans ${col}` : col;
+  });
+  await check("plan timeline: day 12 → add item (type, priority, campaign, title, status) → it sits on 12.10", async () => {
+    await page.getByRole("button", { name: /^שני 12\.10 · .*פתח את היום/ }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByRole("button", { name: /^\+ הוסף פריט ל־12\.10/ }).click();
+    await dlg.getByLabel("סוג").selectOption("reel");
+    await dlg.getByLabel("נושא (מה מקדמים)").selectOption("p-sunset");
+    await dlg.getByLabel("קמפיין / מהלך").selectOption("m-sunset-organic");
+    await dlg.getByRole("button", { name: "שמור" }).click();
+    if (!(await dlg.textContent()).includes("כתבו כותרת")) return "saved without a title";
+    await dlg.getByLabel("כותרת").fill("רילס בדיקה QA");
+    await dlg.getByLabel("סטטוס").selectOption("in_progress");
+    await dlg.getByRole("button", { name: "שמור" }).click();
+    await dlg.locator(".f-pl-dayrow", { hasText: "רילס בדיקה QA" }).waitFor();
+    await dlg.getByRole("button", { name: "סגירה", exact: true }).first().click();
+    const chip = page.getByRole("button", { name: /^רילס · רילס בדיקה QA · שני 12\.10 · בעבודה/ });
+    return (await chip.count()) === 1 ? "on 12.10, in progress" : false;
+  });
+  await check("plan timeline: open an item → change to an exact day → it moves (keyboard / panel, no drag)", async () => {
+    await page.getByRole("button", { name: /^רילס · רילס בדיקה QA/ }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("תאריך מדויק").selectOption("21");
+    await dlg.getByRole("button", { name: "שמור" }).click();
+    return (await page.getByRole("button", { name: /^רילס · רילס בדיקה QA · רביעי 21\.10/ }).count()) === 1 ? "moved to 21.10" : false;
+  });
+  await check("plan timeline: a full day stacks chips and shows '+N' that opens the day", async () => {
+    for (const title of ["פריט 1", "פריט 2", "פריט 3"]) {
+      await page.getByRole("button", { name: /^שבת 17\.10 · .*פתח את היום/ }).click();
+      const dlg = page.getByRole("dialog");
+      await dlg.getByRole("button", { name: /^\+ הוסף פריט/ }).click();
+      await dlg.getByLabel("נושא (מה מקדמים)").selectOption("p-sunset");
+      await dlg.getByLabel("כותרת").fill(title);
+      await dlg.getByRole("button", { name: "שמור" }).click();
+      await dlg.getByRole("button", { name: "סגירה", exact: true }).first().click();
+    }
+    // 17.10 in Sunset: 3 new posts + nothing else = 3 shown; add a 4th → 2 shown + "+2"
+    await page.getByRole("button", { name: /^שבת 17\.10 · .*פתח את היום/ }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByRole("button", { name: /^\+ הוסף פריט/ }).click();
+    await dlg.getByLabel("נושא (מה מקדמים)").selectOption("p-sunset");
+    await dlg.getByLabel("כותרת").fill("פריט 4");
+    await dlg.getByRole("button", { name: "שמור" }).click();
+    await dlg.getByRole("button", { name: "סגירה", exact: true }).first().click();
+    const more = page.getByRole("button", { name: /^עוד 2 פריטים ב־17\.10/ });
+    if ((await more.count()) !== 1) return "no +2";
+    await more.click();
+    const n = await page.getByRole("dialog").locator(".f-pl-dayrow").count();
+    await page.getByRole("dialog").getByRole("button", { name: "סגירה", exact: true }).first().click();
+    return n === 4 ? "+2 → day panel lists 4" : `day panel lists ${n}`;
+  });
+  await check("plan timeline: two launches on one day → a clash warning; the day shows overload", async () => {
+    await page.getByRole("button", { name: /^השקה · השקת LinkedIn/ }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("תאריך מדויק").selectOption("13");
+    await dlg.getByRole("button", { name: "שמור" }).click();
+    const head = await page.getByRole("button", { name: /^שלישי 13\.10 · / }).getAttribute("aria-label");
+    const warn = await page.locator(".f-pl-warns").textContent();
+    if (!(await page.getByRole("button", { name: /הצג עוד/ }).count())) return "no more toggle";
+    await page.getByRole("button", { name: /הצג עוד/ }).click();
+    return (await page.locator(".f-pl-warns").textContent()).includes("כמה השקות באותו יום") && head.includes("עומס") ? "clash + overload on 13.10" : `head=${head} warn=${warn.slice(0, 80)}`;
+  });
+  await check("plan week toggle keeps the view and sets ?week=1", async () => {
     await btn("השבוע").click();
     await page.waitForURL(/week=1/);
     return (await page.locator(".f-pl-tabs__item[aria-current=page]").textContent()).includes("ציר");
+  });
+  await check("plan timeline (week): only 4–10.10 as wide day columns", async () => {
+    const nums = await page.locator(".f-pl-cal__row--head .f-pl-cal__dnum").allTextContents();
+    return nums.join(",") === "4,5,6,7,8,9,10" ? "7 days" : nums.join(",");
   });
   await check("plan: asset cover 'ask the client' creates a task and stays missing", async () => {
     await go(page, "/focus/plan/assets?req=req-delivery-dishes");
@@ -745,6 +818,27 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     await go(page, "/focus/plan?period=2026-11");
     await btn("העתק מאוקטובר").click();
     return (await page.textContent("main")).includes("טיוטה");
+  });
+  await check("plan timeline (mobile): agenda shows every exact date; add to a day and move an item", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await go(page, "/focus/plan/timeline");
+    const dates = await page.locator(".f-pl-agenda__date").allTextContents();
+    if (dates.length !== 7 || !dates[0].includes("4.10") || !dates[6].includes("10.10")) return dates.join(" | ");
+    await page.getByRole("button", { name: "הוסף פריט ל־שישי 9.10" }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("כותרת").fill("סטורי נייד QA");
+    await dlg.getByLabel("סוג").selectOption("story");
+    await dlg.getByRole("button", { name: "שמור" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "סגירה", exact: true }).first().click();
+    const day9 = page.locator(".f-pl-agenda__day", { has: page.locator("#ag-9") });
+    if (!(await day9.textContent()).includes("סטורי נייד QA")) return "not on 9.10";
+    await day9.getByRole("button", { name: /סטורי נייד QA/ }).click();
+    await page.getByRole("dialog").getByLabel("תאריך מדויק").selectOption("10");
+    await page.getByRole("dialog").getByRole("button", { name: "שמור" }).click();
+    const day10 = page.locator(".f-pl-agenda__day", { has: page.locator("#ag-10") });
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    return (await day10.textContent()).includes("סטורי נייד QA") && over <= 0 ? "added on 9.10, moved to 10.10, no overflow" : `over=${over}`;
   });
   await check("plan: no page errors across the plan flows", async () => (errors.length ? errors[0] : true));
   await ctx.close();

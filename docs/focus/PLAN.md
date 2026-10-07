@@ -27,6 +27,20 @@ Deliberate deviations from the package (for review):
 - Plan "today" is 7.10 (the package's snapshot); the global Focus demo clock stays 1.10 for the reviewed flows.
 - Money uses the Focus format (`6,000 ₪`), not `₪6,000`.
 - Plan is one extra item in the existing nav; the package's 6-item nav redesign is out of scope.
-- Timeline drag is replaced by an accessible reschedule panel (non-live items move; live / gated items create an
-  approval request, labelled demo).
 - Derived numbers where the mock is hand-drawn: mobile agenda live count (4), Meta run-out (~12.10), fastest-pace tile.
+
+## Timeline — daily calendar refinement
+
+- Desktop / tablet: one column per calendar day (RTL: 1.10 on the right). Flight bars (`TIMELINE`: live / build /
+  review / planned / waiting) are period context and span exact day columns. Execution is `DAY_ITEMS` (post, story,
+  reel, email, WhatsApp, creative due, approval due, launch, campaign review, optimization review, creative refresh,
+  milestone, business moment) — one exact day each, stacked as compact chips in a "ביצוע" row per lane, "+N" when a day
+  is full, a daily load row at the bottom. "השבוע" shows 4–10.10 as wide day columns with full titles.
+- No drag: a day header opens the day (its items + "הוסף פריט": type, priority, campaign/move, title, status, day); an
+  item opens its panel (exact day + status). A launch / approval date of a move already in approval, approved or live
+  becomes an approval request; done items and business moments do not move.
+- Warnings are derived (`dayWarnings`): missing asset before publish, approval not done before a launch/publish,
+  2+ launches on one day, overdue, creative refresh due, blocked. Asset "awaiting approval" is never "missing".
+- Mobile: the weekly agenda lists every day of the week with every item on its exact date, "+ הוסף" per day, items
+  open the same panel (move / status), warnings inline. No month grid on mobile.
+- Demo only: added / moved items live in the browser session (`plan-v1` overlay: `dayItems`, `dayMoves`, `dayStatus`).

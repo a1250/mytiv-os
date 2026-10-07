@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import type { AssetAvailability, CoverOption, MoveState } from "@/lib/focus/contracts/plan";
+import type { AssetAvailability, CoverOption, DayItem, DayItemStatus, MoveState } from "@/lib/focus/contracts/plan";
 import {
-  BUILDERS, MOVES, PLAN_MONTH_DAYS, PLAN_OCTOBER, PLAN_TODAY, PROPOSED_MOVES, RECOMMENDATIONS, REQUIREMENTS,
+  BUILDERS, DAY_ITEMS, MOVES, PLAN_MONTH_DAYS, PLAN_OCTOBER, PLAN_TODAY, PROPOSED_MOVES, RECOMMENDATIONS, REQUIREMENTS,
 } from "@/lib/focus/fixtures/plan";
 import { R } from "@/lib/focus/routes";
 import {
-  canTransition, moveState, planBudget, planMoves, readOverlay, type BuilderEdits, type PlanFixtures, type PlanOverlay, type Routes,
+  canTransition, dayItemsView, moveState, planBudget, planMoves, readOverlay, type BuilderEdits, type PlanFixtures, type PlanOverlay, type Routes,
 } from "@/lib/focus/state/plan";
 import { useDemo } from "@/components/focus/shell/demo-store";
 
@@ -33,6 +33,7 @@ export function usePlan() {
   const update = useCallback((fn: (o: PlanOverlay) => PlanOverlay) => demo.updateDraft<PlanOverlay>(KEY, (prev) => fn(readOverlay(prev))), [demo]);
   const moves = useMemo(() => planMoves(PLAN_FIXTURES, overlay), [overlay]);
   const budget = useMemo(() => planBudget(PLAN_FIXTURES, overlay, moves, PLAN_TODAY, PLAN_MONTH_DAYS), [overlay, moves]);
+  const dayItems = useMemo(() => dayItemsView(DAY_ITEMS, overlay), [overlay]);
 
   const actions = useMemo(() => ({
     /** a lifecycle step — refused (false) unless it is a legal transition */
@@ -54,12 +55,20 @@ export function usePlan() {
     clearRequirement: (id: string) => update((o) => { const r = { ...o.requirements }; delete r[id]; return { ...o, requirements: r }; }),
     reschedule: (itemId: string, startDay: number, endDay: number) => update((o) => ({ ...o, reschedules: { ...o.reschedules, [itemId]: { startDay, endDay } } })),
     requestReschedule: (itemId: string, day: number) => update((o) => ({ ...o, rescheduleRequests: { ...o.rescheduleRequests, [itemId]: day } })),
+    /** place a new content / execution item on an exact day (browser session only) */
+    addDayItem: (item: Omit<DayItem, "id" | "added">): DayItem => {
+      const created: DayItem = { ...item, id: `di-u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, added: true };
+      update((o) => ({ ...o, dayItems: [...o.dayItems, created] }));
+      return created;
+    },
+    moveDayItem: (id: string, day: number) => update((o) => ({ ...o, dayMoves: { ...o.dayMoves, [id]: day } })),
+    setDayStatus: (id: string, status: DayItemStatus) => update((o) => ({ ...o, dayStatus: { ...o.dayStatus, [id]: status } })),
     enterSpend: (moveId: string, amount: number, at: string) => update((o) => ({ ...o, manualSpend: { ...o.manualSpend, [moveId]: { amount, at } } })),
     addPriority: (name: string, description: string) => update((o) => ({ ...o, proposedPriorities: [...o.proposedPriorities, { id: `pp-${o.proposedPriorities.length + 1}`, name, description }] })),
     copyPeriod: (month: string) => update((o) => ({ ...o, copiedPeriods: o.copiedPeriods.includes(month) ? o.copiedPeriods : [...o.copiedPeriods, month] })),
   }), [overlay, update]);
 
-  return { f: PLAN_FIXTURES, overlay, moves, budget, today: PLAN_TODAY, monthDays: PLAN_MONTH_DAYS, hydrated: demo.hydrated, demo, ...actions };
+  return { f: PLAN_FIXTURES, overlay, moves, budget, dayItems, today: PLAN_TODAY, monthDays: PLAN_MONTH_DAYS, hydrated: demo.hydrated, demo, ...actions };
 }
 
 export type PlanApi = ReturnType<typeof usePlan>;

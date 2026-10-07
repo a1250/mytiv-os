@@ -36,7 +36,7 @@ function Overview() {
   const decisions = pps.filter((pp) => actions.get(pp.priorityId)!.kind === "decision");
   const gaps = pps.flatMap((pp) => openNeeds(pp, plan.moves).filter((n) => n.kind === "coverage_gap").map((n) => ({ pp, n })));
   const count = pps.length + plan.overlay.proposedPriorities.length;
-  const weekIds = week ? weekMoveIds(plan.moves) : null;
+  const weekIds = week ? weekMoveIds(plan.moves, plan.dayItems) : null;
 
   return (
     <PlanFrame view="overview" controls={<span className="f-pl-meta">{PLAN_OCTOBER.nextReview.label}</span>}>

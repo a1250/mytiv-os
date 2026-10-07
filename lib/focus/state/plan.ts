@@ -1,6 +1,6 @@
 import type {
   AssetAvailability, BuilderProposal, ContentRequirement, CoverOption, DecisionKey, Move, MoveState, Plan, PlanNeed, PriorityPlan,
-  ProductionRow, Recommendation, RecommendationRoute, TimelineItem,
+  DayItem, DayItemStatus, DayItemType, ProductionRow, Recommendation, RecommendationRoute, TimelineItem,
 } from "@/lib/focus/contracts/plan";
 import type { Reading } from "@/lib/focus/contracts/common";
 
@@ -37,8 +37,14 @@ export type PlanOverlay = {
   requirements: Record<string, { choice: CoverOption; taskId?: string; assetId?: string }>;
   /** timeline items moved (only items that are not live and need no approval) */
   reschedules: Record<string, { startDay: number; endDay: number }>;
-  /** timeline items whose move was asked for (live / approval-gated): the request waits for approval */
+  /** timeline / day items whose move was asked for (live / approval-gated): the request waits for approval */
   rescheduleRequests: Record<string, number>;
+  /** day items added in this session (content or execution placed on an exact day) */
+  dayItems: DayItem[];
+  /** a day item moved to another exact day */
+  dayMoves: Record<string, number>;
+  /** a day item's status changed */
+  dayStatus: Record<string, DayItemStatus>;
   /** spend typed in by hand where the channel reports nothing (V1) — replaces "unknown" with a known, dated value */
   manualSpend: Record<string, { amount: number; at: string }>;
   /** priorities proposed in this session ("+ נושא לקידום") — proposed, not active */
@@ -49,7 +55,7 @@ export type PlanOverlay = {
 
 export const EMPTY_OVERLAY: PlanOverlay = {
   moveStates: {}, launchLinks: {}, creatives: {}, recs: {}, builders: {}, requirements: {}, reschedules: {}, rescheduleRequests: {},
-  manualSpend: {}, proposedPriorities: [], copiedPeriods: [],
+  dayItems: [], dayMoves: {}, dayStatus: {}, manualSpend: {}, proposedPriorities: [], copiedPeriods: [],
 };
 
 /** Read the overlay defensively (session storage may hold an older shape). */
@@ -272,32 +278,119 @@ export function productionVisibility(row: ProductionRow, opts: { today: number; 
   return null;
 }
 
-/** A timeline item can be dragged only when it is not live and needs no approval to move. */
+/** A flight bar moves freely only when its move is not live and needs no approval; otherwise moving it is a request. */
 export function canReschedule(item: TimelineItem, state: MoveState): "move" | "approval" | "fixed" {
-  if (item.kind === "post" && item.postState === "published") return "fixed";
-  if (item.kind === "live" || item.kind === "optimization") return state === "live" ? "approval" : "fixed";
-  if (state === "live" || state === "waiting_approval" || state === "approved" || item.kind === "approval" || item.kind === "launch" || item.kind === "waiting_flight") return "approval";
+  if (item.kind === "live") return state === "live" ? "approval" : "fixed";
+  if (state === "live" || state === "waiting_approval" || state === "approved" || item.kind === "waiting_flight") return "approval";
   return "move";
 }
 
 export const inWeek = (item: { startDay: number; endDay: number }, w: { from: number; to: number }) => item.startDay <= w.to && item.endDay >= w.from;
 
+/* ---------- day items: execution on exact days ---------- */
+
+export const DAY_TYPE: Record<DayItemType, { word: string; short: string; publish: boolean; major?: boolean }> = {
+  post: { word: "פוסט", short: "פוסט", publish: true },
+  story: { word: "סטורי", short: "סטורי", publish: true },
+  reel: { word: "רילס", short: "רילס", publish: true },
+  email: { word: "דוא״ל", short: "מייל", publish: true },
+  whatsapp: { word: "שליחת WhatsApp", short: "שליחה", publish: true },
+  creative_due: { word: "יעד קריאייטיב", short: "נכס", publish: false },
+  approval_due: { word: "יעד אישור", short: "אישור", publish: false },
+  launch: { word: "השקה", short: "השקה", publish: true, major: true },
+  campaign_review: { word: "סקירת קמפיין", short: "סקירה", publish: false },
+  optimization_review: { word: "בדיקת אופטימיזציה", short: "בדיקה", publish: false },
+  creative_refresh: { word: "רענון קריאייטיב", short: "רענון", publish: false },
+  milestone: { word: "אבן דרך", short: "יעד", publish: false },
+  moment: { word: "רגע עסקי", short: "רגע", publish: false },
+};
+
+/** The status word depends on the type: a post is published, a send is sent, a review is completed. */
+export function dayStatusWord(type: DayItemType, status: DayItemStatus): string {
+  if (status === "done") return DAY_TYPE[type].publish ? (type === "email" || type === "whatsapp" ? "נשלח" : type === "launch" ? "הושק" : "פורסם") : type === "moment" ? "עבר" : "הושלם";
+  return { planned: "מתוכנן", in_progress: "בעבודה", ready: "מוכן", scheduled: "מתוזמן", blocked: "חסום" }[status];
+}
+
+/** Fixtures + this session's additions, moves and status changes. */
+export function dayItemsView(fixtures: DayItem[], o: PlanOverlay): DayItem[] {
+  return [...fixtures, ...o.dayItems].map((it) => ({ ...it, day: o.dayMoves[it.id] ?? it.day, status: o.dayStatus[it.id] ?? it.status }));
+}
+
 /**
- * The mobile agenda: changes only (launch, review, approval, post, send, build start/end); the moves live all week
- * collapse into one count (live moves, not bars — an organic series is live but drawn as post dots).
+ * Moving a day item: content and execution move freely to any exact day; what already happened or is a fact of the
+ * calendar (a business moment) stays; a launch or an approval date of a move that is already approved / live / in
+ * approval is a Plan change and goes through an approval request (as flight bars do).
  */
-export function agendaForWeek(items: TimelineItem[], w: { from: number; to: number }, today: number, liveMoves: number) {
-  const days: Record<number, TimelineItem[]> = {};
-  // the current week starts at today: what already happened this week is not an upcoming change
-  const from = today >= w.from && today <= w.to ? today : w.from;
-  const add = (d: number, it: TimelineItem) => { if (d >= from) (days[d] ??= []).push(it); };
+export function canMoveDayItem(item: DayItem, state: MoveState | null): "move" | "approval" | "fixed" {
+  if (item.status === "done" || item.type === "moment") return "fixed";
+  if ((item.type === "launch" || item.type === "approval_due") && state && (state === "live" || state === "approved" || state === "waiting_approval")) return "approval";
+  return "move";
+}
+
+export type DayWarningKind = "missing_asset" | "approval_incomplete" | "launch_clash" | "overdue" | "refresh_due" | "blocked";
+export type DayWarning = { kind: DayWarningKind; itemId: string; day: number; severity: "high" | "medium"; text: string };
+
+export const DAY_WARNING_WORD: Record<DayWarningKind, string> = {
+  missing_asset: "חסר נכס לפני הפרסום", approval_incomplete: "האישור לא הושלם", launch_clash: "כמה השקות באותו יום",
+  overdue: "באיחור", refresh_due: "נדרש רענון", blocked: "חסום",
+};
+
+const OPEN: DayItemStatus[] = ["planned", "in_progress", "blocked"];
+
+/**
+ * Warnings derived from the day items (never stored): a publish/launch whose asset is missing; a launch whose approval
+ * (or whose creatives' approval) is not done; two or more launches on one day; anything open past its day; a creative
+ * refresh that is due; a blocked item. Asset "awaiting approval" is an approval warning, never "missing".
+ */
+export function dayWarnings(items: DayItem[], ctx: {
+  today: number; overlay: PlanOverlay; requirements: ContentRequirement[]; builders: BuilderProposal[]; moveStateOf: (moveId: string) => MoveState | null;
+}): DayWarning[] {
+  const out: DayWarning[] = [];
+  const launches: Record<number, DayItem[]> = {};
   for (const it of items) {
-    if (!inWeek(it, w) || it.kind === "live" || !it.agenda) continue;
-    if (it.startDay === it.endDay) add(it.startDay, it);
-    else if (it.startDay >= w.from) add(it.startDay, it);
-    else if (today >= w.from && today <= w.to && it.endDay >= today) add(today, it); // a span running through today
+    if (it.status === "done") continue;
+    const req = it.needs?.requirementId ? ctx.requirements.find((r) => r.id === it.needs!.requirementId) : undefined;
+    const slots = req ? countSlots(requirementSlots(req, ctx.overlay, ctx.builders)) : null;
+    const publishes = DAY_TYPE[it.type].publish || it.type === "creative_due" || it.type === "creative_refresh";
+    if (slots && slots.missing > 0 && publishes) out.push({ kind: "missing_asset", itemId: it.id, day: it.day, severity: DAY_TYPE[it.type].publish ? "high" : "medium", text: `${req!.title} · ${slots.missing === 1 ? "חסר" : `${slots.missing} חסרים`}, לא קיים` });
+    else if (slots && slots.awaiting_approval > 0 && DAY_TYPE[it.type].publish) out.push({ kind: "approval_incomplete", itemId: it.id, day: it.day, severity: "high", text: `${slots.awaiting_approval} נכסים ממתינים לאישורך` });
+    if (it.needs?.approvalItemId) {
+      const ap = items.find((x) => x.id === it.needs!.approvalItemId);
+      const moveDone = it.moveId ? ["approved", "live"].includes(ctx.moveStateOf(it.moveId) ?? "") : false;
+      if (ap && ap.status !== "done" && !moveDone && !out.some((w) => w.itemId === it.id && w.kind === "approval_incomplete")) {
+        out.push({ kind: "approval_incomplete", itemId: it.id, day: it.day, severity: "high", text: `אישור הבעלים (${ap.day}.10) עוד לא ניתן` });
+      }
+    }
+    if (it.day < ctx.today && OPEN.includes(it.status) && it.type !== "moment") out.push({ kind: "overdue", itemId: it.id, day: it.day, severity: "high", text: `היה אמור להיות מוכן ב־${it.day}.10` });
+    if (it.type === "creative_refresh" && it.status !== "ready" && !out.some((w) => w.itemId === it.id && w.kind === "missing_asset")) out.push({ kind: "refresh_due", itemId: it.id, day: it.day, severity: "medium", text: "הקריאייטיב הנוכחי שחוק · צריך להחליף" });
+    if (it.status === "blocked") out.push({ kind: "blocked", itemId: it.id, day: it.day, severity: "high", text: it.blockedReason ?? "חסום" });
+    if (DAY_TYPE[it.type].major) (launches[it.day] ??= []).push(it);
   }
-  return { days: Object.entries(days).map(([d, its]) => ({ day: Number(d), items: its })).sort((a, b) => a.day - b.day), liveAllWeek: liveMoves };
+  for (const [d, ls] of Object.entries(launches)) {
+    if (ls.length < 2) continue;
+    for (const l of ls) out.push({ kind: "launch_clash", itemId: l.id, day: Number(d), severity: "medium", text: `${ls.length} השקות ב־${d}.10 · כדאי לפזר` });
+  }
+  return out.sort((a, b) => (a.severity === b.severity ? a.day - b.day : a.severity === "high" ? -1 : 1));
+}
+
+/** Load on one day: many items (execution items, not moments) or two launches = overloaded. */
+export const OVERLOAD_ITEMS = 5;
+export function dayLoad(items: DayItem[], d: number) {
+  const on = items.filter((it) => it.day === d && it.type !== "moment");
+  const launches = on.filter((it) => DAY_TYPE[it.type].major).length;
+  return { count: on.length, launches, overloaded: on.length >= OVERLOAD_ITEMS || launches >= 2 };
+}
+
+/**
+ * The mobile agenda: every day of the week with every item on that exact date (including done ones), plus bars that
+ * start that day ("בנייה מתחילה"); moves live all week collapse into one count.
+ */
+export function agendaWeek(items: DayItem[], bars: TimelineItem[], w: { from: number; to: number }, liveMoves: number) {
+  const days = [];
+  for (let d = w.from; d <= w.to; d++) {
+    days.push({ day: d, items: items.filter((it) => it.day === d), starts: bars.filter((b) => b.startDay === d && b.agenda) });
+  }
+  return { days, liveAllWeek: liveMoves };
 }
 
 /* ---------- budget ---------- */

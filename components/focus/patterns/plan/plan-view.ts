@@ -1,5 +1,5 @@
-import type { BuilderProposal, ContentRequirement, Move, PriorityPlan } from "@/lib/focus/contracts/plan";
-import { PLAN_WEEK, PRIORITIES, TIMELINE } from "@/lib/focus/fixtures/plan";
+import type { DayItem, BuilderProposal, ContentRequirement, Move, PriorityPlan } from "@/lib/focus/contracts/plan";
+import { DAY_ITEMS, PLAN_WEEK, PRIORITIES, TIMELINE } from "@/lib/focus/fixtures/plan";
 import { fmtMoney, formatNumber } from "@/lib/focus/format";
 import { countSlots, inWeek, requirementSlots, type PlanOverlay } from "@/lib/focus/state/plan";
 
@@ -36,9 +36,10 @@ export function moveNote(m: Move, o: PlanOverlay, builders: BuilderProposal[], r
 }
 
 /** Moves with something happening this week (the "השבוע" filter): items in 4–10.10 other than continuous bars. */
-export function weekMoveIds(moves: Move[]): Set<string> {
+export function weekMoveIds(moves: Move[], dayItems: DayItem[] = DAY_ITEMS): Set<string> {
   const ids = new Set<string>();
-  for (const it of TIMELINE) if (it.kind !== "live" && it.kind !== "planned" && it.kind !== "waiting_flight" && inWeek(it, PLAN_WEEK)) ids.add(it.moveId);
+  for (const it of TIMELINE) if ((it.kind === "build" || it.kind === "review") && inWeek(it, PLAN_WEEK)) ids.add(it.moveId);
+  for (const it of dayItems) if (it.moveId && it.day >= PLAN_WEEK.from && it.day <= PLAN_WEEK.to) ids.add(it.moveId);
   for (const m of moves) if (m.state === "waiting_approval" || m.state === "building") ids.add(m.id);
   return ids;
 }
