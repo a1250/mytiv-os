@@ -155,7 +155,7 @@ function MoveRow({ m, plan, onEnter, flat, rowsId }: { m: Move; plan: PlanApi; o
   const l = moveBudget(m, PLAN_TODAY, plan.monthDays);
   return (
     <tr className={cx("f-pl-brow", !flat && "f-pl-brow--child")} id={rowsId ? `${rowsId}-${m.id}` : undefined}>
-      <th scope="row">{m.longName}{m.state !== "live" && <span className="f-pl-meta"> · {m.state === "building" ? "בבנייה" : m.state === "planned" ? "מתוכנן" : m.state === "waiting_approval" ? "ממתין לאישור" : m.state === "approved" ? "מוכן" : ""}</span>}{flat && <span className="f-pl-meta"> · {priorityOf(m.priorityId).shortName}</span>}</th>
+      <th scope="row">{m.longName}{m.state !== "live" && <span className="f-pl-meta"> · {m.state === "building" ? "בבנייה" : m.state === "planned" ? "מתוכנן" : m.state === "ready_for_review" ? "מוכן לבדיקה" : m.state === "approved" ? "מוכן" : ""}</span>}{flat && <span className="f-pl-meta"> · {priorityOf(m.priorityId).shortName}</span>}</th>
       <td><Money v={m.budget.planned} /></td>
       <td>{m.budget.committed != null ? <Money v={m.budget.committed} /> : <span className="f-pl-faint">—</span>}</td>
       <td><SpentCell l={l} m={m} /></td>

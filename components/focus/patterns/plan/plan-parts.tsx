@@ -25,8 +25,8 @@ export const MOVE_STATE: Record<MoveState, { word: string; hint: string }> = {
   idea: { word: "רעיון", hint: "עוד לא בתוכנית" },
   planned: { word: "מתוכנן", hint: "קיים בתוכנית, שום דבר לא נבנה" },
   building: { word: "בבנייה", hint: "מישהו בונה את זה" },
-  waiting_approval: { word: "ממתין לאישור", hint: "ממתין לך" },
-  approved: { word: "מוכן", hint: "אושר, מחכה להשקה" },
+  ready_for_review: { word: "מוכן לבדיקה", hint: "ההצעה שלמה; אישורים לפי מדיניות הלקוח" },
+  approved: { word: "אושר", hint: "אושר, מחכה להשקה ידנית" },
   live: { word: "פעיל", hint: "כבר רץ" },
   paused: { word: "מושהה", hint: "נעצר, אפשר לחדש" },
   ended: { word: "הסתיים", hint: "תוצאות ולקחים נשמרו" },
@@ -120,7 +120,7 @@ export function GoalLine({ pp, compact }: { pp: PriorityPlan; compact?: boolean 
   );
 }
 
-const SEG_TONE: Partial<Record<MoveState, string>> = { live: "live", building: "build", waiting_approval: "build", approved: "build" };
+const SEG_TONE: Partial<Record<MoveState, string>> = { live: "live", building: "build", ready_for_review: "build", approved: "build" };
 
 /**
  * Planned coverage: a stacked bar of each move's expected contribution, a gap drawn as an outlined segment, and the

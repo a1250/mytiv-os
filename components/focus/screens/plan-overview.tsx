@@ -5,7 +5,7 @@ import { Suspense, useId, useState } from "react";
 import type { Move, PriorityPlan } from "@/lib/focus/contracts/plan";
 import { ASSET_SUMMARIES, PLAN_OCTOBER, REQUIREMENTS } from "@/lib/focus/fixtures/plan";
 import { personName } from "@/lib/focus/fixtures/people";
-import { collapsedPriority, coverage, missingFor, movesOf, nextAction, openNeeds, priorityBudget, tooManyPriorities, type NextAction } from "@/lib/focus/state/plan";
+import { NEED_RESOLVER, collapsedPriority, coverage, derivedNeeds, missingFor, movesOf, nextAction, openNeeds, priorityBudget, tooManyPriorities, type NextAction } from "@/lib/focus/state/plan";
 import { Button, ButtonLink } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { Banner, EmptyState } from "@/components/focus/ui/feedback";
@@ -165,7 +165,7 @@ function PriorityBlock({ pp, plan, action, collapsed, weekIds }: { pp: PriorityP
       </div>
 
       <div id={`${id}-drill`} className="f-pl-drill" hidden={!drill}>
-        <Drill pp={pp} moves={all} />
+        <Drill pp={pp} moves={all} plan={plan} />
       </div>
       {rank > 1 && open && <button type="button" className="f-pl-pri__fold f-hit" onClick={() => setOpen(false)}>קפל</button>}
     </article>
@@ -173,7 +173,7 @@ function PriorityBlock({ pp, plan, action, collapsed, weekIds }: { pp: PriorityP
 }
 
 function MoveRow({ m, pp, plan }: { m: Move; pp: PriorityPlan; plan: PlanApi }) {
-  const note = moveNote(m, plan.overlay, plan.f.builders, REQUIREMENTS);
+  const note = moveNote(m, plan.overlay, plan.f.builders, REQUIREMENTS, plan.readinessOf(m));
   return (
     <li className="f-pl-mrow">
       <b className="f-pl-mrow__name">{m.longName}</b>
@@ -188,9 +188,11 @@ function MoveRow({ m, pp, plan }: { m: Move; pp: PriorityPlan; plan: PlanApi }) 
   );
 }
 
-function Drill({ pp, moves }: { pp: PriorityPlan; moves: Move[] }) {
+function Drill({ pp, moves, plan }: { pp: PriorityPlan; moves: Move[]; plan: PlanApi }) {
   const p = priorityOf(pp.priorityId);
   const assets = ASSET_SUMMARIES.find((a) => a.priorityId === pp.priorityId);
+  // every open need of the priority: the planning kinds the Plan resolves, the build-level kinds it only surfaces
+  const needs = [...openNeeds(pp, plan.moves), ...derivedNeeds(pp, plan.moves, REQUIREMENTS, plan.overlay, plan.f.builders)];
   return (
     <dl className="f-pl-drill__grid">
       <div><dt>בעלים</dt><dd>{personName(p.ownerId)}</dd></div>
@@ -201,6 +203,7 @@ function Drill({ pp, moves }: { pp: PriorityPlan; moves: Move[] }) {
       <div><dt>מקור מדידה</dt><dd>{pp.goal.source ? `${pp.goal.source.label} · ${pp.goal.source.directness === "direct" ? "ישיר" : pp.goal.source.directness === "assisted" ? "בשיוך" : "הערכה"}` : <Unknown>אין מקור מדידה</Unknown>}</dd></div>
       <div><dt>יעדים משניים</dt><dd>{pp.secondaryGoals.length ? pp.secondaryGoals.join(" · ") : "—"}</dd></div>
       <div className="f-pl-drill__wide"><dt>בריאות (0–100)</dt><dd>{moves.map((m) => `${m.name}: ${m.healthScore ?? "לא ידוע"}`).join(" · ")}</dd></div>
+      <div className="f-pl-drill__wide"><dt>צרכים פתוחים</dt><dd>{needs.length ? needs.map((n) => `${n.title} (${n.resolver ?? NEED_RESOLVER[n.kind]})`).join(" · ") : "אין"}</dd></div>
       <div className="f-pl-drill__wide"><dt>יומן שינויים</dt><dd>{pp.changeLog.map((c) => `${Number(c.at.slice(8))}.${Number(c.at.slice(5, 7))} · ${c.text}`).join(" · ")}</dd></div>
     </dl>
   );

@@ -5,15 +5,17 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import type { AssetAvailability, ContentRequirement, CoverOption, PriorityPlan } from "@/lib/focus/contracts/plan";
 import { ASSET_SUMMARIES, PLAN_OCTOBER, PLAN_TODAY, REQUIREMENTS } from "@/lib/focus/fixtures/plan";
-import { CLIENTS } from "@/lib/focus/fixtures/people";
 import { R } from "@/lib/focus/routes";
 import { unscopedPath } from "@/lib/focus/scope";
 import { countSlots, requirementSlots, requirementWord } from "@/lib/focus/state/plan";
+import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { cx } from "@/components/focus/ui/cx";
 import { useToast } from "@/components/focus/ui/toast";
 import { useFocusScope } from "@/components/focus/shell/scope";
 import { CoverOptions, COVER_WORD } from "@/components/focus/patterns/plan/cover-options";
+import { ClientRequestSheet } from "@/components/focus/patterns/plan/client-request-sheet";
+import { RequirementSpec, RequirementStatusWord } from "@/components/focus/patterns/plan/requirements";
 import { Num, PlanFrame, WeekNote, usePlanParams } from "@/components/focus/patterns/plan/plan-parts";
 import { dayLabel, priorityOf } from "@/components/focus/patterns/plan/plan-view";
 import { usePlan, type PlanApi } from "@/components/focus/patterns/plan/use-plan";
@@ -69,13 +71,15 @@ function gapLine(pp: PriorityPlan, plan: PlanApi) {
   const s = ASSET_SUMMARIES.find((a) => a.priorityId === pp.priorityId)!;
   const reqs = REQUIREMENTS.filter((r) => r.priorityId === pp.priorityId);
   const awaiting = reqs.flatMap((r) => { const c = countSlots(requirementSlots(r, plan.overlay, plan.f.builders)); return c.awaiting_approval && !c.missing ? [`${c.awaiting_approval} ${r.gapLabel}`] : []; });
-  const missing = reqs.filter((r) => countSlots(requirementSlots(r, plan.overlay, plan.f.builders)).missing > 0).map((r) => `${r.gapLabel}${r.neededByDay ? ` לפני ${dayLabel(r.neededByDay)}` : ""}`);
-  return { s, awaiting, missing, reqs };
+  const open = reqs.filter((r) => countSlots(requirementSlots(r, plan.overlay, plan.f.builders)).missing > 0);
+  const missing = open.filter((r) => plan.overlay.requirements[r.id]?.choice !== "request").map((r) => `${r.gapLabel}${r.neededByDay ? ` לפני ${dayLabel(r.neededByDay)}` : ""}`);
+  const requested = open.filter((r) => plan.overlay.requirements[r.id]?.choice === "request").map((r) => `${r.gapLabel}${r.neededByDay ? ` עד ${dayLabel(r.neededByDay)}` : ""}`);
+  return { s, awaiting, missing, requested, reqs };
 }
 
 function PriorityAssets({ pp, plan, selId, onSelect, week }: { pp: PriorityPlan; plan: PlanApi; selId: string; onSelect: (id: string) => void; week: boolean }) {
   const p = priorityOf(pp.priorityId);
-  const { s, awaiting, missing, reqs } = gapLine(pp, plan);
+  const { s, awaiting, missing, requested, reqs } = gapLine(pp, plan);
   // open when a gap is due soon (within 10 days) or something waits for approval; otherwise one line
   const soon = reqs.some((r) => countSlots(requirementSlots(r, plan.overlay, plan.f.builders)).missing > 0 && r.neededByDay != null && r.neededByDay - PLAN_TODAY <= 10);
   const [open, setOpen] = useState(soon || awaiting.length > 0 || reqs.some((r) => r.id === selId));
@@ -85,6 +89,7 @@ function PriorityAssets({ pp, plan, selId, onSelect, week }: { pp: PriorityPlan;
       <Num>{s.total}</Num> נכסים, <Num>{s.active}</Num> פעילים{s.scheduled ? <>, <Num>{s.scheduled}</Num> מתוזמנים</> : null}.
       {awaiting.length > 0 && <> <b>ממתין לאישור:</b> {awaiting.join(", ")}.</>}
       {missing.length > 0 && <> <b>חסר (לא קיים):</b> {missing.join(", ")}.</>}
+      {requested.length > 0 && <> <b>ממתין ללקוח:</b> {requested.join(", ")}.</>}
       {s.fatigue && <> <b>מעייף:</b> {s.fatigue}</>}
       {s.rightsNote && <span className="f-pl-meta"> · {s.rightsNote}</span>}
     </>
@@ -127,20 +132,15 @@ function RequirementRow({ r, plan, selected, onSelect }: { r: ContentRequirement
 
 function RequirementPanel({ req, plan, onDone }: { req: ContentRequirement; plan: PlanApi; onDone?: () => void }) {
   const toast = useToast();
+  const [request, setRequest] = useState(false);
   const move = plan.moves.find((m) => m.id === req.moveId);
   const slots = requirementSlots(req, plan.overlay, plan.f.builders);
   const c = countSlots(slots);
   const chosen = plan.overlay.requirements[req.id];
   const choose = (choice: CoverOption, extra: { assetId?: string; fileName?: string } = {}) => {
-    if (choice === "request") {
-      const due = Math.max(PLAN_TODAY + 1, (req.neededByDay ?? PLAN_TODAY + 7) - 3);
-      const t = plan.demo.createTask({ title: `בקשה מהלקוח: ${req.title}`, dueDate: `2026-10-${String(due).padStart(2, "0")}`, priority: "high", context: { client: CLIENTS.umino.name }, notes: `בריף: ${req.spec}. עבור ${req.forLabel}.`, nextAction: "לשלוח ללקוח את הבריף" });
-      plan.coverRequirement(req.id, "request", { taskId: t.id });
-      toast.push({ kind: "success", title: "נוצרה משימה בעבודה", detail: t.title });
-    } else {
-      plan.coverRequirement(req.id, choice, { assetId: extra.assetId });
-      toast.push({ title: `${COVER_WORD[choice]} · ${req.title}`, detail: "הנכס ממתין לאישור לפני שימוש" });
-    }
+    if (choice === "request") { setRequest(true); return; }
+    plan.coverRequirement(req.id, choice, { assetId: extra.assetId });
+    toast.push({ title: `${COVER_WORD[choice]} · ${req.title}`, detail: "הנכס ממתין לאישור לפני שימוש" });
     onDone?.();
   };
   const covered = c.missing === 0 && c.awaiting_approval === 0;
@@ -149,8 +149,9 @@ function RequirementPanel({ req, plan, onDone }: { req: ContentRequirement; plan
       <div className="f-pl-rpanel__head">
         <span className="f-pl-meta">דרישת תוכן · {move?.name ?? req.forLabel}{req.neededByDay ? ` · עד ${dayLabel(req.neededByDay)}` : ""}</span>
         <h2 className="f-pl-rpanel__title">{req.title}</h2>
-        <span className="f-pl-meta">{req.spec}</span>
+        <RequirementStatusWord req={req} plan={plan} />
       </div>
+      <RequirementSpec req={req} approverName={plan.approverName} />
       {req.creativeIds ? (
         <div className="f-pl-covered">
           <b>{c.awaiting_approval ? `${c.awaiting_approval} ממתינים לאישור · ${c.approved} מאושר` : "כל הקריאייטיבים מאושרים"}</b>
@@ -158,10 +159,14 @@ function RequirementPanel({ req, plan, onDone }: { req: ContentRequirement; plan
           {move?.builderId && <Link className="f-pl-link" href={`${R.planBuilder(move.builderId)}#creative`}>פתח בבונה ‹</Link>}
         </div>
       ) : covered ? (
-        <div className="f-pl-covered"><b>מכוסה</b><span className="f-pl-meta">כל הנכסים מאושרים ובשימוש.</span></div>
+        <div className="f-pl-covered"><b>מאושר</b><span className="f-pl-meta">כל הנכסים מאושרים ובשימוש.</span></div>
       ) : (
-        <CoverOptions req={req} chosen={chosen} onChoose={choose} onClear={() => plan.clearRequirement(req.id)} />
+        <>
+          <CoverOptions req={req} chosen={chosen} today={plan.today} onChoose={choose} onClear={() => plan.clearRequirement(req.id)} />
+          {chosen?.choice === "request" && <Button variant="secondary" onClick={() => setRequest(true)}>הבקשה ללקוח</Button>}
+        </>
       )}
+      <ClientRequestSheet req={request ? req : null} plan={plan} open={request} onClose={() => { setRequest(false); onDone?.(); }} />
     </div>
   );
 }

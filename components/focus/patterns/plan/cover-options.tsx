@@ -2,37 +2,41 @@
 
 import { useId, useState } from "react";
 import type { ContentRequirement, CoverOption } from "@/lib/focus/contracts/plan";
+import { allowedPaths, pathRefusal, recommendedPath, requestTooLate } from "@/lib/focus/state/plan";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
 import { DemoNote } from "./plan-parts";
 
 /**
- * The ways to cover a content requirement (design package #s6 + #s10 "החלף"): use an existing asset, AI + the
- * client's asset, ask the client (creates a task with a brief), upload, or generate new — the last shown disabled with
- * its reason when a Brain rule forbids it (a testimonial must be real). There is no design editor: editing stays text,
- * crop and format. Nothing is generated or stored in this prototype; a choice marks the asset as existing but waiting
- * for approval (a request to the client keeps it missing until it arrives).
+ * The four canonical ways to cover a content requirement (spec §9): use an existing asset, generate new, AI + the
+ * client's asset, or request from the client. The requirement's authenticity class decides which are offered — the
+ * others stay visible, disabled, with the reason (a testimonial is never generated or cut from other footage). An upload
+ * from the computer is how material arrives under "use existing", not a fifth path. Nothing is generated or stored in
+ * this prototype; a choice marks the asset as existing but waiting for approval (a client request keeps it missing).
  */
 export const COVER_WORD: Record<CoverOption, string> = {
-  existing: "השתמש בנכס קיים", ai_client: "AI + נכס של הלקוח", request: "בקש מהלקוח", upload: "העלה", generate: "צור חדש",
+  existing: "השתמש בנכס קיים", generate: "צור חדש", ai_client: "AI + נכס של הלקוח", request: "בקש מהלקוח",
 };
 
-export function CoverOptions({ req, chosen, onChoose, onClear }: {
+export function CoverOptions({ req, chosen, today, onChoose, onClear }: {
   req: ContentRequirement;
   chosen?: { choice: CoverOption; assetId?: string };
+  today: number;
   onChoose: (choice: CoverOption, extra?: { assetId?: string; fileName?: string }) => void;
   onClear: () => void;
 }) {
   const id = useId();
   const [file, setFile] = useState<string | null>(null);
-  const rec = req.recommended;
+  const allowed = allowedPaths(req.authenticity);
+  const rec = recommendedPath(req);
+  const late = requestTooLate(req, today);
   if (chosen) {
     const exists = chosen.choice !== "request";
     return (
       <div className="f-pl-covered" role="status">
         <b>נבחר: {COVER_WORD[chosen.choice]}</b>
         <span className="f-pl-meta">
-          {chosen.choice === "request" ? "נוצרה משימה בעבודה עם בריף מוכן. הנכס נשאר חסר עד שיגיע." : "הנכס קיים וממתין לאישור — הוא עוד לא זמין לשימוש."}
+          {chosen.choice === "request" ? "נוצרה בקשה מובנית ומשימה בעבודה. הנכס נשאר חסר עד שיגיע." : "הנכס קיים וממתין לאישור — הוא עוד לא זמין לשימוש."}
         </span>
         {exists && <DemoNote>באב טיפוס לא נוצר ולא נשמר קובץ; המצב משקף את הבחירה בלבד</DemoNote>}
         <button type="button" className="f-pl-linkbtn f-hit" onClick={onClear}>שנה בחירה</button>
@@ -42,8 +46,9 @@ export function CoverOptions({ req, chosen, onChoose, onClear }: {
   return (
     <div className="f-pl-cover" aria-labelledby={`${id}-h`}>
       <span id={`${id}-h`} className="f-pl-h3">איך לכסות</span>
-      <div className="f-pl-cover__opt">
-        <div className="f-pl-cover__row"><b>{COVER_WORD.existing}</b><span className="f-pl-meta">{req.existingCandidates.length ? `${req.existingCandidates.length} מתאימים חלקית` : "אין נכס מתאים בספרייה"}</span></div>
+      {/* 1. use existing — candidates from the library, or an upload from the computer */}
+      <div className={cx("f-pl-cover__opt", rec === "existing" && "f-pl-cover__opt--rec")}>
+        <div className="f-pl-cover__row"><b>{COVER_WORD.existing}</b>{rec === "existing" ? <span className="f-pl-chip f-pl-chip--accent">מומלץ</span> : <span className="f-pl-meta">{req.existingCandidates.length ? `${req.existingCandidates.length} מתאימים חלקית` : "אין נכס מתאים בספרייה"}</span>}</div>
         {req.existingCandidates.length > 0 && (
           <ul className="f-pl-cands" aria-label="נכסים קיימים מתאימים">
             {req.existingCandidates.map((c) => (
@@ -55,25 +60,42 @@ export function CoverOptions({ req, chosen, onChoose, onClear }: {
             ))}
           </ul>
         )}
+        {req.authenticity === "brand_fixed" && !req.existingCandidates.length && <span className="f-pl-red">נכס מותג חסר בספרייה המאושרת — חסום עד שיתווסף</span>}
+        <div className="f-pl-cover__upload">
+          <span className="f-pl-meta">העלאה מהמחשב (נכס קיים של הלקוח) · יישמר בתיקיית Mytiv ב־Drive כשיחובר</span>
+          <input id={`${id}-file`} type="file" className="f-sr f-pl-file" accept="image/*,video/*" onChange={(e) => setFile(e.target.files?.[0]?.name ?? null)} />
+          <label htmlFor={`${id}-file`} className="f-pl-filebtn">{file ? `נבחר: ${file}` : "בחר קובץ"}</label>
+          {file && <Button size="sm" variant="secondary" onClick={() => onChoose("existing", { fileName: file })}>השתמש ב־{file}</Button>}
+        </div>
       </div>
-      <button type="button" className={cx("f-pl-cover__opt", "f-pl-cover__btn", rec === "ai_client" && "f-pl-cover__opt--rec")} onClick={() => onChoose("ai_client")}>
-        <span className="f-pl-cover__row"><b>{COVER_WORD.ai_client}</b>{rec === "ai_client" && <span className="f-pl-chip f-pl-chip--accent">מומלץ</span>}</span>
-        <span className="f-pl-meta">{req.aiClientNote ?? "התאמת נכס קיים של הלקוח בעזרת AI. מסומן \"משופר AI\"."}</span>
-      </button>
-      <button type="button" className={cx("f-pl-cover__opt", "f-pl-cover__btn", rec === "request" && "f-pl-cover__opt--rec")} onClick={() => onChoose("request")}>
-        <span className="f-pl-cover__row"><b>{COVER_WORD.request}</b>{rec === "request" && <span className="f-pl-chip f-pl-chip--accent">מומלץ</span>}</span>
-        <span className="f-pl-meta">{req.requestNote ?? "יוצר משימה עם בריף מוכן."}</span>
-      </button>
-      <div className="f-pl-cover__opt">
-        <div className="f-pl-cover__row"><b>{COVER_WORD.upload}</b><span className="f-pl-meta">מהמחשב · Drive יחובר בהמשך</span></div>
-        <input id={`${id}-file`} type="file" className="f-sr f-pl-file" accept="image/*,video/*" onChange={(e) => setFile(e.target.files?.[0]?.name ?? null)} />
-        <label htmlFor={`${id}-file`} className="f-pl-filebtn">{file ? `נבחר: ${file}` : "בחר קובץ"}</label>
-        {file && <Button size="sm" variant="secondary" onClick={() => onChoose("upload", { fileName: file })}>השתמש ב־{file}</Button>}
-      </div>
-      {req.generateBlockedReason
-        ? <div className="f-pl-cover__opt f-pl-cover__opt--off"><b>{COVER_WORD.generate} · לא זמין</b><span>{req.generateBlockedReason}</span></div>
-        : <button type="button" className="f-pl-cover__opt f-pl-cover__btn" onClick={() => onChoose("generate")}><span className="f-pl-cover__row"><b>{COVER_WORD.generate}</b></span><span className="f-pl-meta">יצירת נכס חדש לפי הדרישה, מסומן &quot;קונספט AI&quot;. אין עורך עיצוב: רק טקסט, חיתוך והתאמת פורמט.</span></button>}
-      {rec && <Button variant="strong" block onClick={() => onChoose(rec)}>התחל עם {COVER_WORD[rec]}</Button>}
+      {/* 2. AI + client asset */}
+      {allowed.includes("ai_client")
+        ? <button type="button" className={cx("f-pl-cover__opt", "f-pl-cover__btn", rec === "ai_client" && "f-pl-cover__opt--rec")} onClick={() => onChoose("ai_client")}>
+            <span className="f-pl-cover__row"><b>{COVER_WORD.ai_client}</b>{rec === "ai_client" && <span className="f-pl-chip f-pl-chip--accent">מומלץ</span>}</span>
+            <span className="f-pl-meta">{req.aiClientNote ?? "התאמת נכס קיים של הלקוח בעזרת AI (חיתוך, פורמט, רקע). מסומן \"משופר AI\"."}</span>
+          </button>
+        : <OffPath req={req} path="ai_client" />}
+      {/* 3. request from the client */}
+      {allowed.includes("request")
+        ? <button type="button" className={cx("f-pl-cover__opt", "f-pl-cover__btn", rec === "request" && "f-pl-cover__opt--rec")} onClick={() => onChoose("request")}>
+            <span className="f-pl-cover__row"><b>{COVER_WORD.request}</b>{rec === "request" && <span className="f-pl-chip f-pl-chip--accent">מומלץ</span>}</span>
+            <span className="f-pl-meta">בקשה מובנית: מה, כמה, פורמט, עד מתי, למה ואיך לצלם. נשלחת ידנית.</span>
+            {late && <span className="f-pl-amber">{late}</span>}
+          </button>
+        : <OffPath req={req} path="request" />}
+      {/* 4. generate */}
+      {allowed.includes("generate")
+        ? <button type="button" className={cx("f-pl-cover__opt", "f-pl-cover__btn", rec === "generate" && "f-pl-cover__opt--rec")} onClick={() => onChoose("generate")}>
+            <span className="f-pl-cover__row"><b>{COVER_WORD.generate}</b>{rec === "generate" && <span className="f-pl-chip f-pl-chip--accent">מומלץ</span>}</span>
+            <span className="f-pl-meta">יצירת נכס חדש לפי הדרישה, מסומן &quot;קונספט AI&quot;. אין עורך עיצוב: רק טקסט, חיתוך והתאמת פורמט.</span>
+          </button>
+        : <OffPath req={req} path="generate" />}
+      {rec && rec !== "existing" && <Button variant="strong" block onClick={() => onChoose(rec)}>התחל עם {COVER_WORD[rec]}</Button>}
     </div>
   );
+}
+
+/** A path the authenticity class refuses: shown disabled with the reason, never hidden. */
+function OffPath({ req, path }: { req: ContentRequirement; path: CoverOption }) {
+  return <div className="f-pl-cover__opt f-pl-cover__opt--off" aria-disabled><b>{COVER_WORD[path]} · לא זמין</b><span>{pathRefusal(req.authenticity, path)}</span></div>;
 }

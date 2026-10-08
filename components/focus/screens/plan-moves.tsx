@@ -15,6 +15,7 @@ import { useToast } from "@/components/focus/ui/toast";
 import { CoverageBar, HealthChip, Money, MoveStateTag, Num, OptimizingTag, PlanFrame, PriorityStatusChip, ReadingText, WeekNote, usePlanParams } from "@/components/focus/patterns/plan/plan-parts";
 import { awaitingCreatives, dayLabel, expectedText, priorityOf, weekMoveIds } from "@/components/focus/patterns/plan/plan-view";
 import { CreateMovePanel } from "@/components/focus/patterns/plan/create-move";
+import { ReadinessLine } from "@/components/focus/patterns/plan/readiness";
 import { usePlan, type PlanApi } from "@/components/focus/patterns/plan/use-plan";
 
 /**
@@ -117,6 +118,7 @@ function MoveRow({ m, pp, plan }: { m: Move; pp: PriorityPlan; plan: PlanApi }) 
   const decided = Object.entries(plan.overlay.recs).find(([id]) => RECOMMENDATIONS.find((r) => r.id === id)?.moveId === m.id);
   const { spent, unknown } = readingSpend(m.budget.spent);
   const awaiting = awaitingCreatives(m, plan.overlay, plan.f.builders);
+  const ready = m.state === "building" || m.state === "ready_for_review" || m.state === "approved" ? plan.readinessOf(m) : null;
   const [dlg, setDlg] = useState<"accept" | "dismiss" | null>(null);
 
   const start = () => {
@@ -145,10 +147,10 @@ function MoveRow({ m, pp, plan }: { m: Move; pp: PriorityPlan; plan: PlanApi }) 
         {!rec && decided && (
           <span className="f-pl-meta">{decided[1].decision === "accepted" ? <>התקבל · נוצרו {decided[1].taskIds?.length ?? 0} משימות · <Link className="f-pl-link" href={R.work}>לעבודה</Link></> : <>נדחה · {decided[1].reason}</>}</span>
         )}
-        {!rec && !decided && m.builderId && (m.state === "building" || m.state === "waiting_approval" || m.state === "approved") && (
+        {!rec && !decided && m.builderId && (m.state === "building" || m.state === "ready_for_review" || m.state === "approved") && (
           <div className="f-pl-rec">
-            <span className="f-pl-rec__text">{awaiting > 0 ? "אשר קריאייטיבים" : m.state === "waiting_approval" ? "ממתין לאישורך" : m.state === "approved" ? "השקה ידנית" : "המשך בנייה"}</span>
-            <ButtonLink size="sm" variant="secondary" href={`${R.planBuilder(m.builderId)}${awaiting > 0 ? "#creative" : ""}`}>פתח בונה</ButtonLink>
+            {ready ? <ReadinessLine r={ready} /> : <span className="f-pl-rec__text">{awaiting > 0 ? "אשר קריאייטיבים" : m.state === "approved" ? "השקה ידנית" : "המשך בנייה"}</span>}
+            <ButtonLink size="sm" variant="secondary" href={`${R.planBuilder(m.builderId)}${awaiting > 0 ? "#creative" : ready && ready.overall !== "approved" ? "#readiness" : ""}`}>פתח בונה</ButtonLink>
           </div>
         )}
         {!rec && !decided && m.state === "planned" && (

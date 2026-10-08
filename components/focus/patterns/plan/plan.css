@@ -50,7 +50,7 @@
 .f-pl-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 700; line-height: 16px; padding: 4px 10px; border-radius: var(--f-r-pill); white-space: nowrap; align-self: flex-start; }
 .f-pl-chip--sm { font-size: 11.5px; padding: 3px 9px; }
 .f-pl-chip--on_track, .f-pl-chip--health-good, .f-pl-state--live.f-pl-chip { background: var(--f-green-panel); color: var(--f-green-panel-ink); }
-.f-pl-chip--at_risk, .f-pl-state--waiting_approval.f-pl-chip { background: var(--f-amber-panel); color: var(--f-amber-panel-ink); }
+.f-pl-chip--at_risk, .f-pl-state--ready_for_review.f-pl-chip { background: var(--f-amber-panel); color: var(--f-amber-panel-ink); }
 .f-pl-chip--off_track, .f-pl-chip--health-attention { background: var(--f-red-panel); color: var(--f-red-panel-ink); }
 .f-pl-pair { unicode-bidi: isolate; white-space: nowrap; }
 .f-pl-chip--unknown, .f-pl-chip--health-unknown, .f-pl-chip--draft, .f-pl-state--paused.f-pl-chip, .f-pl-state--ended.f-pl-chip { background: var(--f-neutral-bg); color: var(--f-neutral-ink); }
@@ -61,7 +61,7 @@
 .f-pl-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--f-neutral-ink); }
 .f-pl-state--live .f-pl-dot { background: var(--f-green-text); }
 .f-pl-state--building .f-pl-dot { background: var(--f-accent); }
-.f-pl-state--waiting_approval .f-pl-dot { background: var(--f-amber-text); }
+.f-pl-state--ready_for_review .f-pl-dot { background: var(--f-amber-text); }
 .f-pl-state--approved .f-pl-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--f-ink); }
 .f-pl-state--planned .f-pl-dot, .f-pl-state--idea .f-pl-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--f-neutral-ink); }
 .f-pl-overlay { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: var(--f-r-pill); white-space: nowrap; }
@@ -669,3 +669,72 @@
 @media (max-width: 1199px) { .f-pl-dcard--creative { grid-template-columns: minmax(0, 1fr); } }
 /* mobile: the builder footer sticks above the global bottom nav (shell.css .f-bottomnav, ~67px) */
 @media (max-width: 767px) { .focus-app:has(.f-bottomnav) .f-pl-bdfoot { bottom: calc(67px + env(safe-area-inset-bottom)); } }
+
+/* ---------- V1 completion: readiness, copy directions, requirements, client request, approvals ---------- */
+.f-pl-ready { background: var(--f-surface); border-radius: 14px; box-shadow: var(--f-line); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 16px; }
+.f-pl-ready__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.f-pl-ready__dims { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.f-pl-ready__dim { display: grid; grid-template-columns: 18px 92px minmax(0, 1fr); gap: 2px 8px; padding: 7px 0; border-top: 1px solid var(--f-surface-2); font-size: 13px; align-items: baseline; }
+.f-pl-ready__glyph { font-weight: 700; text-align: center; }
+.f-pl-ready__name { font-weight: 700; }
+.f-pl-ready__state { font-weight: 600; }
+.f-pl-ready__text { grid-column: 3; color: var(--f-ink-soft); line-height: 1.45; }
+.f-pl-ready__dim--ready .f-pl-ready__glyph, .f-pl-ready__dim--ready .f-pl-ready__state { color: var(--f-green-text); }
+.f-pl-ready__dim--waiting .f-pl-ready__glyph, .f-pl-ready__dim--waiting .f-pl-ready__state { color: var(--f-amber-text); }
+.f-pl-ready__dim--missing .f-pl-ready__glyph, .f-pl-ready__dim--missing .f-pl-ready__state, .f-pl-ready__dim--blocked .f-pl-ready__glyph, .f-pl-ready__dim--blocked .f-pl-ready__state { color: var(--f-red-text); }
+.f-pl-ready__dim--unknown .f-pl-ready__glyph, .f-pl-ready__dim--unknown .f-pl-ready__state { color: var(--f-neutral-ink); }
+.f-pl-ready__block { font-size: 13px; }
+.f-pl-ready__next { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 12px; background: var(--f-accent-tint); box-shadow: inset 0 0 0 1px var(--f-accent-line); font-size: 14px; }
+.f-pl-ready__risk { margin: 0; line-height: 1.5; }
+.f-pl-ready__line { display: inline-flex; flex-direction: column; gap: 3px; align-items: flex-start; min-width: 0; }
+.f-pl-ready__line .f-pl-meta { font-size: 12.5px; }
+.f-pl-chip--ready-blocked, .f-pl-chip--ready-missing { background: var(--f-red-panel); color: var(--f-red-panel-ink); }
+.f-pl-chip--ready-waiting_client, .f-pl-chip--ready-waiting_approval, .f-pl-chip--ready-waiting_generation { background: var(--f-amber-panel); color: var(--f-amber-panel-ink); }
+.f-pl-chip--ready-ready_for_review { background: var(--f-accent-weak); color: var(--f-accent-ink); }
+.f-pl-chip--ready-approved { background: var(--f-green-panel); color: var(--f-green-panel-ink); }
+.f-pl-dcard--copy { grid-template-columns: minmax(0, 1fr); gap: 14px; scroll-margin-top: 16px; }
+.f-pl-dirs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.f-pl-dir { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--f-border); min-width: 0; font-size: 13.5px; }
+.f-pl-dir--on { box-shadow: inset 0 0 0 2px var(--f-accent); background: var(--f-accent-tint); }
+.f-pl-dir__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.f-pl-dir__name { font-size: 14.5px; }
+.f-pl-dir__promise { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
+.f-pl-dir__spine { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 3px 8px; margin: 0; font-size: 12.5px; }
+.f-pl-dir__spine dt { color: var(--f-muted); }
+.f-pl-dir__spine dd { margin: 0; }
+.f-pl-dir__why { margin: 0; line-height: 1.5; }
+.f-pl-dir__flag { font-size: 12.5px; padding: 8px 10px; }
+.f-pl-dir__acts { margin-top: auto; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.f-pl-dir__acts > .f-btn { width: 100%; }
+.f-pl-dir__tools { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.f-pl-kw--btn { position: relative; cursor: pointer; }
+.f-pl-kw--btn:hover { background: var(--f-surface-3); }
+.f-pl-kw--btn::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
+.f-pl-kw--on { background: var(--f-ink); color: var(--f-surface); }
+.f-pl-variants { border-radius: 12px; box-shadow: inset 0 0 0 1px var(--f-border); overflow: hidden; display: flex; flex-direction: column; }
+.f-pl-variants__toggle { border-radius: 0; }
+.f-pl-variants > .f-pl-meta { padding: 0 18px 10px; }
+.f-pl-variants__list { list-style: none; margin: 0; padding: 0 18px 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.f-pl-variant { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 10px; background: var(--f-surface-sunk); font-size: 13px; }
+.f-pl-variant__head { display: flex; flex-direction: column; gap: 2px; }
+.f-pl-variant__hook { margin: 0; font-weight: 700; font-size: 14px; }
+.f-pl-variant__body { margin: 0; line-height: 1.5; }
+.f-pl-reqlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.f-pl-reqlist__item { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--f-surface-2); font-size: 14px; flex-wrap: wrap; }
+.f-pl-reqlist__main { flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.f-pl-reqlist__main .f-pl-meta { font-size: 12.5px; }
+.f-pl-spec { padding: 12px 14px; border-radius: 12px; background: var(--f-surface-sunk); font-size: 13px; }
+.f-pl-cover__upload { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px dashed var(--f-border); }
+.f-pl-request dd { line-height: 1.5; }
+.f-pl-request__text { width: 100%; font: inherit; font-size: 13.5px; line-height: 1.55; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--f-border); background: var(--f-surface); color: var(--f-ink); resize: vertical; }
+.f-pl-approvals { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.f-pl-ack { font-size: 13px; flex: 1 1 100%; }
+@media (max-width: 1199px) { .f-pl-dirs { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 767px) {
+  .f-pl-ready__dim { grid-template-columns: 18px minmax(0, 1fr); }
+  .f-pl-ready__state { grid-column: 2; }
+  .f-pl-ready__text { grid-column: 2; }
+  .f-pl-reqlist__item > .f-btn, .f-pl-reqlist__item > .f-pl-linkbtn { flex: 1 1 auto; }
+  .f-pl-approvals > button { flex: 1 1 auto; }
+  .f-pl-bhead .f-pl-demo { order: 5; width: 100%; }
+}
