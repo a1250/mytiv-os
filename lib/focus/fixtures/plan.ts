@@ -1,5 +1,5 @@
 import type {
-  AssetSummary, BuilderProposal, Client, ContentRequirement, CreateMoveNeed, DayItem, Goal, Move, Plan, Priority, ProductionRow, Recommendation, TimelineItem,
+  ApprovalAction, ApprovalPreset, ApproverKind, AssetSummary, BuilderProposal, Client, ClientApprovalPolicy, ContentRequirement, CreateMoveNeed, DayItem, Goal, Move, Plan, Priority, ProductionRow, Recommendation, TimelineItem,
 } from "@/lib/focus/contracts/plan";
 import { CLIENTS, PEOPLE } from "./people";
 
@@ -125,6 +125,7 @@ export const MOVES: Move[] = [
     expected: 15000, actual: null, budget: { planned: 500, committed: null, spent: null }, buildStartDay: 15, startDay: 22,
     mainIssue: "תמונות מנות סתיו חסרות לפני 22.10", recommendationId: null, builderId: "fallmenu-meta",
     overviewNote: "תמונות מנות", ownerId: PEOPLE.dana.id,
+    measurementAgreement: "הכנסות המשלוחים מדו״ח מערכת ההזמנות, מול השבועיים שלפני ההשקה (ידני)",
   },
 ];
 
@@ -241,48 +242,85 @@ export const ASSET_SUMMARIES: AssetSummary[] = [
   { priorityId: "p-delivery", total: 9, active: 2, scheduled: 0, rightsNote: "זכויות על 2 תמונות פגות ב־31.10" },
 ];
 
+/**
+ * Content requirements (spec §9): structured, never free text. The authenticity class decides the paths: a testimonial
+ * is must-be-authentic (never generated, never cut from footage that is not a testimonial — it is requested from the
+ * client); a venue photo is adaptable (AI + client asset); a text card is illustrative (may be generated); the logo
+ * is brand-fixed (approved library only).
+ */
 export const REQUIREMENTS: ContentRequirement[] = [
   {
     id: "req-events-vertical", gapLabel: "קריאייטיבים 9:16", priorityId: "p-events", moveId: "m-events-meta", title: "3 קריאייטיבים אנכיים 9:16", forLabel: "Meta לידים",
-    spec: "9:16 · לטופס לידים", neededByDay: 11, slots: ["approved", "awaiting_approval", "awaiting_approval"],
+    spec: "9:16 · 1080×1920 · לטופס לידים", assetType: "photo", format: "9:16", dimensions: "1080×1920", quantity: 3, purpose: "תמונות פתיחה לשתי קבוצות המודעות", placement: "Meta · סטורי ורילס",
+    neededByDay: 11, authenticity: "adaptable", approval: "client", slots: ["approved", "awaiting_approval", "awaiting_approval"],
     creativeIds: ["cr-hall", "cr-table", "cr-toast"], existingCandidates: [],
   },
   {
     id: "req-events-testimonial", gapLabel: "סרטון המלצה", priorityId: "p-events", moveId: "m-events-meta", title: "סרטון המלצה מלקוח עסקי", forLabel: "Meta לידים",
-    spec: "9:16 · 15–30 שניות · לקוח אמיתי ששם אירוע", neededByDay: 18, slots: ["missing"],
-    generateBlockedReason: "המלצה חייבת להיות של לקוח אמיתי (כלל במוח העסק)",
-    existingCandidates: [
-      { id: "as-launch", label: "אירוע השקה, סטארט־אפ", format: "16:9 · 48ש׳", note: "16:9, צריך חיתוך" },
-      { id: "as-team", label: "ערב צוות", format: "9:16 · ספטמבר", note: "בשימוש 4 פעמים" },
-    ],
-    recommended: "ai_client", aiClientNote: "חיתוך הסרטון הקיים ל־9:16 והוספת כתוביות. מסומן \"משופר AI\".",
-    requestNote: "יוצר משימה עם בריף מוכן. בעלים: מנהלת התוכן · יעד 15.10",
+    spec: "9:16 · 15–30 שניות · לקוח אמיתי ששם אירוע", assetType: "testimonial", format: "9:16", dimensions: "1080×1920", duration: "15–30 שניות", quantity: 1,
+    purpose: "הוכחה לקהל החדש (קבוצה 1) בשבוע השני", placement: "Meta · סטורי ורילס", neededByDay: 18, authenticity: "authentic", approval: "client", slots: ["missing"],
+    // only real testimonials are candidates; event footage without a client speaking is not one
+    existingCandidates: [],
+    recommended: "request",
+    captureInstructions: "לקוח אמיתי שאירח אצלכם אירוע, מדבר למצלמה 15–30 שניות: מה האירוע היה ולמה בחרו בכם. אנכי (9:16), אור טבעי, בלי מוזיקה על הדיבור. לא צריך עריכה.",
   },
   {
     id: "req-events-next", gapLabel: "קריאייטיב חדש לשבוע הבא", priorityId: "p-events", moveId: "m-events-meta", title: "קריאייטיב חדש לשבוע הבא", forLabel: "Meta לידים · רענון",
-    spec: "9:16 · אחרי שבוע באוויר", neededByDay: 20, slots: ["missing"],
+    spec: "9:16 · אחרי שבוע באוויר", assetType: "photo", format: "9:16", dimensions: "1080×1920", quantity: 1, purpose: "רענון אחרי שבוע באוויר", placement: "Meta · סטורי ורילס",
+    neededByDay: 20, authenticity: "adaptable", approval: "operator", slots: ["missing"],
     existingCandidates: [{ id: "as-hall-2", label: "אולם ערוך, ספטמבר", format: "4:5", note: "צריך התאמה ל־9:16" }],
     recommended: "ai_client", aiClientNote: "גרסה אנכית לתמונת האולם הקיימת. מסומן \"משופר AI\".",
-    requestNote: "יוצר משימה עם בריף מוכן. בעלים: מנהלת התוכן · יעד 17.10",
+  },
+  {
+    id: "req-events-card", gapLabel: "כרטיס טקסט \"3 חבילות אירועים\"", priorityId: "p-events", moveId: "m-events-meta", title: "כרטיס טקסט · 3 חבילות אירועים", forLabel: "Meta לידים · קבוצה 2",
+    spec: "4:5 · כרטיס טקסט על רקע מותג", assetType: "graphic", format: "4:5", dimensions: "1080×1350", quantity: 1, purpose: "מודעת חזרה למבקרי עמוד האירועים", placement: "Meta · פיד",
+    neededByDay: 12, authenticity: "illustrative", approval: "operator", slots: ["missing"], existingCandidates: [],
+    recommended: "generate",
+  },
+  {
+    id: "req-events-logo", gapLabel: "לוגו לטופס הלידים", priorityId: "p-events", moveId: "m-events-meta", title: "לוגו UMINO לטופס הלידים", forLabel: "Meta לידים · טופס",
+    spec: "1:1 · לוגו מאושר", assetType: "logo", format: "1:1", dimensions: "512×512", quantity: 1, purpose: "כותרת טופס הלידים", placement: "Meta · טופס לידים",
+    neededByDay: 11, authenticity: "brand_fixed", approval: "operator", slots: ["approved"], existingCandidates: [],
   },
   {
     id: "req-events-hall", gapLabel: "תמונות אולם 1:1", priorityId: "p-events", moveId: "m-events-google", title: "4 תמונות אולם 1:1", forLabel: "Google Search · תוספי תמונה",
-    spec: "1:1", neededByDay: null, live: true, slots: ["approved", "approved", "approved", "approved"], existingCandidates: [],
+    spec: "1:1 · תוספי תמונה", assetType: "photo", format: "1:1", dimensions: "1200×1200", quantity: 4, purpose: "תוספי תמונה למודעות החיפוש", placement: "Google · תוספי תמונה",
+    neededByDay: null, live: true, authenticity: "adaptable", approval: "operator", slots: ["approved", "approved", "approved", "approved"], existingCandidates: [],
+  },
+  {
+    id: "req-sunset-google-images", gapLabel: "תוספי תמונה 1:1", priorityId: "p-sunset", moveId: "m-sunset-google", title: "4 תמונות שקיעה 1:1 לתוספי תמונה", forLabel: "Google Search · שקיעה",
+    spec: "1:1 · 1200×1200 · 4 תמונות מאושרות מהספרייה", assetType: "photo", format: "1:1", dimensions: "1200×1200", quantity: 4, purpose: "תוספי תמונה למודעות החיפוש", placement: "Google · תוספי תמונה",
+    neededByDay: 9, authenticity: "adaptable", approval: "operator", slots: ["approved", "approved", "approved", "approved"], existingCandidates: [],
   },
   {
     id: "req-sunset-fresh", gapLabel: "2 קריאייטיבים רעננים 4:5", priorityId: "p-sunset", moveId: "m-sunset-meta", title: "2 קריאייטיבים רעננים 4:5", forLabel: "Meta חשיפה · החלפה",
-    spec: "4:5 · להחלפת \"שקיעה על המרפסת\"", neededByDay: 14, slots: ["missing", "missing"],
+    spec: "4:5 · להחלפת \"שקיעה על המרפסת\"", assetType: "photo", format: "4:5", dimensions: "1080×1350", quantity: 2, purpose: "החלפת הקריאייטיב השחוק", placement: "Meta · פיד Instagram",
+    neededByDay: 14, authenticity: "adaptable", approval: "client", slots: ["missing", "missing"],
     existingCandidates: [{ id: "as-dinner", label: "שולחן ערב מול הים, ספטמבר", format: "1:1", note: "צריך התאמה ל־4:5" }],
     recommended: "ai_client", aiClientNote: "שתי גרסאות 4:5 מתמונות ערב קיימות. מסומן \"משופר AI\".",
-    requestNote: "יוצר משימה עם בריף מוכן. בעלים: מנהלת התוכן · יעד 12.10",
   },
   {
     id: "req-delivery-dishes", gapLabel: "תמונות מנות תפריט סתיו", priorityId: "p-delivery", moveId: "m-delivery-meta", title: "תמונות מנות תפריט סתיו", forLabel: "Meta · תפריט סתיו",
-    spec: "1:1 ו־4:5 · 4 מנות חדשות", neededByDay: 22, slots: ["missing", "missing", "missing", "missing"],
-    generateBlockedReason: "תמונת מנה חייבת להיות המנה האמיתית (כלל במוח העסק)", existingCandidates: [],
-    recommended: "request", requestNote: "יוצר משימה לצילום מנות עם בריף מוכן. בעלים: מנהלת התוכן · יעד 19.10",
+    spec: "1:1 ו־4:5 · 4 מנות חדשות · המנה האמיתית", assetType: "photo", format: "1:1 / 4:5", quantity: 4, purpose: "מודעות תפריט הסתיו", placement: "Meta · פיד",
+    neededByDay: 22, authenticity: "authentic", approval: "client", slots: ["missing", "missing", "missing", "missing"], existingCandidates: [],
+    recommended: "request",
+    captureInstructions: "4 מנות הסתיו החדשות, כל מנה מצולמת לבד מלמעלה ובזווית 45°, באור יום ליד חלון, על צלחת לבנה. בלי פילטרים.",
   },
 ];
+
+/* ---------- client approval policy ---------- */
+
+/** STANDARD, STRICT and DELEGATED presets (spec §4); the floor in state/plan.ts keeps Plan-level actions with the Client. */
+export const APPROVAL_PRESETS: Record<Exclude<ApprovalPreset, "custom">, Record<ApprovalAction, ApproverKind>> = {
+  strict: { plan: "client", direction: "client", variants: "client", new_creative: "client", material_adaptation: "client", minor_adaptation: "client", launch: "client", in_priority_change: "client" },
+  standard: { plan: "client", direction: "client", variants: "operator", new_creative: "client", material_adaptation: "client", minor_adaptation: "operator", launch: "client", in_priority_change: "operator" },
+  delegated: { plan: "client", direction: "operator", variants: "operator", new_creative: "operator", material_adaptation: "client", minor_adaptation: "operator", launch: "operator", in_priority_change: "operator" },
+};
+
+/** UMINO's policy: STANDARD (the locked default). Approvers: רון (the client's owner), דנה (the marketing manager). */
+export const CLIENT_APPROVAL_POLICY: ClientApprovalPolicy = {
+  clientId: PLAN_CLIENT.id, preset: "standard", rules: APPROVAL_PRESETS.standard, approvers: { client: PEOPLE.ron.id, operator: PEOPLE.dana.id },
+};
 
 /* ---------- timeline ---------- */
 
@@ -291,7 +329,7 @@ export const TIMELINE: TimelineItem[] = [
   { id: "tl-eg-live", moveId: "m-events-google", kind: "live", startDay: 1, endDay: 31, label: "פעיל" },
   { id: "tl-em-build", moveId: "m-events-meta", kind: "build", startDay: 1, endDay: 8, label: "בנייה" },
   { id: "tl-em-review", moveId: "m-events-meta", kind: "review", startDay: 9, endDay: 10, label: "בדיקה", agenda: "Meta לידים · בדיקה מתחילה" },
-  { id: "tl-em-flight", moveId: "m-events-meta", kind: "waiting_flight", startDay: 13, endDay: 31, label: "ממתין לאישור · עולה 13.10" },
+  { id: "tl-em-flight", moveId: "m-events-meta", kind: "waiting_flight", startDay: 13, endDay: 31, label: "לפני אישור · עולה 13.10" },
   { id: "tl-el-build", moveId: "m-events-linkedin", kind: "build", startDay: 12, endDay: 18, label: "בנייה", agenda: "LinkedIn · בנייה מתחילה" },
   { id: "tl-el-planned", moveId: "m-events-linkedin", kind: "planned", startDay: 19, endDay: 31, label: "מתוכנן" },
   { id: "tl-sm-live", moveId: "m-sunset-meta", kind: "live", startDay: 1, endDay: 31, label: "פעיל" },
@@ -363,7 +401,7 @@ export const PRODUCTION: ProductionRow[] = [
 export const BUILDERS: BuilderProposal[] = [
   {
     id: "sunset-google", moveId: "m-sunset-google", channel: "google", title: "Google Search · הזמנות שקיעה", priorityId: "p-sunset",
-    intro: "Mytiv הכין את ההצעה מהתוכנית, ממוח העסק ומ־Google Search · משלוחים. בדוק חמש החלטות:",
+    intro: "הצעה לדוגמה (V1 · אין חיבור ל־Google). Mytiv הכין אותה מהתוכנית, ממוח העסק ומהנתונים הידניים של Google Search · משלוחים. בדוק את ההחלטות:",
     decisions: [
       { key: "promote", label: "מה מקדמים", value: "ארוחת שקיעה מול הים, 18:00–19:30", detail: "מבצע מאושר במוח העסק · דף נחיתה umino.co.il/sunset" },
       { key: "result", label: "איזו תוצאה", value: "20 הזמנות שולחן באוקטובר", detail: "כ־₪60 להזמנה · נספר במערכת ההזמנות (ישיר)" },
@@ -381,25 +419,47 @@ export const BUILDERS: BuilderProposal[] = [
       { key: "location", label: "מיקום ולוח זמנים", summary: "5 ק״מ · 14–19", lines: ["רדיוס 5 ק״מ מנמל תל אביב", "מוצג 14:00–19:00, כל הימים"] },
       { key: "bidding", label: "אסטרטגיית הצעת מחיר", summary: "מקסימום הזמנות", lines: ["מקסימום המרות (הזמנת שולחן)", "בלי מגבלת עלות בשבוע הראשון; בדיקה ב־16.10"] },
       { key: "extensions", label: "תוספים", summary: "4", lines: ["קישורי אתר: תפריט, אירועים", "4 תמונות מהספרייה", "שיחה", "מיקום"] },
-      { key: "tracking", label: "דף נחיתה ומעקב", summary: "3/4 · חסר אירוע המרה", problem: "חסר אירוע המרה", lines: ["✓ הדף נטען תוך 1.8 שניות", "✓ תיוג UTM", "✓ מערכת ההזמנות מקושרת", "✕ אירוע המרה על כפתור \"הזמן\" חסר"] },
+      { key: "tracking", label: "דף נחיתה ומעקב", summary: "לא נבדק (V1) · חסר אירוע המרה", problem: "חסר אירוע המרה", lines: ["מוצהר ידנית: תיוג UTM מוגדר", "מוצהר ידנית: מערכת ההזמנות מקושרת", "חסר: אירוע המרה על כפתור \"הזמן\"", "אימות בפועל דורש חיבור ל־Google (V2)"] },
     ],
     footerNote: "אחרי אישור: מוכן להשקה. ב־V1 אדם מעלה ידנית ומסמן \"פעיל\" עם קישור לקמפיין.",
-    sideNote: "אירוע ההמרה על כפתור \"הזמן\" חסר. בשליחה לאישור תיווצר משימת בדיקת מעקב לפני ההשקה (בעלים: אחראי הקמפיין).",
-    context: { plan: "לא מוקצה ₪1,200 · הקצאת שקיעה ₪5,000, מחויב ₪4,700", brain: "40 מקומות בשקיעה ליום · בממוצע 70% תפוסה", earlier: "Google · משלוחים: ₪58 להמרה" },
+    sideNote: "אירוע ההמרה על כפתור \"הזמן\" חסר. בשליחה לבדיקה תיווצר משימת בדיקת מעקב לפני ההשקה (בעלים: אחראי הקמפיין).",
+    context: { plan: "לא מוקצה ₪1,200 · הקצאת שקיעה ₪5,000, מחויב ₪4,700", brain: "40 מקומות בשקיעה ליום · בממוצע 70% תפוסה", earlier: "Google · משלוחים: ₪58 להמרה (הוזן ידנית)" },
     launchDay: 9,
     preLaunchTask: "בדיקת אירוע המרה על כפתור \"הזמן\" · Google Search · שקיעה",
+    destination: { label: "umino.co.il/sunset", exists: true },
+    tracking: { checked: ["תיוג UTM מוגדר", "מערכת ההזמנות מקושרת"], missing: ["אירוע המרה על כפתור \"הזמן\""] },
+    copy: {
+      directions: [
+        { id: "d-sg-direct", name: "ישיר · הזמנה מיידית", promise: "שולחן ל־18:00 מול הים, באישור מיידי", proof: ["אישור מיידי במערכת ההזמנות", "18:00–19:30", "נמל תל אביב"], tone: "ענייני וקצר", cta: "הזמינו שולחן", why: "מי שמחפש \"מסעדה עם שקיעה\" כבר רוצה להזמין; הכיוון נותן לו את הדרך הקצרה.", anchors: ["שקיעה", "הזמינו"] },
+        { id: "d-sg-mood", name: "חוויה · ערב מול הים", promise: "ארוחת ערב מוקדמת עם השקיעה ברקע", proof: ["מרפסת מול הים", "תפריט סתיו חדש"], tone: "חם ומזמין", cta: "שמרו מקום לשקיעה", why: "השקיעה היא ההבדל בין UMINO לכל מסעדה אחרת בנמל.", anchors: ["שקיעה"], flag: "\"תפריט סתיו חדש\" — ההשקה ב־22.10, אחרי תחילת המהלך. אשר או הסר." },
+        { id: "d-sg-proof", name: "הוכחה · הנמל מתמלא", promise: "המסעדה בנמל שהזמנות השקיעה שלה מתמלאות", proof: ["40 מקומות בשקיעה ליום", "מעל 1,000 סועדים בשקיעה בספטמבר"], tone: "בטוח", cta: "תפסו שולחן", why: "ביקוש אמיתי משכנע יותר מתיאור.", anchors: ["שקיעה", "נמל"], flag: "\"מעל 1,000 סועדים בספטמבר\" לא במוח העסק — אשר או הסר." },
+      ],
+      variants: [
+        { id: "v-sg-direct-sea", directionId: "d-sg-direct", slot: "sunset-sea", slotLabel: "קבוצה 1 · שקיעה וים", audience: "מי שמחפש \"מסעדה עם שקיעה\"", hook: "שולחן מול השקיעה ל־18:00", body: "ארוחת ערב מוקדמת מול הים בנמל תל אביב. הזמינו שולחן, אישור מיידי.", headline: "מסעדה עם שקיעה | UMINO", cta: "הזמינו שולחן" },
+        { id: "v-sg-direct-port", directionId: "d-sg-direct", slot: "port", slotLabel: "קבוצה 2 · מסעדה בנמל", audience: "מי שמחפש \"מסעדה בנמל תל אביב\"", hook: "מסעדה בנמל, שולחן ל־18:00", body: "בנמל תל אביב, מול הים. הזמינו שולחן לשקיעה, אישור מיידי.", headline: "מסעדה בנמל תל אביב | UMINO", cta: "הזמינו שולחן" },
+        { id: "v-sg-mood-sea", directionId: "d-sg-mood", slot: "sunset-sea", slotLabel: "קבוצה 1 · שקיעה וים", audience: "מי שמחפש \"מסעדה עם שקיעה\"", hook: "הערב מתחיל עם השקיעה", body: "ארוחת ערב מוקדמת על המרפסת מול הים. 18:00–19:30, נמל תל אביב.", headline: "ערב מול הים | UMINO", cta: "שמרו מקום לשקיעה" },
+        { id: "v-sg-mood-port", directionId: "d-sg-mood", slot: "port", slotLabel: "קבוצה 2 · מסעדה בנמל", audience: "מי שמחפש \"מסעדה בנמל תל אביב\"", hook: "בנמל, מול הים, בשעת השקיעה", body: "ארוחת ערב מוקדמת על המרפסת. 18:00–19:30.", headline: "מסעדה בנמל מול הים | UMINO", cta: "שמרו מקום לשקיעה" },
+        { id: "v-sg-proof-sea", directionId: "d-sg-proof", slot: "sunset-sea", slotLabel: "קבוצה 1 · שקיעה וים", audience: "מי שמחפש \"מסעדה עם שקיעה\"", hook: "השקיעה שמתמלאת כל ערב", body: "40 מקומות מול הים בנמל תל אביב, 18:00–19:30. תפסו שולחן.", headline: "השקיעה בנמל | UMINO", cta: "תפסו שולחן" },
+        { id: "v-sg-proof-port", directionId: "d-sg-proof", slot: "port", slotLabel: "קבוצה 2 · מסעדה בנמל", audience: "מי שמחפש \"מסעדה בנמל תל אביב\"", hook: "המסעדה בנמל שמתמלאת בשקיעה", body: "40 מקומות מול הים, 18:00–19:30. תפסו שולחן לפני שנגמר.", headline: "מסעדה בנמל תל אביב | UMINO", cta: "תפסו שולחן" },
+      ],
+      alternatives: [
+        { id: "d-sg-local", name: "מקומי · 5 דקות מהבית", promise: "ארוחת שקיעה במרחק הליכה מהבית", proof: ["נמל תל אביב", "חניה בנמל"], tone: "שכונתי", cta: "הזמינו לערב", why: "הרדיוס הוא הטירגוט; הקרבה היא ההקשר המשותף.", anchors: ["שקיעה"], flag: "\"חניה בנמל\" — תנאי החניה לא במוח העסק. אשר או הסר." },
+        { id: "d-sg-season", name: "עונתי · ערבי אוקטובר", promise: "ערבי אוקטובר האחרונים מול הים", proof: ["18:00–19:30", "מרפסת מול הים"], tone: "דחוף־עדין", cta: "הזמינו השבוע", why: "העונה נגמרת; עכשיו או בשנה הבאה.", anchors: ["שקיעה"] },
+        { id: "d-sg-objection", name: "מסיר התנגדות · בלי לחכות", promise: "שולחן לשקיעה בלי להתקשר ובלי לחכות", proof: ["אישור מיידי במערכת ההזמנות"], tone: "פרקטי", cta: "הזמינו בקליק", why: "מסיר את החשש משולחן תפוס.", anchors: ["שקיעה"] },
+      ],
+    },
   },
   {
     id: "events-meta", moveId: "m-events-meta", channel: "meta", title: "Meta לידים · אירועים עסקיים", priorityId: "p-events",
-    intro: "Mytiv הכין את ההצעה מהתוכנית, ממוח העסק ומ־Google Search · אירועים. בדוק חמש החלטות:",
+    intro: "הצעה לדוגמה (V1 · אין חיבור ל־Meta). Mytiv הכין אותה מהתוכנית, ממוח העסק ומהנתונים הידניים של Google Search · אירועים. בדוק את ההחלטות:",
     decisions: [
       { key: "promote", label: "מה מקדמים", value: "אירוח פרטי לחברות, 20–120 אורחים", detail: "תפריט אירועים מאושר במוח העסק" },
       { key: "result", label: "איזו תוצאה", value: "15 לידים מוסמכים", detail: "מוסמך = חברה, 20+ אורחים, תאריך בשלושת החודשים הקרובים · נספר במכירות" },
-      { key: "audience", label: "את מי", value: "מנהלות משרד ו־HR בחברות במרכז", detail: "+ מי שביקר בעמוד האירועים ב־30 הימים האחרונים · בלי לקוחות קיימים" },
+      { key: "audience", label: "את מי", value: "מי שכבר מכיר · דומים ללקוחות אירועים · מנהלות משרד ו־HR במרכז", detail: "שלוש קבוצות לפי קרבה, מוחרגות זו מזו · בלי לקוחות קיימים" },
       { key: "budget", label: "כמה משקיעים", value: "" },
       { key: "acceptable", label: "ההצעה מקובלת?", value: "" },
     ],
-    summary: "קמפיין לידים אחד, שתי קבוצות: קהל חדש וחזרה למבקרים. טופס לידים בתוך Instagram ו־Facebook.",
+    summary: "קמפיין לידים אחד, שלוש קבוצות לפי קרבה: מי שכבר מכיר, דומים ללקוחות אירועים, קהל קר במרכז. טופס לידים בתוך Instagram ו־Facebook.",
     budget: { amount: 2500, fromDay: 13, toDay: 31, fromUnallocated: false, costPerResult: { low: 147, high: 208 }, resultWord: "לידים מוסמכים" },
     budgetNote: "בתוך הקצאת הנושא · צפי כ־₪165 לליד (לפי Google)",
     creatives: [
@@ -407,22 +467,48 @@ export const BUILDERS: BuilderProposal[] = [
       { id: "cr-table", label: "שולחן ערוך", origin: "ai_edited", availability: "awaiting_approval" },
       { id: "cr-toast", label: "צוות בהרמת כוסית", origin: "ai_edited", availability: "awaiting_approval" },
     ],
-    creativeNote: "3 גרסאות טקסט · כפתור \"קבלו הצעת מחיר\" · \"החלף\" פותח את ארבע דרכי הכיסוי בלי לצאת מהבונה",
+    creativeNote: "\"החלף\" פותח את דרכי הכיסוי המותרות לפי סוג הנכס, בלי לצאת מהבונה",
     details: [
-      { key: "structure", label: "מטרה ומבנה", summary: "לידים · 1 · 2", lines: ["מטרה: לידים (טופס בתוך Instagram ו־Facebook)", "קבוצה 1 · קהל חדש", "קבוצה 2 · חזרה למבקרי עמוד האירועים"] },
-      { key: "audiences", label: "קהלים, החרגות, חזרה", summary: "3", lines: ["מנהלות משרד ו־HR, חברות במרכז", "חזרה: מבקרי עמוד האירועים, 30 יום", "החרגה: לקוחות קיימים"] },
+      { key: "structure", label: "מטרה ומבנה", summary: "לידים · 1 · 3", lines: ["מטרה: לידים (טופס בתוך Instagram ו־Facebook)", "קבוצה 1 · חם: מבקרי עמוד האירועים 30 יום, אנשי קשר עם הסכמה", "קבוצה 2 · דומים: 1% דומים ללקוחות אירועים 2025, רדיוס 25 ק״מ", "קבוצה 3 · קר: מנהלות משרד ו־HR, חברות במרכז", "תקציב לכל קבוצה בנפרד; הרחבת קהל כבויה בקבוצות 1–2"] },
+      { key: "audiences", label: "קהלים, החרגות, חזרה", summary: "3 · מוחרגות", lines: ["קבוצה 2 מחריגה את קבוצה 1; קבוצה 3 מחריגה את 1 ו־2", "החרגה בכולן: לקוחות קיימים", "קהל 1% דומים ברדיוס קטן עלול לצאת קטן — להרחיב ל־2–3% אם ההיקף נמוך"] },
       { key: "placements", label: "מיקומים ולוח זמנים", summary: "אוטומטי · א׳–ה׳", lines: ["מיקומים אוטומטיים", "ימים א׳–ה׳"] },
-      { key: "form", label: "טופס לידים", summary: "4 שדות", lines: ["שם", "חברה", "מספר אורחים", "תאריך משוער"] },
-      { key: "tracking", label: "יעד ומעקב", summary: "✓ מוכן", lines: ["✓ הלידים נכנסים למכירות", "✓ פיקסל ואירוע ליד"] },
+      { key: "form", label: "טופס לידים", summary: "4 שדות · פרטיות · תודה", lines: ["שם", "חברה", "מספר אורחים", "תאריך משוער", "קישור למדיניות פרטיות: umino.co.il/privacy (חובה ב־Meta)", "מסך תודה: \"תודה! נחזור אליכם תוך יום עבודה\" + כפתור לעמוד האירועים"] },
+      { key: "tracking", label: "יעד ומעקב", summary: "לא נבדק (V1) · מוצהר ידנית", lines: ["מוצהר ידנית: הלידים נכנסים למכירות", "מוצהר ידנית: פיקסל ואירוע ליד הוגדרו", "אימות בפועל דורש חיבור ל־Meta (V2)"] },
     ],
-    footerNote: "יעלה ב־13.10 אחרי אישור · התוכנית תתעדכן: Meta לידים › \"מוכן\"",
-    sideNote: "שני הקריאייטיבים הממתינים ייכללו בבקשת האישור. קריאייטיב חדש שעולה לאוויר הוא תמיד אישור בעלים.",
-    context: { plan: "הקצאת אירועים ₪6,000 · מחויב ₪2,500", brain: "תפריט אירועים מאושר · 20–120 אורחים", earlier: "Google Search · אירועים: ₪168 לליד מוסמך (ידוע)" },
+    footerNote: "יעלה ב־13.10 אחרי אישור · התוכנית תתעדכן: Meta לידים › \"אושר\"",
+    sideNote: "שני הקריאייטיבים הממתינים ייכללו בבקשת האישור. קריאייטיב חדש שעולה לאוויר הוא תמיד אישור לקוח.",
+    context: { plan: "הקצאת אירועים ₪6,000 · מחויב ₪2,500", brain: "תפריט אירועים מאושר · 20–120 אורחים", earlier: "Google Search · אירועים: ₪168 לליד מוסמך (הוזן ידנית)" },
     launchDay: 13,
+    destination: { label: "טופס לידים בתוך Instagram ו־Facebook", exists: true },
+    tracking: { checked: ["הלידים נכנסים למכירות", "פיקסל ואירוע ליד הוגדרו"], missing: [] },
+    irreversible: { label: "סוג הקריאייטיב בקבוצות המודעות", chosen: "קריאייטיבים קלאסיים: מודעה לכל תמונה, מדידה לכל תמונה (מומלץ)", note: "נקבע ביצירת קבוצת המודעות ולא ניתן לשינוי אחר כך. החלופה, קריאייטיב דינמי, מאפשרת מודעה אחת בלבד לקבוצה." },
+    copy: {
+      directions: [
+        { id: "d-em-direct", name: "ישיר · הצעת מחיר", promise: "אירוע חברה ל־20–120 אורחים, הצעת מחיר תוך יום עבודה", proof: ["תפריט אירועים מאושר", "אולם פרטי עד 120 אורחים"], tone: "ענייני", cta: "קבלו הצעת מחיר", why: "מנהלת משרד עם תאריך ביד רוצה מחיר, לא סיפור.", anchors: ["הצעת מחיר"], flag: "\"תוך יום עבודה\" — זמן המענה לא מתועד במוח העסק. אשר או הסר." },
+        { id: "d-em-mood", name: "רגשי · הערב שהצוות יזכור", promise: "ערב חברה מול הים שהצוות ידבר עליו", proof: ["מרפסת מול הים", "תפריט אירועים"], tone: "חם", cta: "בואו נתכנן", why: "אירוע סוף שנה נבחר גם על הרגש; הים הוא הנכס שאין לאחרים.", anchors: ["מול הים"] },
+        { id: "d-em-proof", name: "הוכחה · חברות שכבר חגגו", promise: "המקום שחברות חוזרות אליו לאירועי סוף שנה", proof: ["אירועי סוף שנה 2025 (ידוע במכירות)", "המלצת לקוח עסקי"], tone: "בטוח", cta: "דברו איתנו", why: "חברה שבוחרת מקום לאירוע מחפשת מי שכבר עשה את זה.", anchors: ["חברות"] },
+      ],
+      variants: [
+        { id: "v-em-direct-warm", directionId: "d-em-direct", slot: "warm", slotLabel: "קבוצה 1 · חם", audience: "מי שכבר ביקר בעמוד האירועים", hook: "ראיתם את האולם. עכשיו המחיר.", body: "אירוע חברה ל־20–120 אורחים מול הים. השאירו פרטים ותקבלו הצעת מחיר תוך יום עבודה.", headline: "הצעת מחיר לאירוע החברה", cta: "קבלו הצעת מחיר" },
+        { id: "v-em-direct-lal", directionId: "d-em-direct", slot: "lookalike", slotLabel: "קבוצה 2 · דומים", audience: "דומים ללקוחות אירועים", hook: "אירוע סוף שנה בלי סיבוכים", body: "אולם פרטי עד 120 אורחים, תפריט אירועים מאושר, הצעת מחיר תוך יום עבודה.", headline: "אירוע חברה מול הים | UMINO", cta: "קבלו הצעת מחיר" },
+        { id: "v-em-direct-cold", directionId: "d-em-direct", slot: "cold", slotLabel: "קבוצה 3 · קר", audience: "מנהלות משרד ו־HR במרכז", hook: "מחפשים מקום לאירוע החברה?", body: "UMINO, נמל תל אביב: אולם פרטי ל־20–120 אורחים מול הים. הצעת מחיר תוך יום עבודה.", headline: "מקום לאירוע חברה בתל אביב", cta: "קבלו הצעת מחיר" },
+        { id: "v-em-mood-warm", directionId: "d-em-mood", slot: "warm", slotLabel: "קבוצה 1 · חם", audience: "מי שכבר ביקר בעמוד האירועים", hook: "דמיינו את הצוות על המרפסת", body: "ערב חברה מול הים, תפריט אירועים ושקיעה. בואו נתכנן את הערב שהצוות ידבר עליו.", headline: "ערב חברה מול הים", cta: "בואו נתכנן" },
+        { id: "v-em-mood-lal", directionId: "d-em-mood", slot: "lookalike", slotLabel: "קבוצה 2 · דומים", audience: "דומים ללקוחות אירועים", hook: "הערב שהצוות יזכור", body: "ערב חברה מול הים בנמל תל אביב: מרפסת, תפריט אירועים, שקיעה.", headline: "אירוע סוף שנה מול הים", cta: "בואו נתכנן" },
+        { id: "v-em-mood-cold", directionId: "d-em-mood", slot: "cold", slotLabel: "קבוצה 3 · קר", audience: "מנהלות משרד ו־HR במרכז", hook: "ערב חברה, אבל מול הים", body: "UMINO, נמל תל אביב. ערב חברה על המרפסת עם תפריט אירועים. בואו נתכנן.", headline: "ערב חברה מול הים | UMINO", cta: "בואו נתכנן" },
+        { id: "v-em-proof-warm", directionId: "d-em-proof", slot: "warm", slotLabel: "קבוצה 1 · חם", audience: "מי שכבר ביקר בעמוד האירועים", hook: "חברות שכבר חגגו כאן", body: "המקום שחברות חוזרות אליו לאירועי סוף שנה. דברו איתנו על התאריך שלכם.", headline: "אירועי סוף שנה | UMINO", cta: "דברו איתנו" },
+        { id: "v-em-proof-lal", directionId: "d-em-proof", slot: "lookalike", slotLabel: "קבוצה 2 · דומים", audience: "דומים ללקוחות אירועים", hook: "המקום שחברות חוזרות אליו", body: "אירועי סוף שנה 2025 נערכו אצלנו מול הים. דברו איתנו על הערב שלכם.", headline: "המקום לאירוע החברה", cta: "דברו איתנו" },
+        { id: "v-em-proof-cold", directionId: "d-em-proof", slot: "cold", slotLabel: "קבוצה 3 · קר", audience: "מנהלות משרד ו־HR במרכז", hook: "איפה חברות חוגגות סוף שנה?", body: "UMINO, נמל תל אביב: המקום שחברות חוזרות אליו. דברו איתנו.", headline: "אירוע חברה בנמל תל אביב", cta: "דברו איתנו" },
+      ],
+      alternatives: [
+        { id: "d-em-urgency", name: "דחיפות · דצמבר מתמלא", promise: "תאריכי דצמבר לאירועי חברה נגמרים", proof: ["עונת אירועי סוף שנה נפתחת 13.10"], tone: "דחוף", cta: "שריינו תאריך", why: "ההחלטה נדחית עד שאין תאריכים.", anchors: ["תאריך"], flag: "\"תאריכי דצמבר נגמרים\" — מצב הזמינות לא במוח העסק. אשר או הסר." },
+        { id: "d-em-easy", name: "מסיר התנגדות · הכול כלול", promise: "אירוע חברה שלא צריך לארגן", proof: ["תפריט אירועים מאושר", "אולם פרטי"], tone: "מרגיע", cta: "קבלו הצעה", why: "מנהלת המשרד חוששת מעבודה; הכיוון מוריד אותה.", anchors: ["אירוע"] },
+        { id: "d-em-local", name: "מקומי · בנמל תל אביב", promise: "אירוע החברה במרחק נסיעה קצרה מהמשרד", proof: ["נמל תל אביב"], tone: "פרקטי", cta: "דברו איתנו", why: "לחברות במרכז המיקום הוא השיקול הראשון.", anchors: ["נמל"] },
+      ],
+    },
   },
   {
     id: "fallmenu-meta", moveId: "m-delivery-meta", channel: "meta", title: "Meta · תפריט סתיו", priorityId: "p-delivery",
-    intro: "Mytiv הכין את ההצעה מהתוכנית ומ־Google Search · משלוחים. בדוק חמש החלטות:",
+    intro: "הצעה לדוגמה (V1 · אין חיבור ל־Meta). Mytiv הכין אותה מהתוכנית ומהנתונים הידניים של Google Search · משלוחים. בדוק את ההחלטות:",
     decisions: [
       { key: "promote", label: "מה מקדמים", value: "תפריט סתיו · 4 מנות חדשות", detail: "המבצע לא אושר לפרסום במוח העסק", warn: "המבצע לא אושר לפרסום במוח העסק" },
       { key: "result", label: "איזו תוצאה", value: "₪15,000 הכנסה ממשלוחים", detail: "אין מקור מדידה ליעד · ההכנסה לא נמדדת" },
@@ -435,11 +521,27 @@ export const BUILDERS: BuilderProposal[] = [
     budgetNote: "בתוך הקצאת הנושא · אין מקור מדידה, אז אין צפי",
     details: [
       { key: "structure", label: "מטרה ומבנה", summary: "חשיפה · 1 · 1", lines: ["מטרה: חשיפה", "קבוצה אחת ברדיוס 5 ק״מ"] },
-      { key: "tracking", label: "יעד ומעקב", summary: "אין מקור מדידה", problem: "אין מקור מדידה", lines: ["✕ מערכת ההזמנות לא מחוברת"] },
+      { key: "tracking", label: "יעד ומעקב", summary: "מדד ידני מוסכם", lines: ["מערכת ההזמנות לא מחוברת", "הסכם מדידה: הכנסות המשלוחים מדו״ח מערכת ההזמנות, מול השבועיים שלפני ההשקה (ידני)"] },
     ],
-    footerNote: "חסום עד שהמבצע יאומת במוח העסק. שום דבר לא נשלח לאישור.",
+    footerNote: "חסום עד שהמבצע יאומת במוח העסק. שום דבר לא נשלח לבדיקה.",
     blocked: "המבצע לא אושר לפרסום במוח העסק",
-    context: { plan: "הקצאת משלוחים ₪1,800 · מחויב ₪1,300", brain: "תפריט הסתיו: קיים, פרסום חסום עד אישור התנאים", earlier: "Google Search · משלוחים: ₪58 להמרה" },
+    context: { plan: "הקצאת משלוחים ₪1,800 · מחויב ₪1,300", brain: "תפריט הסתיו: קיים, פרסום חסום עד אישור התנאים", earlier: "Google Search · משלוחים: ₪58 להמרה (הוזן ידנית)" },
     launchDay: 22,
+    destination: { label: "umino.co.il/fall-menu · עמוד תפריט הסתיו", exists: false },
+    tracking: { checked: [], missing: [] },
+    irreversible: { label: "סוג הקריאייטיב בקבוצת המודעות", chosen: "קריאייטיבים קלאסיים: מודעה לכל תמונה (מומלץ)", note: "נקבע ביצירת קבוצת המודעות ולא ניתן לשינוי אחר כך." },
+    copy: {
+      directions: [
+        { id: "d-fm-direct", name: "ישיר · 4 מנות חדשות", promise: "תפריט סתיו חדש למשלוחים, 4 מנות", proof: ["תפריט משלוחים", "רדיוס 5 ק״מ"], tone: "ענייני", cta: "הזמינו משלוח", why: "מי שמזמין משלוח רוצה לדעת מה חדש ומתי מגיע.", anchors: ["סתיו"] },
+        { id: "d-fm-mood", name: "עונתי · ערב סתיו בבית", promise: "ארוחת סתיו של UMINO על השולחן בבית", proof: ["תפריט משלוחים"], tone: "חם", cta: "הזמינו הביתה", why: "הסתיו מחזיר אנשים הביתה; המשלוח פוגש אותם שם.", anchors: ["סתיו"] },
+        { id: "d-fm-proof", name: "הוכחה · ממסעדת הנמל", promise: "המנות של מסעדת הנמל, עכשיו במשלוח", proof: ["נמל תל אביב"], tone: "בטוח", cta: "הזמינו עכשיו", why: "המוניטין של המסעדה הוא ההוכחה.", anchors: ["נמל"] },
+      ],
+      variants: [
+        { id: "v-fm-direct-radius", directionId: "d-fm-direct", slot: "radius", slotLabel: "קבוצה 1 · רדיוס 5 ק״מ", audience: "תושבי הרדיוס, בלי מי שהזמין השבוע", hook: "4 מנות סתיו חדשות", body: "תפריט הסתיו של UMINO הגיע למשלוחים. 4 מנות חדשות, רדיוס 5 ק״מ.", headline: "תפריט סתיו במשלוח", cta: "הזמינו משלוח" },
+        { id: "v-fm-mood-radius", directionId: "d-fm-mood", slot: "radius", slotLabel: "קבוצה 1 · רדיוס 5 ק״מ", audience: "תושבי הרדיוס, בלי מי שהזמין השבוע", hook: "ערב סתיו, בלי לצאת מהבית", body: "ארוחת סתיו של UMINO מגיעה אליכם. 4 מנות חדשות.", headline: "סתיו של UMINO בבית", cta: "הזמינו הביתה" },
+        { id: "v-fm-proof-radius", directionId: "d-fm-proof", slot: "radius", slotLabel: "קבוצה 1 · רדיוס 5 ק״מ", audience: "תושבי הרדיוס, בלי מי שהזמין השבוע", hook: "מהנמל אליכם", body: "המנות של מסעדת הנמל, עכשיו במשלוח. תפריט סתיו חדש.", headline: "UMINO במשלוח", cta: "הזמינו עכשיו" },
+      ],
+      alternatives: [],
+    },
   },
 ];

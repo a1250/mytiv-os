@@ -6,17 +6,20 @@
 import { describe, expect, it } from "vitest";
 import type { Move, Plan } from "@/lib/focus/contracts/plan";
 import {
-  ASSET_SUMMARIES, BUILDERS, MOVES, PLAN_MONTH_DAYS, PLAN_OCTOBER, PLAN_TODAY, PLAN_WEEK, PRODUCTION, PROPOSED_MOVES, RECOMMENDATIONS, REQUIREMENTS, TIMELINE, DAY_ITEMS, PLAN_WEEKS,
+  APPROVAL_PRESETS, ASSET_SUMMARIES, BUILDERS, CLIENT_APPROVAL_POLICY, MOVES, PLAN_CLIENT, PLAN_MONTH_DAYS, PLAN_OCTOBER, PLAN_TODAY, PLAN_WEEK, PRIORITIES, PRODUCTION, PROPOSED_MOVES, RECOMMENDATIONS, REQUIREMENTS, TIMELINE, DAY_ITEMS, PLAN_WEEKS,
 } from "@/lib/focus/fixtures/plan";
+import { PEOPLE } from "@/lib/focus/fixtures/people";
 import {
   EMPTY_OVERLAY, LIFECYCLE, agendaWeek, canMoveDayItem, dayItemsView, dayLoad, dayStatusWord, dayWarnings, applyMove, budgetOverflow, canReschedule, canTransition, collapsedPriority, countSlots, coverage,
   expectedRange, isHttpsUrl, missingFor, movePriorityViolations, moveBudget, nextAction, openNeeds, pace, periodViolations, planBudget,
   planMoves, priorityBudget, productionVisibility, readOverlay, requirementSlots, requirementWord, sendBlocked, tooManyPriorities,
   unverifiedClaim, type PlanFixtures, type PlanOverlay,
+  APPROVAL_FLOOR, allowedPaths, approvalNeedsAck, approverFor, buildClientRequest, clientRequestText, copyState, delegatedLaunchAllowed, derivedNeeds, directionFlags,
+  pathRefusal, readiness, recommendedPath, requestTooLate, requiredApprovals, requirementStatus, variantConforms, type ReadinessInput,
 } from "@/lib/focus/state/plan";
 
 const F: PlanFixtures = { plan: PLAN_OCTOBER, moves: MOVES, proposed: PROPOSED_MOVES, recs: RECOMMENDATIONS, requirements: REQUIREMENTS, builders: BUILDERS };
-const routes = { builder: (id: string) => `/b/${id}`, createMove: (id: string) => `/c/${id}`, connections: "/conn", requirement: (id: string) => `/r/${id}` };
+const routes = { builder: (id: string) => `/b/${id}`, createMove: (id: string) => `/c/${id}`, measurement: (id: string) => `/m/${id}`, requirement: (id: string) => `/r/${id}` };
 const pp = (id: string) => PLAN_OCTOBER.priorities.find((p) => p.priorityId === id)!;
 const o = (patch: Partial<PlanOverlay> = {}): PlanOverlay => ({ ...EMPTY_OVERLAY, ...patch });
 const moves = (ov = o()) => planMoves(F, ov);
@@ -66,7 +69,7 @@ describe("coverage is planned; actual stays separate", () => {
 
 describe("lifecycle vs overlays", () => {
   it("the lifecycle has exactly the eight states; needs attention and optimizing are not states", () => {
-    expect([...LIFECYCLE]).toEqual(["idea", "planned", "building", "waiting_approval", "approved", "live", "paused", "ended"]);
+    expect([...LIFECYCLE]).toEqual(["idea", "planned", "building", "ready_for_review", "approved", "live", "paused", "ended"]);
     expect(LIFECYCLE).not.toContain("needs_attention");
     expect(LIFECYCLE).not.toContain("optimizing");
   });
@@ -83,8 +86,8 @@ describe("lifecycle vs overlays", () => {
     expect(g.recommendationId).toBeNull();
   });
   it("legal transitions only (V1 launch is manual: approved → live)", () => {
-    expect(canTransition("building", "waiting_approval")).toBe(true);
-    expect(canTransition("waiting_approval", "approved")).toBe(true);
+    expect(canTransition("building", "ready_for_review")).toBe(true);
+    expect(canTransition("ready_for_review", "approved")).toBe(true);
     expect(canTransition("approved", "live")).toBe(true);
     expect(canTransition("planned", "live")).toBe(false);
     expect(canTransition("building", "live")).toBe(false);
@@ -124,15 +127,15 @@ describe("one next action per priority (decision › blocker › missing asset �
   it("Sunset → create a move for 20 bookings (coverage gap)", () => {
     expect(nextAction(pp("p-sunset"), moves(), REQUIREMENTS, o(), F, routes)).toMatchObject({ kind: "blocker", label: "צור מהלך ל־20 הזמנות", href: "/c/need-sunset-20" });
   });
-  it("Delivery → connect a measurement source", () => {
-    expect(nextAction(pp("p-delivery"), moves(), REQUIREMENTS, o(), F, routes)).toMatchObject({ kind: "blocker", label: "חבר מקור מדידה" });
+  it("Delivery → set a measurement source by hand (V1 has no connections to offer)", () => {
+    expect(nextAction(pp("p-delivery"), moves(), REQUIREMENTS, o(), F, routes)).toMatchObject({ kind: "blocker", label: "הגדר מקור מדידה ליעד", href: "/m/p-delivery" });
   });
   it("after the creatives are approved, Events moves to its nearest missing asset", () => {
     const ov = o({ creatives: { "cr-table": "approved", "cr-toast": "approved" } });
-    expect(nextAction(pp("p-events"), moves(ov), REQUIREMENTS, ov, F, routes)).toMatchObject({ kind: "missing_asset", label: "כסה: סרטון המלצה מלקוח עסקי" });
+    expect(nextAction(pp("p-events"), moves(ov), REQUIREMENTS, ov, F, routes)).toMatchObject({ kind: "missing_asset", label: "כסה: כרטיס טקסט · 3 חבילות אירועים" });
   });
   it("a move waiting for approval is a decision too", () => {
-    const ov = o({ moveStates: { "m-sunset-google": "waiting_approval" } });
+    const ov = o({ moveStates: { "m-sunset-google": "ready_for_review" } });
     expect(nextAction(pp("p-sunset"), moves(ov), REQUIREMENTS, ov, F, routes)).toMatchObject({ kind: "decision", label: "אשר את Google Search · שקיעה" });
   });
   it("collapse only above 3 priorities, only on-track with nothing to do; warn only above 5", () => {
@@ -189,7 +192,7 @@ describe("timeline", () => {
     expect(canMoveDayItem(it("di-so-post-2"), "live")).toBe("fixed");
     expect(canMoveDayItem(it("di-mo-fall"), null)).toBe("fixed");
     expect(canMoveDayItem(it("di-em-launch"), "building")).toBe("move");
-    expect(canMoveDayItem(it("di-em-launch"), "waiting_approval")).toBe("approval");
+    expect(canMoveDayItem(it("di-em-launch"), "ready_for_review")).toBe("approval");
   });
   it("warnings are derived: approval before launch, missing asset, overdue, refresh, blocked, launch clash", () => {
     const ctx = (o = EMPTY_OVERLAY) => ({ today: PLAN_TODAY, overlay: o, requirements: REQUIREMENTS, builders: BUILDERS, moveStateOf: (id: string) => MOVES.find((m) => m.id === id)?.state ?? null });
@@ -245,7 +248,7 @@ describe("budget — unknown is never zero", () => {
     expect(pace(null, false, 1000, PLAN_TODAY, PLAN_MONTH_DAYS, false).pace).toBe("not_started");
   });
   it("money a proposed move takes from the unallocated amount stays pending until the owner approves", () => {
-    const pending = planBudget(F, o({ moveStates: { "m-sunset-google": "waiting_approval" } }), moves(), PLAN_TODAY, PLAN_MONTH_DAYS);
+    const pending = planBudget(F, o({ moveStates: { "m-sunset-google": "ready_for_review" } }), moves(), PLAN_TODAY, PLAN_MONTH_DAYS);
     expect(pending).toMatchObject({ unallocated: 1200, pendingFromUnallocated: 1200 });
     const approved = planBudget(F, o({ moveStates: { "m-sunset-google": "approved" } }), moves(), PLAN_TODAY, PLAN_MONTH_DAYS);
     expect(approved).toMatchObject({ unallocated: 0, pendingFromUnallocated: 0 });
@@ -269,7 +272,7 @@ describe("builders", () => {
     expect(unverifiedClaim("ארוחת שקיעה מול הים")).toBeNull();
     expect(sendBlocked(BUILDERS.find((b) => b.id === "fallmenu-meta")!, "building")).toMatch(/לא אושר לפרסום/);
     expect(sendBlocked(google, "building")).toBeNull();
-    expect(sendBlocked(google, "waiting_approval")).toMatch(/כבר נשלח/);
+    expect(sendBlocked(google, "ready_for_review")).toMatch(/כבר נשלח/);
   });
   it("marking live needs a real https platform link (V1 manual launch)", () => {
     expect(isHttpsUrl("https://ads.google.com/aw/campaigns?campaignId=1")).toBe(true);
@@ -293,5 +296,273 @@ describe("V1 model guards", () => {
   it("the overlay reader tolerates an older or empty session shape", () => {
     expect(readOverlay(undefined)).toEqual(EMPTY_OVERLAY);
     expect(readOverlay({ moveStates: { a: "live" } }).recs).toEqual({});
+  });
+});
+
+/* ---------- V1 completion: readiness, approvals, authenticity, copy, client requests (spec rev 110) ---------- */
+
+const approverName = (k: "client" | "operator") => (k === "client" ? PEOPLE.ron.name : PEOPLE.dana.name);
+const builderOf = (id: string) => BUILDERS.find((b) => b.id === id)!;
+const moveOf = (id: string, ov = o()) => [...moves(ov), ...PROPOSED_MOVES.map((m) => applyMove(m, ov, RECOMMENDATIONS))].find((m) => m.id === id)!;
+function ready(builderId: string, ov = o(), state?: Move["state"]): ReturnType<typeof readiness> {
+  const b = builderOf(builderId);
+  const m = moveOf(b.moveId, ov);
+  const i: ReadinessInput = { move: m, builder: b, state: state ?? m.state, requirements: REQUIREMENTS, overlay: ov, builders: BUILDERS, policy: CLIENT_APPROVAL_POLICY, approverName, unallocated: 1200 };
+  return readiness(i);
+}
+/** everything the Meta events move needs before approval, short of the approvals themselves */
+const eventsComplete = (extra: Partial<PlanOverlay> = {}) => o({
+  copy: { "events-meta": { set: "main", directionId: "d-em-mood", refinements: [] } },
+  creatives: { "cr-table": "approved", "cr-toast": "approved" },
+  requirements: { "req-events-testimonial": { choice: "existing", assetId: "as-cmr-1" }, "req-events-next": { choice: "ai_client" }, "req-events-card": { choice: "generate" } },
+  ...extra,
+});
+
+describe("lifecycle is the locked seven-step chain; approval waiting is readiness, not a state", () => {
+  it("ready_for_review replaced waiting_approval; an old session shape is migrated on read", () => {
+    expect(LIFECYCLE).not.toContain("waiting_approval");
+    expect(LIFECYCLE[3]).toBe("ready_for_review");
+    expect(readOverlay({ moveStates: { "m-x": "waiting_approval" } }).moveStates["m-x"]).toBe("ready_for_review");
+  });
+  it("readiness never changes the lifecycle: a move stays ready_for_review while its overall status is waiting_approval", () => {
+    const ov = eventsComplete({ moveStates: { "m-events-meta": "ready_for_review" } });
+    const r = ready("events-meta", ov);
+    expect(moveOf("m-events-meta", ov).state).toBe("ready_for_review");
+    expect(r.overall).toBe("waiting_approval");
+    expect(r.approver).toBe(PEOPLE.ron.name);
+  });
+});
+
+describe("campaign readiness (derived): eight dimensions, one next action, at most two blockers", () => {
+  it("every readiness has the eight dimensions and exactly one next action", () => {
+    for (const b of BUILDERS) {
+      const r = ready(b.id);
+      expect(Object.keys(r.dims).sort()).toEqual(["approval", "budget", "copy", "creative", "landing", "strategy", "targeting", "tracking"]);
+      expect(r.next.label.length).toBeGreaterThan(0);
+      expect(r.blockers.length).toBeLessThanOrEqual(2);
+    }
+  });
+  it("Meta events before any choice: copy missing → status 'missing', next = choose a direction", () => {
+    const r = ready("events-meta");
+    expect(r.dims.copy.state).toBe("missing");
+    expect(r.overall).toBe("missing");
+    expect(r.next.label).toBe("בחר כיוון מסר");
+  });
+  it("a testimonial requested from the client → WAITING for the client, named as the actor, status 'waiting for client material'", () => {
+    const ov = o({ copy: { "events-meta": { set: "main", directionId: "d-em-direct", refinements: [] } }, requirements: { "req-events-testimonial": { choice: "request" } } });
+    const r = ready("events-meta", ov);
+    expect(r.dims.creative).toMatchObject({ state: "waiting", actor: "הלקוח" });
+    expect(r.overall).toBe("waiting_client");
+    expect(r.next).toMatchObject({ actor: "הלקוח" });
+  });
+  it("the fall-menu move is BLOCKED by the Brain (offer not cleared) and its destination is MISSING; blockers ≤ 2", () => {
+    const r = ready("fallmenu-meta");
+    expect(r.dims.strategy.state).toBe("blocked");
+    expect(r.dims.landing.state).toBe("missing");
+    expect(r.overall).toBe("blocked");
+    expect(r.blockers).toHaveLength(1);
+  });
+  it("UNKNOWN tracking (V1): a risk that never reads healthy, does not block review, and needs acknowledgment at approval", () => {
+    const r = ready("sunset-google", o({ copy: { "sunset-google": { set: "main", directionId: "d-sg-direct", refinements: [] } } }));
+    expect(r.dims.tracking.state).toBe("unknown");
+    expect(r.dims.tracking.text).toMatch(/לא נבדק/);
+    expect(r.dims.tracking.text).not.toMatch(/✓|מאומת|0/);
+    expect(r.trackingRisk).toBe(true);
+    expect(r.overall).toBe("ready_for_review");
+    expect(approvalNeedsAck(r, "m-sunset-google", o())).toBe(true);
+    expect(approvalNeedsAck(r, "m-sunset-google", o({ trackingAck: { "m-sunset-google": true } }))).toBe(false);
+  });
+  it("a measurement agreement makes Tracking READY (manual) instead of unknown", () => {
+    const r = ready("fallmenu-meta");
+    expect(r.dims.tracking.state).toBe("ready");
+    expect(r.dims.tracking.text).toMatch(/מדד ידני/);
+    expect(r.trackingRisk).toBe(false);
+  });
+  it("readiness recomputes: when the client's material arrives the move becomes ready for review", () => {
+    const base = eventsComplete({ requirements: { "req-events-testimonial": { choice: "request" }, "req-events-next": { choice: "ai_client" }, "req-events-card": { choice: "generate" } } });
+    expect(ready("events-meta", base).overall).toBe("waiting_client");
+    const arrived = o({ ...base, requirements: { ...base.requirements, "req-events-testimonial": { choice: "existing", assetId: "as-cmr-1" } } });
+    expect(ready("events-meta", arrived).dims.creative.state).toBe("waiting"); // exists, awaiting approval by the client
+    expect(ready("events-meta", arrived).overall).toBe("ready_for_review");
+  });
+  it("after every approval is given the move is approved / ready to launch", () => {
+    const ov = eventsComplete({ moveStates: { "m-events-meta": "approved" }, approvalsGiven: { "m-events-meta": ["direction", "variants", "new_creative", "launch"] } });
+    const r = ready("events-meta", ov);
+    expect(r.dims.approval.state).toBe("ready");
+    expect(r.dims.creative.state).toBe("ready");
+    expect(r.overall).toBe("approved");
+    expect(r.next.label).toMatch(/סמן "פעיל"/);
+  });
+});
+
+describe("client approval policy: STANDARD by default, a floor no preset crosses", () => {
+  it("UMINO's policy is STANDARD; the client approves the direction, creatives and launch, the operator the variants", () => {
+    expect(CLIENT_APPROVAL_POLICY.preset).toBe("standard");
+    expect(CLIENT_APPROVAL_POLICY.rules).toEqual(APPROVAL_PRESETS.standard);
+    const req = requiredApprovals(moveOf("m-events-meta"), builderOf("events-meta"), CLIENT_APPROVAL_POLICY, o());
+    expect(req.map((a) => [a.action, a.by])).toEqual([["direction", "client"], ["variants", "operator"], ["new_creative", "client"], ["launch", "client"]]);
+    expect(req.every((a) => !a.given)).toBe(true);
+  });
+  it("the floor: plan approval and a material AI adaptation need the client under DELEGATED too", () => {
+    const delegated = { ...CLIENT_APPROVAL_POLICY, preset: "delegated" as const, rules: APPROVAL_PRESETS.delegated };
+    for (const a of APPROVAL_FLOOR) expect(approverFor(delegated, a)).toBe("client");
+    expect(approverFor(delegated, "launch")).toBe("operator");
+    const custom = { ...CLIENT_APPROVAL_POLICY, preset: "custom" as const, rules: { ...APPROVAL_PRESETS.delegated, plan: "operator" as const } };
+    expect(approverFor(custom, "plan")).toBe("client");
+  });
+  it("DELEGATED launch only inside a client-approved plan, within allocation, no spend rise, no client approval open, no material change", () => {
+    const ok = { planApproved: true, withinAllocation: true, totalSpendUnchanged: true, clientApprovalsOutstanding: 0, materialChangeOutsidePlan: false };
+    expect(delegatedLaunchAllowed(ok).ok).toBe(true);
+    expect(delegatedLaunchAllowed({ ...ok, withinAllocation: false }).ok).toBe(false);
+    expect(delegatedLaunchAllowed({ ...ok, totalSpendUnchanged: false }).ok).toBe(false);
+    expect(delegatedLaunchAllowed({ ...ok, clientApprovalsOutstanding: 1 }).ok).toBe(false);
+    expect(delegatedLaunchAllowed({ ...ok, materialChangeOutsidePlan: true }).ok).toBe(false);
+    expect(delegatedLaunchAllowed({ ...ok, planApproved: false }).ok).toBe(false);
+  });
+  it("waiting for approval names the approver", () => {
+    const r = ready("events-meta", eventsComplete({ moveStates: { "m-events-meta": "ready_for_review" } }));
+    expect(r.dims.approval.state).toBe("waiting");
+    expect(r.dims.approval.text).toContain(PEOPLE.ron.name);
+    expect(r.next.actor).toBe(PEOPLE.ron.name);
+  });
+});
+
+describe("content requirements are structured; authenticity decides the paths", () => {
+  it("every requirement carries type, format, quantity, purpose, placement, authenticity and approval", () => {
+    for (const r of REQUIREMENTS) {
+      expect(r.assetType).toBeTruthy(); expect(r.format).toBeTruthy(); expect(r.quantity).toBeGreaterThan(0);
+      expect(r.purpose).toBeTruthy(); expect(r.placement).toBeTruthy(); expect(r.authenticity).toBeTruthy(); expect(r.approval).toBeTruthy();
+      expect(r.slots).toHaveLength(r.quantity);
+    }
+  });
+  it("status: open → partly covered → covered → approved", () => {
+    expect(requirementStatus(["missing", "missing"])).toBe("open");
+    expect(requirementStatus(["approved", "missing"])).toBe("partly_covered");
+    expect(requirementStatus(["approved", "awaiting_approval"])).toBe("covered");
+    expect(requirementStatus(["approved", "approved"])).toBe("approved");
+  });
+  it("a testimonial is never generated or adapted from other footage: existing (a real testimonial) or a client request", () => {
+    expect(allowedPaths("authentic")).toEqual(["existing", "request"]);
+    expect(pathRefusal("authentic", "generate")).toMatch(/לא נוצר ב־AI/);
+    expect(pathRefusal("authentic", "ai_client")).toMatch(/לא נגזרים/);
+    const t = REQUIREMENTS.find((r) => r.id === "req-events-testimonial")!;
+    expect(t.authenticity).toBe("authentic");
+    expect(recommendedPath(t)).toBe("request");
+    expect(t.existingCandidates).toHaveLength(0);
+  });
+  it("brand-fixed: library only; adaptable: AI + client asset; illustrative: generate", () => {
+    expect(allowedPaths("brand_fixed")).toEqual(["existing"]);
+    expect(allowedPaths("adaptable")).toContain("ai_client");
+    expect(allowedPaths("adaptable")).not.toContain("generate");
+    expect(allowedPaths("illustrative")).toContain("generate");
+    expect(recommendedPath(REQUIREMENTS.find((r) => r.id === "req-events-card")!)).toBe("generate");
+    expect(recommendedPath(REQUIREMENTS.find((r) => r.id === "req-events-next")!)).toBe("ai_client");
+    expect(recommendedPath(REQUIREMENTS.find((r) => r.id === "req-events-logo")!)).toBeNull();
+  });
+  it("the deadline check: a request that cannot arrive in time proposes an interim fallback inside the class", () => {
+    const fresh = REQUIREMENTS.find((r) => r.id === "req-sunset-fresh")!; // needed 14.10, today 7.10 → 7 days, fine
+    expect(requestTooLate(fresh, PLAN_TODAY)).toBeNull();
+    expect(requestTooLate(fresh, 12)).toMatch(/פתרון ביניים: התאמת נכס קיים/);
+    const t = REQUIREMENTS.find((r) => r.id === "req-events-testimonial")!;
+    expect(requestTooLate(t, 16)).toMatch(/בסיכון/);
+  });
+});
+
+describe("copy: three Move Message Directions, variants beneath the chosen one", () => {
+  it("every builder proposes exactly three clearly different directions, each with a one-line why", () => {
+    for (const b of BUILDERS) {
+      expect(b.copy.directions).toHaveLength(3);
+      expect(new Set(b.copy.directions.map((d) => d.promise)).size).toBe(3);
+      for (const d of b.copy.directions) { expect(d.why.length).toBeGreaterThan(10); expect(d.anchors.length).toBeGreaterThan(0); }
+      expect(b.copy.alternatives.length === 0 || b.copy.alternatives.length === 3).toBe(true);
+    }
+  });
+  it("nothing is chosen until the person chooses; choosing shows the variants of that direction only", () => {
+    const b = builderOf("events-meta");
+    expect(copyState(b, o()).chosen).toBeNull();
+    const cs = copyState(b, o({ copy: { "events-meta": { set: "main", directionId: "d-em-direct", refinements: [] } } }));
+    expect(cs.chosen?.id).toBe("d-em-direct");
+    expect(cs.variants.map((v) => v.slot)).toEqual(["warm", "lookalike", "cold"]);
+  });
+  it("Google variants are per ad group / search intent", () => {
+    const cs = copyState(builderOf("sunset-google"), o({ copy: { "sunset-google": { set: "main", directionId: "d-sg-direct", refinements: [] } } }));
+    expect(cs.variants.map((v) => v.slot)).toEqual(["sunset-sea", "port"]);
+  });
+  it("every fixture variant conforms to its direction (keeps the promise, no refused claim)", () => {
+    for (const b of BUILDERS) for (const v of b.copy.variants) {
+      const d = [...b.copy.directions, ...b.copy.alternatives].find((x) => x.id === v.directionId)!;
+      expect(variantConforms(v, d)).toEqual({ ok: true });
+    }
+  });
+  it("a variant that drops the promise or adds a refused claim does not conform", () => {
+    const d = builderOf("sunset-google").copy.directions[0];
+    const v = builderOf("sunset-google").copy.variants[0];
+    expect(variantConforms({ ...v, hook: "x", body: "y", headline: "z" }, d).ok).toBe(false);
+    expect(variantConforms({ ...v, body: `${v.body} הנוף הכי יפה בעיר` }, d).ok).toBe(false);
+  });
+  it("refinements keep the promise; 'three new directions' works only where alternatives exist", () => {
+    const b = builderOf("events-meta");
+    const cs = copyState(b, o({ copy: { "events-meta": { set: "main", directionId: "d-em-direct", refinements: ["shorter", "more_proof"] } } }));
+    for (const v of cs.variants) expect(variantConforms(v, cs.chosen!).ok).toBe(true);
+    expect(copyState(b, o({ copy: { "events-meta": { set: "alt", refinements: [] } } })).directions.map((d) => d.id)).toEqual(b.copy.alternatives.map((d) => d.id));
+    expect(copyState(builderOf("fallmenu-meta"), o()).canAskNew).toBe(false);
+  });
+  it("an unverified fact is flagged, never invented: the direction says 'confirm or remove'", () => {
+    const flagged = builderOf("sunset-google").copy.directions.find((d) => d.id === "d-sg-proof")!;
+    expect(directionFlags(flagged)[0]).toMatch(/לא במוח העסק — אשר או הסר/);
+    expect(directionFlags(builderOf("events-meta").copy.directions.find((d) => d.id === "d-em-mood")!)).toEqual([]);
+    const r = ready("sunset-google", o({ copy: { "sunset-google": { set: "main", directionId: "d-sg-proof", refinements: [] } } }));
+    expect(r.dims.copy.state).toBe("waiting");
+  });
+});
+
+describe("client material request: structured, linked, manual sending, one per requirement", () => {
+  const t = REQUIREMENTS.find((r) => r.id === "req-events-testimonial")!;
+  const m = moveOf("m-events-meta");
+  const p = PRIORITIES.find((x) => x.id === "p-events")!;
+  it("carries what, quantity, format, duration, needed-by, why, the move, capture instructions, an upload placeholder and the requirement", () => {
+    const r = buildClientRequest(t, m, p, "t-1", 13);
+    expect(r).toMatchObject({ requirementId: t.id, moveId: m.id, priorityId: p.id, taskId: "t-1", neededByDay: 18, sentAt: null });
+    expect(r.items[0]).toMatchObject({ what: t.title, quantity: 1, duration: "15–30 שניות" });
+    expect(r.items[0].format).toContain("9:16");
+    expect(r.why).toContain("13.10");
+    expect(r.captureInstructions).toContain("אנכי");
+    expect(r.uploadTo).toMatch(/Drive/);
+    const text = clientRequestText(r);
+    expect(text).toContain("אנחנו צריכים");
+    expect(text).not.toMatch(/^שלחו לנו תוכן$/m);
+  });
+  it("one request per requirement: the id is derived from the requirement, so a second attempt is the same key", () => {
+    expect(buildClientRequest(t, m, p, "t-1", 13).id).toBe(buildClientRequest(t, m, p, "t-2", 13).id);
+  });
+  it("a request keeps the asset missing until it arrives (readiness waits for the client)", () => {
+    const ov = o({ requirements: { [t.id]: { choice: "request", taskId: "t-1" } } });
+    expect(requirementSlots(t, ov, BUILDERS)).toEqual(["missing"]);
+  });
+});
+
+describe("plan needs: planning kinds in the Plan, build-level kinds derived", () => {
+  it("Events today: not built (LinkedIn), missing content (testimonial, card, refresh), and no coverage gap", () => {
+    const needs = derivedNeeds(pp("p-events"), moves(), REQUIREMENTS, o(), BUILDERS);
+    expect(needs.map((n) => n.kind)).toContain("not_built");
+    expect(needs.filter((n) => n.kind === "missing_content").map((n) => n.title)).toContain("סרטון המלצה מלקוח עסקי");
+    expect(needs.every((n) => n.resolver)).toBe(true);
+    expect(openNeeds(pp("p-events"), moves())).toHaveLength(0);
+  });
+  it("a requested asset becomes 'waiting for the client'; a move ready for review becomes 'approve'", () => {
+    const ov = o({ requirements: { "req-events-testimonial": { choice: "request" } }, moveStates: { "m-events-meta": "ready_for_review" } });
+    const kinds = derivedNeeds(pp("p-events"), moves(ov), REQUIREMENTS, ov, BUILDERS).map((n) => n.kind);
+    expect(kinds).toContain("client_material");
+    expect(kinds).toContain("missing_approval");
+  });
+});
+
+describe("tenant isolation in fixtures", () => {
+  it("every priority, move, requirement and the policy belong to the one demo client", () => {
+    for (const p of PRIORITIES) expect(p.clientId).toBe(PLAN_CLIENT.id);
+    for (const m of [...MOVES, ...PROPOSED_MOVES]) expect(PRIORITIES.find((p) => p.id === m.priorityId)?.clientId).toBe(PLAN_CLIENT.id);
+    for (const r of REQUIREMENTS) expect(PRIORITIES.find((p) => p.id === r.priorityId)?.clientId).toBe(PLAN_CLIENT.id);
+    expect(CLIENT_APPROVAL_POLICY.clientId).toBe(PLAN_CLIENT.id);
+    expect(PLAN_OCTOBER.client.id).toBe(PLAN_CLIENT.id);
   });
 });

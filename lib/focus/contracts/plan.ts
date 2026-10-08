@@ -20,10 +20,12 @@ export type Client = ClientRef & { slug: string };
 /* ---------- lifecycle ---------- */
 
 /**
- * The one lifecycle every move has (spec §8). Not every move passes through every state. "Needs attention" and
- * "optimization in progress" are NOT states — they are overlays on a move (`attention`, `optimizing`).
+ * The one lifecycle every move has (spec §8, locked): idea → planned → building → ready for review → approved → live →
+ * paused / ended. Not every move passes through every state. "Needs attention", "optimization in progress" and
+ * "waiting for approval" are NOT states — the first two are overlays on a move (`attention`, `optimizing`), the third is
+ * a readiness status inside `ready_for_review` (see `Readiness`).
  */
-export type MoveState = "idea" | "planned" | "building" | "waiting_approval" | "approved" | "live" | "paused" | "ended";
+export type MoveState = "idea" | "planned" | "building" | "ready_for_review" | "approved" | "live" | "paused" | "ended";
 
 export type MoveType = "paid_search" | "paid_social" | "organic_series" | "outreach" | "crm_sequence" | "event" | "partnership";
 export type Channel = "google" | "meta" | "linkedin" | "instagram" | "whatsapp" | "email" | "website" | "offline";
@@ -106,15 +108,27 @@ export type Plan = {
   nextReview: { day: number; label: string };
 };
 
-/** A gap the Plan must close: expected contributions below the goal, or a measurement source missing. */
+/**
+ * A Plan need (spec §8): a derived gap between what the Plan decided and what exists. The Plan types the planning
+ * kinds (coverage gap, no measurement source); the build-level kinds are derived from readiness (`derivedNeeds`) and
+ * resolved by Marketing, the client or Approvals — the Plan only surfaces them. Channel access is V2.
+ */
+export type PlanNeedKind =
+  | "coverage_gap" | "no_measurement"
+  | "not_built" | "missing_content" | "client_material" | "missing_tracking" | "missing_approval";
+
 export type PlanNeed = {
   id: string;
   priorityId: string;
-  kind: "coverage_gap" | "no_measurement";
+  kind: PlanNeedKind;
+  /** the move the need belongs to (build-level kinds) */
+  moveId?: string;
   /** amount short, in the goal's unit (coverage gaps only) */
   short?: number;
   title: string;
   detail: string;
+  /** who resolves it, in words ("שיווק", "הלקוח", "אישורים") */
+  resolver?: string;
 };
 
 /* ---------- moves ---------- */
@@ -165,6 +179,11 @@ export type Move = {
   recommendationId: string | null;
   /** the builder that builds it, when one exists */
   builderId?: string;
+  /**
+   * How results are counted when platform tracking cannot count them (spec §8): the destination's own reports against
+   * a baseline, or asking at the point of sale. Set before review; feeds the Goal's source.
+   */
+  measurementAgreement?: string;
   /** a line in the overview's "missing / awaiting" column */
   overviewNote?: string;
   ownerId: PersonId;
@@ -190,7 +209,23 @@ export type Recommendation = {
 /** Asset availability — three distinct words; "awaiting approval" is never merged with "missing". */
 export type AssetAvailability = "approved" | "awaiting_approval" | "missing";
 
-export type CoverOption = "existing" | "generate" | "ai_client" | "request" | "upload";
+/**
+ * The four canonical ways to cover a requirement (spec §9). An upload from the computer is how material arrives under
+ * "use existing" (or a client request), not a fifth path.
+ */
+export type CoverOption = "existing" | "generate" | "ai_client" | "request";
+
+/**
+ * Authenticity class (spec §9): decides which cover paths are allowed. Must-be-authentic material (a testimonial, real
+ * customers or staff, a real event setup) is never generated; brand-fixed material comes from the approved library
+ * only; adaptable client material may be AI-adapted; illustrative material may be generated.
+ */
+export type AuthenticityClass = "authentic" | "brand_fixed" | "adaptable" | "illustrative";
+
+export type AssetType = "photo" | "video" | "testimonial" | "logo" | "copy" | "landing_page" | "graphic";
+
+/** Who must approve the asset before paid use — from the Client Approval Policy. */
+export type ApproverKind = "client" | "operator";
 
 export type ContentRequirement = {
   id: string;
@@ -201,20 +236,63 @@ export type ContentRequirement = {
   gapLabel: string;
   /** the move or slot it serves ("Meta לידים", "Google Search · תוספי תמונה") */
   forLabel: string;
+  /** the spec in one line, for display ("9:16 · 15–30 שניות · לקוח אמיתי") — the typed fields below are the source */
   spec: string;
+  assetType: AssetType;
+  /** aspect ratio(s) ("9:16", "1:1 / 4:5") */
+  format: string;
+  /** pixel dimensions, when they matter */
+  dimensions?: string;
+  /** video length, when it matters ("15–30 שניות") */
+  duration?: string;
+  quantity: number;
+  /** the role in the move ("תמונת פתיחה לקהל החדש") */
+  purpose: string;
+  /** channel / placement ("Meta · סטורי ורילס") */
+  placement: string;
   neededByDay: number | null;
+  authenticity: AuthenticityClass;
+  /** who must approve the material before paid use (from the Client Approval Policy) */
+  approval: ApproverKind;
   /** one slot per asset the requirement needs, each with its availability */
   slots: AssetAvailability[];
   /** builder creatives this requirement is made of — their approval state is the slots' state */
   creativeIds?: string[];
   /** live = already running ("פעיל") instead of a needed-by date */
   live?: boolean;
-  /** Brain rule that blocks generating a new asset (e.g. testimonials must be real) */
-  generateBlockedReason?: string;
   existingCandidates: { id: string; label: string; format: string; note: string }[];
   recommended?: CoverOption;
   aiClientNote?: string;
-  requestNote?: string;
+  /** how to capture the material, for a client request ("לצלם באור טבעי, בלי מוזיקה על דיבור") */
+  captureInstructions?: string;
+};
+
+/** Requirement status (spec §9): open → partly covered → covered → approved. Derived from the slots. */
+export type RequirementStatus = "open" | "partly_covered" | "covered" | "approved";
+
+/**
+ * A Client Material Request (spec §9): what the client must send, exactly, and why. A task of kind "client request"
+ * with this structured payload; sending is manual in V1 (WhatsApp / email by a person). One open request per
+ * requirement.
+ */
+export type ClientMaterialRequest = {
+  id: string;
+  requirementId: string;
+  moveId: string;
+  priorityId: string;
+  /** the move's name as the client knows it ("אירועים עסקיים — Meta לידים") */
+  title: string;
+  items: { what: string; quantity: number; format: string; duration?: string }[];
+  neededByDay: number;
+  /** why it is needed: the move and its launch date */
+  why: string;
+  captureInstructions: string;
+  /** where to put the material (V1: a manual location placeholder, Drive later) */
+  uploadTo: string;
+  /** the Work task created with the request */
+  taskId: string;
+  /** marked by a person after sending by hand (V1 has no automated sending) */
+  sentAt: IsoDate | null;
 };
 
 export type AssetSummary = {
@@ -307,6 +385,70 @@ export type CreateMoveNeed = {
   approvalNote?: string;
 };
 
+/* ---------- client approval policy ---------- */
+
+/** The actions a Client Approval Policy routes (spec §4). The Plan-level actions always need the Client (the floor). */
+export type ApprovalAction =
+  | "plan" | "direction" | "variants" | "new_creative" | "material_adaptation" | "minor_adaptation" | "launch" | "in_priority_change";
+
+export type ApprovalPreset = "strict" | "standard" | "delegated" | "custom";
+
+/**
+ * Who approves what for one Client (spec §4): a preset or a custom map. A policy only chooses who approves; it never
+ * removes a human approval the action classes require (`APPROVAL_FLOOR` in state/plan.ts).
+ */
+export type ClientApprovalPolicy = {
+  clientId: string;
+  preset: ApprovalPreset;
+  /** the resolved map (for `custom`, as configured; for a preset, the preset's map) */
+  rules: Record<ApprovalAction, ApproverKind>;
+  /** the people who approve: the client's owner and the operator (marketing manager) */
+  approvers: { client: PersonId; operator: PersonId };
+};
+
+/* ---------- copy: three Move Message Directions ---------- */
+
+/**
+ * A Move Message Direction (spec §8, Copy Builder): one of three genuinely different strategies for a move. The user
+ * compares three, chooses one, and the variants beneath it adapt hook, proof, wording and CTA — never the promise.
+ */
+export type MoveMessageDirection = {
+  id: string;
+  /** the direction's name ("ישיר · ביצועים") */
+  name: string;
+  /** core promise — the one claim every variant keeps */
+  promise: string;
+  /** proof points the variants may draw from (all verified in the Brain) */
+  proof: string[];
+  tone: string;
+  /** primary call-to-action intent ("קבלו הצעת מחיר") */
+  cta: string;
+  /** one line: why this direction for this move */
+  why: string;
+  /** words of the core promise every variant must keep (conformance check) */
+  anchors: string[];
+  /** a fact the Brain cannot verify — flagged, never invented ("מחיר לא במוח העסק — אשר או הסר") */
+  flag?: string;
+};
+
+/** A variant under a direction: one copy slot (Meta: an ad set by temperature; Google: an ad group / search intent). */
+export type CopyVariant = {
+  id: string;
+  directionId: string;
+  /** the slot: "warm" | "lookalike" | "cold" for Meta; the ad-group key for Google */
+  slot: string;
+  slotLabel: string;
+  /** the audience / intent in words ("מי שכבר מכיר אותנו") */
+  audience: string;
+  hook: string;
+  body: string;
+  headline: string;
+  cta: string;
+};
+
+/** The ways a chosen direction can be refined without a prompt. */
+export type RefineKey = "shorter" | "warmer" | "more_proof" | "lead_offer";
+
 /* ---------- builders ---------- */
 
 export type DecisionKey = "promote" | "result" | "audience" | "budget" | "acceptable";
@@ -352,4 +494,36 @@ export type BuilderProposal = {
   launchDay: number;
   /** a pre-launch task created on "send for approval" (a missing tracking event) */
   preLaunchTask?: string;
+  /** the three Move Message Directions, the variants beneath each, and three alternatives for "3 כיוונים חדשים" */
+  copy: { directions: MoveMessageDirection[]; variants: CopyVariant[]; alternatives: MoveMessageDirection[] };
+  /** a platform choice fixed at creation (Meta: classic vs dynamic creative) — shown before build, never silently defaulted */
+  irreversible?: { label: string; chosen: string; note: string };
+  /**
+   * Tracking in V1 is never verified by a connection: `checked` = what a person declared by hand ("מוצהר ידנית"),
+   * `missing` = what is known to be missing. Readiness shows Tracking as UNKNOWN (a risk) until a connection exists.
+   */
+  tracking: { checked: string[]; missing: string[] };
+  /** the destination (landing page / lead form) and whether it exists */
+  destination: { label: string; exists: boolean };
+};
+
+/* ---------- readiness (derived) ---------- */
+
+export type ReadinessDimension = "strategy" | "targeting" | "budget" | "copy" | "creative" | "landing" | "tracking" | "approval";
+export type ReadinessState = "ready" | "waiting" | "missing" | "blocked" | "unknown";
+
+export type ReadinessOverall =
+  | "blocked" | "waiting_client" | "missing" | "waiting_generation" | "ready_for_review" | "waiting_approval" | "approved";
+
+export type Readiness = {
+  dims: Record<ReadinessDimension, { state: ReadinessState; text: string; /** who acts (WAITING) */ actor?: string }>;
+  overall: ReadinessOverall;
+  /** who the move waits for, when it waits for approval */
+  approver?: string;
+  /** exactly one next action */
+  next: { label: string; actor: string };
+  /** at most two blocking items */
+  blockers: string[];
+  /** UNKNOWN tracking: a risk shown explicitly; approval needs an acknowledgment */
+  trackingRisk: boolean;
 };
