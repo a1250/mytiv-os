@@ -3,6 +3,8 @@
 import { useId, useState } from "react";
 import type { BuilderProposal, RefineKey } from "@/lib/focus/contracts/plan";
 import { REFINE_WORD, copyState, directionFlags, variantConforms } from "@/lib/focus/state/plan";
+import Link from "@/components/focus/ui/link";
+import { R } from "@/lib/focus/routes";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
 import { DemoNote } from "./plan-parts";
@@ -44,7 +46,11 @@ export function CopyDirections({ b, plan, editable }: { b: BuilderProposal; plan
                 <dt>קריאה לפעולה</dt><dd>{d.cta}</dd>
               </dl>
               <p className="f-pl-meta f-pl-dir__why"><b>למה:</b> {d.why}</p>
-              {flags.map((f) => <p key={f} className="f-pl-note f-pl-note--amber f-pl-dir__flag"><b>לאימות:</b> {f}</p>)}
+              {flags.map((f) => (
+                <p key={f} className="f-pl-note f-pl-note--amber f-pl-dir__flag">
+                  <b>לאימות:</b> {f} <Link className="f-pl-link" href={R.clientBrain("umino")}>אמת במוח העסק ‹</Link>{chosen && <> · או בחרו כיוון אחר</>}
+                </p>
+              ))}
               <div className="f-pl-dir__acts">
                 {editable
                   ? <Button size="sm" variant={chosen ? "secondary" : "strong"} block onClick={() => plan.chooseDirection(b.id, d.id)} disabled={chosen} disabledReason={chosen ? "זה הכיוון שנבחר" : undefined}>{chosen ? "נבחר" : "בחר כיוון זה"}</Button>
