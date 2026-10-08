@@ -23,6 +23,48 @@ Semantic rules enforced in code: planned coverage is always shown as "כיסוי
 "דורש תשומת לב" is an overlay, not a state; "שינוי בביצוע" (optimizing) is activity detail, not a state; asset
 availability keeps approved / awaiting approval / missing distinct; one move → one priority; calendar-month periods.
 
+## V1 completion (canonical Product Model rev 110, gap review backlog)
+
+- Lifecycle is the locked chain `idea → planned → building → ready_for_review → approved → live → paused / ended`
+  (`LIFECYCLE`). "Waiting for approval" is a readiness status inside `ready_for_review`, never a state; an older session
+  overlay holding `waiting_approval` is migrated on read (`readOverlay`).
+- Campaign Readiness (`readiness()`, `patterns/plan/readiness.tsx`): eight dimensions — strategy, targeting, budget,
+  copy, creative, landing, tracking, approval — each READY / WAITING / MISSING / BLOCKED / UNKNOWN with the reason;
+  one overall status (first match wins), exactly one next action, at most two blockers. Derived, never stored, never
+  lifecycle. Building → "שלח לבדיקה" only when every dimension except Approval is ready or unknown.
+- Tracking in V1 is UNKNOWN unless a move carries a manual measurement agreement: shown as a risk ("לא נבדק (V1)"),
+  never as healthy or zero; it does not block review; approval needs the acknowledgment checkbox (`trackingAck`).
+  Builder fixtures carry what was declared by hand (`tracking.checked`) and what is known missing (`tracking.missing`).
+- Client Approval Policy (`CLIENT_APPROVAL_POLICY`, UMINO = STANDARD): who approves direction / variants / new
+  creative / material adaptation / minor adaptation / launch / in-priority change; `APPROVAL_FLOOR` keeps the Plan and
+  material adaptations with the client under every preset. Readiness's Approval dimension lists the open approvals
+  with their approver; the builder's footer gives them one by one (demo viewer = the client's owner; operator approvals
+  are given "as דנה" with a note). `delegatedLaunchAllowed()` encodes owner decision L14.
+- Copy Builder (`patterns/plan/copy-directions.tsx`): three Move Message Directions per builder (promise, proof, tone,
+  CTA, one-line why, `anchors` = the promise words every variant keeps, an optional unverified-fact `flag`); choose
+  one → its variants (Meta: warm / lookalike / cold; Google: per ad group); refine chips (shorter / warmer / more
+  proof / lead with the offer) keep the anchors; "3 כיוונים חדשים" swaps to `copy.alternatives`; "שלב את ההוכחה"
+  combines a proof point. `variantConforms()` refuses a variant that drops an anchor or carries a refused claim. All
+  fixtures; no model is called; no prompt box.
+- Content requirements are typed (`assetType`, `format`, `dimensions`, `duration`, `quantity`, `purpose`,
+  `placement`, `neededByDay`, `authenticity`, `approval`); status open → partly covered → covered → approved
+  (`requirementStatus`). Four cover paths; `allowedPaths(class)` / `pathRefusal()` — authentic material (testimonial,
+  real dishes) is never generated or adapted from other footage, brand-fixed comes from the library only, adaptable
+  may be AI-adapted, illustrative may be generated; refused paths stay visible, disabled, with the reason. An upload
+  from the computer arrives under "use existing". `requestTooLate()` proposes an interim fallback inside the class.
+- Client Material Request (`patterns/plan/client-request-sheet.tsx`, `buildClientRequest()`): what, quantity, format,
+  duration, needed-by, why (move + launch), capture instructions, upload placeholder, linked requirement; one per
+  requirement (id derived from it); creates one Work task whose notes carry the same text; sending is manual (copy
+  text → "סמן כנשלח ידנית"). The requirement stays missing until the material arrives; readiness waits for the client.
+- Plan needs: planning kinds typed in the Plan (coverage gap, no measurement source) + build-level kinds derived from
+  readiness (`derivedNeeds`: not built, missing content, client material, missing approval), each with its resolver;
+  the Overview drill-down lists them. V1 has no connections: "no measurement source" routes to the Plan (set by hand),
+  never to a connections screen.
+- Builders are labelled "הצעה לדוגמה · אין חיבור (V1)"; earlier-move figures are "הוזן ידנית"; Meta shows the
+  irreversible classic-vs-dynamic creative choice under "פרטים לבדיקה"; the lead form lists the privacy link and the
+  thank-you screen; the Meta structure follows the three-temperature template with mutual exclusions (Channel Policy
+  seeded from the Meta skill as fixture reference only — no API path).
+
 Deliberate deviations from the package (for review):
 - Plan "today" is 7.10 (the package's snapshot); the global Focus demo clock stays 1.10 for the reviewed flows.
 - Money uses the Focus format (`6,000 ₪`), not `₪6,000`.

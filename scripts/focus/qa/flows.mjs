@@ -676,7 +676,7 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     await dlg.getByLabel(/מנושא אחר/).check();
     await apply.click();
     const t = await page.textContent(".f-pl-bmain");
-    return t.includes("2,500") && t.includes("דורש אישור בעלים") ? "2,500 from another priority (owner approval)" : false;
+    return t.includes("2,500") && t.includes("דורש אישור לקוח") ? "2,500 from another priority (client approval)" : false;
   });
   await check("plan: unverified claim blocks the text change", async () => {
     await page.getByRole("button", { name: "שנה · מה מקדמים" }).click();
@@ -686,10 +686,49 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     await dlg.getByRole("button", { name: "ביטול" }).click();
     return err.includes("טענה שלא אושרה") ? "blocked" : false;
   });
-  await check("plan: send → waiting approval (+ tracking task) → owner approve → mark live needs an https link", async () => {
-    await btn("שלח לאישור").click();
-    await page.getByText("ממתין לאישור", { exact: true }).first().waitFor();
-    await btn("אשר כבעלים").click();
+  await check("plan: readiness blocks review until a Move Message Direction is chosen (one next action)", async () => {
+    const ready = await page.locator("#readiness").textContent();
+    if (!ready.includes("בחר כיוון מסר")) return `next action: ${ready.slice(0, 80)}`;
+    const send = btn("שלח לבדיקה");
+    if (!((await send.getAttribute("aria-disabled")) === "true" || (await send.isDisabled()))) return "send enabled before a direction";
+    const dirs = await page.locator(".f-pl-dir").count();
+    if (dirs !== 3) return `${dirs} directions`;
+    const names = await page.locator(".f-pl-dir__name").allTextContents();
+    return new Set(names).size === 3 ? `3 directions: ${names.join(" / ")}` : "directions repeat";
+  });
+  await check("plan: choose a direction → variants per ad group appear; refine keeps the promise; 3 new directions swap the set", async () => {
+    await page.getByRole("button", { name: "בחר כיוון זה" }).first().click();
+    if (!(await page.locator(".f-pl-dir--on").count())) return "no chosen card";
+    await page.getByRole("button", { name: /^הגרסאות מתחת לכיוון/ }).click();
+    const n = await page.locator(".f-pl-variant").count();
+    if (n !== 2) return `${n} variants (expected 2 ad groups)`;
+    if (await page.locator(".f-pl-variant .f-pl-red").count()) return "a variant lost the promise";
+    await page.getByRole("button", { name: "קצר יותר" }).click();
+    if (await page.locator(".f-pl-variant .f-pl-red").count()) return "shorter broke the promise";
+    await page.getByRole("button", { name: "3 כיוונים חדשים" }).click();
+    const alt = await page.locator(".f-pl-dir__name").allTextContents();
+    await page.getByRole("button", { name: /חזרה לשלושת הכיוונים/ }).click();
+    return alt.join(",").includes("מקומי") ? "variants ok · refine ok · 3 new ok" : `alt: ${alt.join(",")}`;
+  });
+  await check("plan: UNKNOWN tracking is shown as a risk, never healthy; send for review still allowed", async () => {
+    await page.getByRole("button", { name: "בחר כיוון זה" }).first().click();
+    const ready = await page.locator("#readiness").textContent();
+    if (!/מעקב.*לא ידוע.*סיכון/.test(ready.replace(/\s+/g, " "))) return "tracking not shown as unknown risk";
+    if (/מעקב[^.]*✓/.test(ready)) return "tracking shows a checkmark";
+    const send = btn("שלח לבדיקה");
+    return (await send.getAttribute("aria-disabled")) !== "true" && !(await send.isDisabled()) ? "unknown tracking does not block review" : "send blocked";
+  });
+  await check("plan: send → ready for review (+ tracking task) → approvals by the Client's policy, after acknowledging the tracking risk → approved → mark live needs https", async () => {
+    await btn("שלח לבדיקה").click();
+    await page.locator(".f-pl-bhead").getByText("מוכן לבדיקה", { exact: true }).waitFor();
+    const foot = await page.locator(".f-pl-bdfoot").textContent();
+    if (!foot.includes("ממתין לאישור") || !foot.includes("רון")) return `approver not named: ${foot.slice(0, 120)}`;
+    const first = page.getByRole("button", { name: /^אשר: כיוון המסר · כרון/ });
+    if (!((await first.getAttribute("aria-disabled")) === "true" || (await first.isDisabled()))) return "approval allowed before the tracking acknowledgment";
+    await page.getByRole("checkbox", { name: /מכיר\/ה בכך שהמעקב לא נבדק/ }).check();
+    await first.click();
+    await page.getByRole("button", { name: /^אשר: גרסאות הטקסט · כדנה/ }).click();
+    await page.getByRole("button", { name: /^אשר: השקת המהלך · כרון/ }).click();
     await btn("סמן כפעיל").click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("קישור לקמפיין").fill("ads.google.com/x");
@@ -701,18 +740,46 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     const stored = await page.evaluate(() => Object.keys(sessionStorage).map((k) => sessionStorage.getItem(k)).join(" "));
     return stored.includes("בדיקת אירוע המרה") ? "live + pre-launch tracking task in the demo store" : "live, but no tracking task";
   });
-  await check("plan: Meta builder — approving both awaiting creatives clears the awaiting count", async () => {
+  await check("plan: Meta builder — a testimonial is never generated: 'צור חדש' and 'AI + נכס' are disabled with a reason; 'בקש מהלקוח' is recommended", async () => {
     await go(page, "/focus/plan/build/events-meta");
+    await page.getByRole("button", { name: "כסה · סרטון המלצה מלקוח עסקי" }).click();
+    const dlg = page.getByRole("dialog");
+    const t = await dlg.textContent();
+    const off = await dlg.locator(".f-pl-cover__opt--off").allTextContents();
+    if (!off.some((x) => x.includes("צור חדש")) || !off.some((x) => x.includes("AI + נכס"))) return `off: ${off.join(" | ")}`;
+    if (!t.includes("חייב להיות אמיתי")) return "authenticity class not shown";
+    return t.includes("בקש מהלקוח") ? "generate + adapt refused with reasons; request recommended" : false;
+  });
+  await check("plan: 'בקש מהלקוח' → a structured request (what, quantity, format, duration, by when, why, how to capture, where) + a Work task; manual send", async () => {
+    const dlg = page.getByRole("dialog");
+    await dlg.getByRole("button", { name: /^התחל עם בקש מהלקוח/ }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "צור בקשה ומשימה" }).click();
+    const t = (await sheet.textContent()).replace(/\s+/g, " ");
+    for (const k of ["מה צריך", "1 × סרטון המלצה", "9:16", "15–30 שניות", "עד מתי", "18.10", "בשביל מה", "איך לצלם", "להעלות ל"]) if (!t.includes(k)) return `missing ${k}`;
+    const txt = await sheet.locator("textarea").inputValue();
+    if (!txt.includes("אנחנו צריכים")) return "no request text";
+    await sheet.getByRole("button", { name: "סמן כנשלח ידנית" }).click();
+    await sheet.getByText("נשלח ידנית · ממתין לחומר מהלקוח").waitFor();
+    await sheet.getByRole("button", { name: "סגור חלון", exact: true }).click();
+    const stored = await page.evaluate(() => Object.keys(sessionStorage).map((k) => sessionStorage.getItem(k)).join(" "));
+    const ready = (await page.locator("#readiness").textContent()).replace(/\s+/g, " ");
+    return stored.includes("בקשה מהלקוח: סרטון המלצה") && ready.includes("ממתין לחומר מהלקוח") ? "request + task · readiness waits for the client" : `ready: ${ready.slice(0, 100)}`;
+  });
+  await check("plan: Meta builder — approving both awaiting creatives clears the awaiting count", async () => {
     if (!(await page.textContent("#creative")).includes("2 ממתינים")) return "not 2 awaiting";
     await page.getByRole("button", { name: /^אשר · / }).first().click();
     await page.getByRole("button", { name: /^אשר · / }).first().click();
     return (await page.locator("#creative .f-pl-good").count()) === 3 ? "3 approved" : false;
   });
-  await check("plan: blocked builder cannot be sent", async () => {
+  await check("plan: blocked builder cannot be sent; readiness says BLOCKED with the Brain reason and the missing destination", async () => {
     await go(page, "/focus/plan/build/fallmenu-meta");
     await btn("התחל לבנות").click();
-    const send = btn("שלח לאישור");
-    return (await send.getAttribute("aria-disabled")) === "true" || (await send.isDisabled()) ? "send disabled with reason" : false;
+    const send = btn("שלח לבדיקה");
+    const ready = (await page.locator("#readiness").textContent()).replace(/\s+/g, " ");
+    if (!ready.includes("חסום") || !ready.includes("לא אושר לפרסום")) return `ready: ${ready.slice(0, 100)}`;
+    if (!ready.includes("עוד לא קיים")) return "missing destination not shown";
+    return (await send.getAttribute("aria-disabled")) === "true" || (await send.isDisabled()) ? "send disabled with reason · blocked readiness" : false;
   });
   await check("plan: accept recommendation → tasks created, routed to Marketing", async () => {
     await go(page, "/focus/plan/moves");
@@ -807,12 +874,18 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     const nums = await page.locator(".f-pl-cal__row--head .f-pl-cal__dnum").allTextContents();
     return nums.join(",") === "4,5,6,7,8,9,10" ? "7 days" : nums.join(",");
   });
-  await check("plan: asset cover 'ask the client' creates a task and stays missing", async () => {
+  await check("plan: asset cover 'ask the client' → structured request + task; the asset stays missing", async () => {
     await go(page, "/focus/plan/assets?req=req-delivery-dishes");
     const panel = page.locator(".f-pl-assets__panel");
+    if (!(await panel.textContent()).includes("חייב להיות אמיתי")) return "authenticity class not shown";
     await panel.getByRole("button", { name: /^בקש מהלקוח/ }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "צור בקשה ומשימה" }).click();
+    const st = (await sheet.textContent()).replace(/\s+/g, " ");
+    if (!st.includes("4 × תמונות מנות תפריט סתיו") || !st.includes("22.10")) return `sheet: ${st.slice(0, 120)}`;
+    await sheet.getByRole("button", { name: "סגור חלון", exact: true }).click();
     const t = await panel.textContent();
-    return t.includes("נוצרה משימה") && t.includes("חסר") ? "task + still missing" : false;
+    return t.includes("נבחר: בקש מהלקוח") && t.includes("חסר") ? "request + task, still missing" : `panel: ${t.slice(0, 120)}`;
   });
   await check("plan: November empty state → copy from October makes a draft", async () => {
     await go(page, "/focus/plan?period=2026-11");
