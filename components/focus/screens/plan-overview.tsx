@@ -12,7 +12,7 @@ import { Banner, EmptyState } from "@/components/focus/ui/feedback";
 import { TextAreaField, TextField } from "@/components/focus/ui/field";
 import { cx } from "@/components/focus/ui/cx";
 import { AttentionTag, CoverageBar, GoalLine, Money, MoveStateTag, Num, OptimizingTag, PlanFrame, PriorityStatusChip, Unknown, WeekNote, DemoNote, usePlanParams } from "@/components/focus/patterns/plan/plan-parts";
-import { awaitingCreatives, expectedText, moveNote, priorityOf, weekMoveIds } from "@/components/focus/patterns/plan/plan-view";
+import { expectedText, moveNote, priorityOf, weekMoveIds } from "@/components/focus/patterns/plan/plan-view";
 import { PLAN_ROUTES, usePlan, type PlanApi } from "@/components/focus/patterns/plan/use-plan";
 import { CreateMovePanel } from "@/components/focus/patterns/plan/create-move";
 import { R } from "@/lib/focus/routes";
@@ -32,7 +32,8 @@ function Overview() {
   const { period, week } = usePlanParams();
   if (period.month !== "2026-10") return <PlanFrame view="overview"><NextPeriod plan={plan} /></PlanFrame>;
   const pps = PLAN_OCTOBER.priorities;
-  const actions = new Map(pps.map((pp) => [pp.priorityId, nextAction(pp, plan.moves, REQUIREMENTS, plan.overlay, plan.f, PLAN_ROUTES)]));
+  // the same source as the builder: a move with a builder speaks through its readiness
+  const actions = new Map(pps.map((pp) => [pp.priorityId, nextAction(pp, plan.moves, REQUIREMENTS, plan.overlay, plan.f, PLAN_ROUTES, plan.readinessOf)]));
   const decisions = pps.filter((pp) => actions.get(pp.priorityId)!.kind === "decision");
   const gaps = pps.flatMap((pp) => openNeeds(pp, plan.moves).filter((n) => n.kind === "coverage_gap").map((n) => ({ pp, n })));
   const count = pps.length + plan.overlay.proposedPriorities.length;
@@ -42,14 +43,13 @@ function Overview() {
     <PlanFrame view="overview" controls={<span className="f-pl-meta">{PLAN_OCTOBER.nextReview.label}</span>}>
       <div className="f-pl-summary">
         <span>תקציב <Money v={plan.budget.total} strong /></span><span className="f-pl-sep" aria-hidden>·</span>
-        <span><Money v={plan.budget.unallocated} strong /> לא מוקצה{plan.budget.pendingFromUnallocated > 0 && <span className="f-pl-meta"> · <Money v={plan.budget.pendingFromUnallocated} /> מוצעים, ממתין לאישור בעלים</span>}</span>
+        <span><Money v={plan.budget.unallocated} strong /> לא מוקצה{plan.budget.pendingFromUnallocated > 0 && <span className="f-pl-meta"> · <Money v={plan.budget.pendingFromUnallocated} /> מוצעים, ממתין לאישור הלקוח</span>}</span>
         <span className="f-pl-summary__spacer" />
         {decisions.map((pp) => {
           const a = actions.get(pp.priorityId)!;
-          const mv = movesOf(pp, plan.moves).find((m) => awaitingCreatives(m, plan.overlay, plan.f.builders) > 0);
           return (
             <Link key={pp.priorityId} href={a.href ?? R.plan} className="f-pl-alert f-pl-alert--wait">
-              <b>ממתין לך</b> · {mv ? `${awaitingCreatives(mv, plan.overlay, plan.f.builders)} קריאייטיבים ל־${mv.channelLabel}` : a.label} · {priorityOf(pp.priorityId).shortName}
+              <b>הפעולה הבאה</b> · {a.label} · {priorityOf(pp.priorityId).shortName}
             </Link>
           );
         })}

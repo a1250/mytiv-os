@@ -139,7 +139,7 @@ function RequirementPanel({ req, plan, onDone }: { req: ContentRequirement; plan
   const chosen = plan.overlay.requirements[req.id];
   const choose = (choice: CoverOption, extra: { assetId?: string; fileName?: string } = {}) => {
     if (choice === "request") { setRequest(true); return; }
-    plan.coverRequirement(req.id, choice, { assetId: extra.assetId });
+    if (!plan.coverRequirement(req.id, choice, { assetId: extra.assetId })) { toast.push({ kind: "error", title: "הדרך הזו לא מותרת לסוג הנכס", detail: req.title }); return; }
     toast.push({ title: `${COVER_WORD[choice]} · ${req.title}`, detail: "הנכס ממתין לאישור לפני שימוש" });
     onDone?.();
   };
@@ -163,7 +163,7 @@ function RequirementPanel({ req, plan, onDone }: { req: ContentRequirement; plan
       ) : (
         <>
           <CoverOptions req={req} chosen={chosen} today={plan.today} onChoose={choose} onClear={() => plan.clearRequirement(req.id)} />
-          {chosen?.choice === "request" && <Button variant="secondary" onClick={() => setRequest(true)}>הבקשה ללקוח</Button>}
+          {(chosen?.choice === "request" || plan.overlay.requests[req.id]) && <Button variant="secondary" onClick={() => setRequest(true)}>הבקשה ללקוח</Button>}
         </>
       )}
       <ClientRequestSheet req={request ? req : null} plan={plan} open={request} onClose={() => { setRequest(false); onDone?.(); }} />

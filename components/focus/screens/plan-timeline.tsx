@@ -552,7 +552,7 @@ function DayItemBody({ plan, it, warns, onClose }: { plan: PlanApi; it: DayItem;
         )}
         {mode === "move" && <SelectField label="תאריך מדויק" value={d} onChange={(e) => setD(e.target.value)} options={days} />}
         {mode === "approval" && (requested
-          ? <p className="f-pl-note">בקשה להזזה ל־{dayLabel(requested)} ממתינה לאישור בעלים. <DemoNote>האישור מדומה באב טיפוס</DemoNote></p>
+          ? <p className="f-pl-note">בקשה להזזה ל־{dayLabel(requested)} ממתינה לאישור הלקוח. <DemoNote>האישור מדומה באב טיפוס</DemoNote></p>
           : <>
             <p className="f-pl-note f-pl-note--amber">{DAY_TYPE[it.type].word} של מהלך במצב &quot;{m ? MOVE_STATE[m.state].word : ""}&quot; הוא שינוי תוכנית: הזזה פותחת בקשת אישור, ושום דבר לא זז עד שבעלים מאשר.</p>
             <SelectField label="להזיז ל־" value={d} onChange={(e) => setD(e.target.value)} options={days} />
@@ -597,7 +597,7 @@ function BarBody({ plan, it, m, onClose }: { plan: PlanApi; it: TimelineItem; m:
           <div className="f-pl-form">
             <p className="f-pl-note f-pl-note--amber">הזזת תקופה של מהלך פעיל או כזה שדורש אישור פותחת בקשת אישור. שום דבר לא זז עד שבעלים מאשר.</p>
             {requested
-              ? <p className="f-pl-note">בקשה להזזה ל־{dayLabel(requested)} ממתינה לאישור בעלים. <DemoNote>האישור מדומה באב טיפוס</DemoNote></p>
+              ? <p className="f-pl-note">בקשה להזזה ל־{dayLabel(requested)} ממתינה לאישור הלקוח. <DemoNote>האישור מדומה באב טיפוס</DemoNote></p>
               : <SelectField label="להזיז ל־" value={start} onChange={(e) => setStart(e.target.value)} options={days} />}
           </div>
         )}

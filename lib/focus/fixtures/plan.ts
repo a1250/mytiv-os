@@ -172,10 +172,10 @@ export const CREATE_MOVE_NEEDS: CreateMoveNeed[] = [
       plan: "הזמנות שקיעה · יעד 320 הזמנות · אוקטובר · תרומה צפויה 20",
       brain: "ארוחת שקיעה 18:00–19:30 · נמל תל אביב · דף umino.co.il/sunset · אסור: \"הנוף הכי יפה בעיר\"",
       assets: "6 תמונות מאושרות לפרסום ממומן, 4 מתאימות ל־Google",
-      earlier: "Google Search · משלוחים: עלות להמרה ₪58, ביטויים עם \"ים\" הביאו 61%",
+      earlier: "Google Search · משלוחים (הוזן ידנית · נתוני הדגמה): עלות להמרה ₪58, ביטויים עם \"ים\" הביאו 61%",
     },
     autoFilled: { type: "קמפיין ממומן", purpose: "הזמנות", dates: "9–31.10", owner: "דנה" },
-    approvalNote: "התקציב יגיע מ־₪1,200 הלא מוקצים. זה שינוי בחלוקת התוכנית ולכן יעבור לאישור בעלים.",
+    approvalNote: "התקציב יגיע מ־₪1,200 הלא מוקצים. זה שינוי בחלוקת התוכנית ולכן יעבור לאישור הלקוח.",
   },
 ];
 
@@ -359,7 +359,7 @@ export const DAY_ITEMS: DayItem[] = [
   ...[8, 15, 22, 29].map((d) => day(`di-eg-opt-${d}`, d, "optimization_review", "בדיקת אופטימיזציה · Google Search", "p-events", "m-events-google", "planned")),
   day("di-eg-review-15", 15, "campaign_review", "סקירת אמצע חודש · Google Search", "p-events", "m-events-google", "planned"),
   day("di-em-creatives", 9, "creative_due", "3 קריאייטיבים אנכיים 9:16", "p-events", "m-events-meta", "in_progress", { needs: { requirementId: "req-events-vertical" } }),
-  day("di-em-approval", 11, "approval_due", "אישור בעלים · Meta לידים", "p-events", "m-events-meta", "planned"),
+  day("di-em-approval", 11, "approval_due", "אישור לקוח · Meta לידים", "p-events", "m-events-meta", "planned"),
   day("di-em-launch", 13, "launch", "השקת Meta לידים", "p-events", "m-events-meta", "planned", { needs: { requirementId: "req-events-vertical", approvalItemId: "di-em-approval" } }),
   day("di-em-testimonial", 18, "creative_due", "סרטון המלצה מלקוח עסקי", "p-events", "m-events-meta", "planned", { needs: { requirementId: "req-events-testimonial" } }),
   day("di-em-next", 20, "creative_refresh", "קריאייטיב חדש לשבוע השני", "p-events", "m-events-meta", "planned", { needs: { requirementId: "req-events-next" } }),
@@ -431,8 +431,8 @@ export const BUILDERS: BuilderProposal[] = [
     copy: {
       directions: [
         { id: "d-sg-direct", name: "ישיר · הזמנה מיידית", promise: "שולחן ל־18:00 מול הים, באישור מיידי", proof: ["אישור מיידי במערכת ההזמנות", "18:00–19:30", "נמל תל אביב"], tone: "ענייני וקצר", cta: "הזמינו שולחן", why: "מי שמחפש \"מסעדה עם שקיעה\" כבר רוצה להזמין; הכיוון נותן לו את הדרך הקצרה.", anchors: ["שקיעה", "הזמינו"] },
-        { id: "d-sg-mood", name: "חוויה · ערב מול הים", promise: "ארוחת ערב מוקדמת עם השקיעה ברקע", proof: ["מרפסת מול הים", "תפריט סתיו חדש"], tone: "חם ומזמין", cta: "שמרו מקום לשקיעה", why: "השקיעה היא ההבדל בין UMINO לכל מסעדה אחרת בנמל.", anchors: ["שקיעה"], flag: "\"תפריט סתיו חדש\" — ההשקה ב־22.10, אחרי תחילת המהלך. אשר או הסר." },
-        { id: "d-sg-proof", name: "הוכחה · הנמל מתמלא", promise: "המסעדה בנמל שהזמנות השקיעה שלה מתמלאות", proof: ["40 מקומות בשקיעה ליום", "מעל 1,000 סועדים בשקיעה בספטמבר"], tone: "בטוח", cta: "תפסו שולחן", why: "ביקוש אמיתי משכנע יותר מתיאור.", anchors: ["שקיעה", "נמל"], flag: "\"מעל 1,000 סועדים בספטמבר\" לא במוח העסק — אשר או הסר." },
+        { id: "d-sg-mood", name: "חוויה · ערב מול הים", promise: "ארוחת ערב מוקדמת עם השקיעה ברקע", proof: ["מרפסת מול הים", "תפריט סתיו חדש"], tone: "חם ומזמין", cta: "שמרו מקום לשקיעה", why: "השקיעה היא ההבדל בין UMINO לכל מסעדה אחרת בנמל.", anchors: ["שקיעה"], unverified: ["תפריט סתיו חדש"], flag: "\"תפריט סתיו חדש\" — ההשקה ב־22.10, אחרי תחילת המהלך. אשר או הסר." },
+        { id: "d-sg-proof", name: "הוכחה · הנמל מתמלא", promise: "המסעדה בנמל שהזמנות השקיעה שלה מתמלאות", proof: ["40 מקומות בשקיעה ליום", "מעל 1,000 סועדים בשקיעה בספטמבר"], tone: "בטוח", cta: "תפסו שולחן", why: "ביקוש אמיתי משכנע יותר מתיאור.", anchors: ["שקיעה", "נמל"], unverified: ["מעל 1,000 סועדים בשקיעה בספטמבר"], flag: "\"מעל 1,000 סועדים בספטמבר\" לא במוח העסק — אשר או הסר." },
       ],
       variants: [
         { id: "v-sg-direct-sea", directionId: "d-sg-direct", slot: "sunset-sea", slotLabel: "קבוצה 1 · שקיעה וים", audience: "מי שמחפש \"מסעדה עם שקיעה\"", hook: "שולחן מול השקיעה ל־18:00", body: "ארוחת ערב מוקדמת מול הים בנמל תל אביב. הזמינו שולחן, אישור מיידי.", headline: "מסעדה עם שקיעה | UMINO", cta: "הזמינו שולחן" },
@@ -443,7 +443,7 @@ export const BUILDERS: BuilderProposal[] = [
         { id: "v-sg-proof-port", directionId: "d-sg-proof", slot: "port", slotLabel: "קבוצה 2 · מסעדה בנמל", audience: "מי שמחפש \"מסעדה בנמל תל אביב\"", hook: "המסעדה בנמל שמתמלאת בשקיעה", body: "40 מקומות מול הים, 18:00–19:30. תפסו שולחן לפני שנגמר.", headline: "מסעדה בנמל תל אביב | UMINO", cta: "תפסו שולחן" },
       ],
       alternatives: [
-        { id: "d-sg-local", name: "מקומי · 5 דקות מהבית", promise: "ארוחת שקיעה במרחק הליכה מהבית", proof: ["נמל תל אביב", "חניה בנמל"], tone: "שכונתי", cta: "הזמינו לערב", why: "הרדיוס הוא הטירגוט; הקרבה היא ההקשר המשותף.", anchors: ["שקיעה"], flag: "\"חניה בנמל\" — תנאי החניה לא במוח העסק. אשר או הסר." },
+        { id: "d-sg-local", name: "מקומי · 5 דקות מהבית", promise: "ארוחת שקיעה במרחק הליכה מהבית", proof: ["נמל תל אביב", "חניה בנמל"], tone: "שכונתי", cta: "הזמינו לערב", why: "הרדיוס הוא הטירגוט; הקרבה היא ההקשר המשותף.", anchors: ["שקיעה"], unverified: ["חניה בנמל"], flag: "\"חניה בנמל\" — תנאי החניה לא במוח העסק. אשר או הסר." },
         { id: "d-sg-season", name: "עונתי · ערבי אוקטובר", promise: "ערבי אוקטובר האחרונים מול הים", proof: ["18:00–19:30", "מרפסת מול הים"], tone: "דחוף־עדין", cta: "הזמינו השבוע", why: "העונה נגמרת; עכשיו או בשנה הבאה.", anchors: ["שקיעה"] },
         { id: "d-sg-objection", name: "מסיר התנגדות · בלי לחכות", promise: "שולחן לשקיעה בלי להתקשר ובלי לחכות", proof: ["אישור מיידי במערכת ההזמנות"], tone: "פרקטי", cta: "הזמינו בקליק", why: "מסיר את החשש משולחן תפוס.", anchors: ["שקיעה"] },
       ],
@@ -464,8 +464,10 @@ export const BUILDERS: BuilderProposal[] = [
     budgetNote: "בתוך הקצאת הנושא · צפי כ־₪165 לליד (לפי Google)",
     creatives: [
       { id: "cr-hall", label: "תמונת אולם", origin: "original", availability: "approved" },
-      { id: "cr-table", label: "שולחן ערוך", origin: "ai_edited", availability: "awaiting_approval" },
-      { id: "cr-toast", label: "צוות בהרמת כוסית", origin: "ai_edited", availability: "awaiting_approval" },
+      // the set table: venue material, AI changed the scene (material adaptation → the Client, floor)
+      { id: "cr-table", label: "שולחן ערוך", origin: "ai_edited", availability: "awaiting_approval", adaptation: "material" },
+      // real staff: authentic material — only cropped to 9:16 (minor), never materially adapted
+      { id: "cr-toast", label: "צוות בהרמת כוסית", origin: "ai_edited", availability: "awaiting_approval", authentic: true, adaptation: "minor" },
     ],
     creativeNote: "\"החלף\" פותח את דרכי הכיסוי המותרות לפי סוג הנכס, בלי לצאת מהבונה",
     details: [

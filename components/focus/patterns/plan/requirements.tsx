@@ -66,7 +66,7 @@ export function RequirementsSection({ moveId, plan, editable }: { moveId: string
               </div>
               <RequirementStatusWord req={r} plan={plan} />
               {editable && missing && !chosen && <Button size="sm" variant="secondary" onClick={() => setCover(r)} aria-label={`כסה · ${r.title}`}>כסה</Button>}
-              {chosen?.choice === "request" && <Button size="sm" variant="quiet" onClick={() => setRequest(r)} aria-label={`הבקשה ללקוח · ${r.title}`}>הבקשה ללקוח</Button>}
+              {(chosen?.choice === "request" || plan.overlay.requests[r.id]) && <Button size="sm" variant="quiet" onClick={() => setRequest(r)} aria-label={`הבקשה ללקוח · ${r.title}`}>הבקשה ללקוח</Button>}
               {editable && chosen && chosen.choice !== "request" && <button type="button" className="f-pl-linkbtn f-hit" onClick={() => plan.clearRequirement(r.id)}>שנה</button>}
             </li>
           );
@@ -99,7 +99,7 @@ export function CoverDialog({ req, plan, onClose, onRequest }: { req: ContentReq
               today={plan.today}
               onChoose={(choice: CoverOption, extra) => {
                 if (choice === "request") { onRequest(req); return; }
-                plan.coverRequirement(req.id, choice, { assetId: extra?.assetId });
+                if (!plan.coverRequirement(req.id, choice, { assetId: extra?.assetId })) { toast.push({ kind: "error", title: "הדרך הזו לא מותרת לסוג הנכס", detail: req.title }); return; }
                 toast.push({ title: `${COVER_WORD[choice]} · ${req.title}`, detail: "הנכס ממתין לאישור לפני שימוש" });
                 onClose();
               }}

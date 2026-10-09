@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import type { ContentRequirement, CoverOption } from "@/lib/focus/contracts/plan";
-import { allowedPaths, pathRefusal, recommendedPath, requestTooLate } from "@/lib/focus/state/plan";
+import { allowedPaths, pathRefusal, recommendedPath, requestTooLate, uploadCompatible } from "@/lib/focus/state/plan";
 import { Button } from "@/components/focus/ui/button";
 import { cx } from "@/components/focus/ui/cx";
 import { DemoNote } from "./plan-parts";
@@ -26,7 +26,9 @@ export function CoverOptions({ req, chosen, today, onChoose, onClear }: {
   onClear: () => void;
 }) {
   const id = useId();
-  const [file, setFile] = useState<string | null>(null);
+  const [file, setFile] = useState<{ name: string; type: string } | null>(null);
+  const fileProblem = file ? uploadCompatible(req, file) : null;
+  const video = req.assetType === "video" || req.assetType === "testimonial";
   const allowed = allowedPaths(req.authenticity);
   const rec = recommendedPath(req);
   const late = requestTooLate(req, today);
@@ -61,12 +63,13 @@ export function CoverOptions({ req, chosen, today, onChoose, onClear }: {
           </ul>
         )}
         {req.authenticity === "brand_fixed" && !req.existingCandidates.length && <span className="f-pl-red">נכס מותג חסר בספרייה המאושרת — חסום עד שיתווסף</span>}
-        <div className="f-pl-cover__upload">
-          <span className="f-pl-meta">העלאה מהמחשב (נכס קיים של הלקוח) · יישמר בתיקיית Mytiv ב־Drive כשיחובר</span>
-          <input id={`${id}-file`} type="file" className="f-sr f-pl-file" accept="image/*,video/*" onChange={(e) => setFile(e.target.files?.[0]?.name ?? null)} />
-          <label htmlFor={`${id}-file`} className="f-pl-filebtn">{file ? `נבחר: ${file}` : "בחר קובץ"}</label>
-          {file && <Button size="sm" variant="secondary" onClick={() => onChoose("existing", { fileName: file })}>השתמש ב־{file}</Button>}
-        </div>
+        {req.authenticity !== "brand_fixed" && <div className="f-pl-cover__upload">
+          <span className="f-pl-meta">העלאה מהמחשב ({req.authenticity === "authentic" ? "רק חומר אמיתי שהתקבל מהלקוח" : "נכס קיים של הלקוח"}) · יישמר בתיקיית Mytiv ב־Drive כשיחובר</span>
+          <input id={`${id}-file`} type="file" className="f-sr f-pl-file" accept={video ? "video/*" : "image/*"} onChange={(e) => { const f = e.target.files?.[0]; setFile(f ? { name: f.name, type: f.type } : null); }} />
+          <label htmlFor={`${id}-file`} className="f-pl-filebtn">{file ? `נבחר: ${file.name}` : "בחר קובץ"}</label>
+          {fileProblem && <span className="f-pl-red" role="alert">{fileProblem}</span>}
+          {file && !fileProblem && <Button size="sm" variant="secondary" onClick={() => onChoose("existing", { fileName: file.name })}>השתמש ב־{file.name}</Button>}
+        </div>}
       </div>
       {/* 2. AI + client asset */}
       {allowed.includes("ai_client")

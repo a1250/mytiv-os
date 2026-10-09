@@ -7,7 +7,7 @@ import { BUILDERS, PLAN_OCTOBER, REQUIREMENTS } from "@/lib/focus/fixtures/plan"
 import { CLIENTS } from "@/lib/focus/fixtures/people";
 import { R } from "@/lib/focus/routes";
 import { fmtMoney } from "@/lib/focus/format";
-import { APPROVAL_ACTION_WORD, approvalNeedsAck, budgetOverflow, coverage, dailyBudget, expectedRange, isHttpsUrl, moveState, requiredApprovals, sendBlocked, unverifiedClaim } from "@/lib/focus/state/plan";
+import { APPROVAL_ACTION_WORD, approvalNeedsAck, approverFor, budgetOverflow, creativeReplacementRequirement, creativeViolation, requestStatus, REQUEST_STATUS_WORD, coverage, dailyBudget, expectedRange, isHttpsUrl, moveState, requiredApprovals, sendBlocked, unverifiedClaim } from "@/lib/focus/state/plan";
 import { Button } from "@/components/focus/ui/button";
 import { Dialog } from "@/components/focus/ui/dialog";
 import { Banner } from "@/components/focus/ui/feedback";
@@ -22,7 +22,7 @@ import { DemoNote, Money, MoveStateTag, Num } from "@/components/focus/patterns/
 import { dayLabel, priorityOf } from "@/components/focus/patterns/plan/plan-view";
 import { ReadinessPanel } from "@/components/focus/patterns/plan/readiness";
 import { RequirementSpec, RequirementsSection } from "@/components/focus/patterns/plan/requirements";
-import { usePlan, type PlanApi } from "@/components/focus/patterns/plan/use-plan";
+import { PLAN_APPROVED, usePlan, type PlanApi } from "@/components/focus/patterns/plan/use-plan";
 
 /**
  * Google / Meta Campaign Builder (spec §8): a review surface, not a platform form. The main column answers what we
@@ -46,7 +46,7 @@ export default function PlanBuilderScreen({ builderId }: { builderId: string }) 
   const toast = useToast();
   const [panel, setPanel] = useState<DecisionKey | null>(null);
   const [cover, setCover] = useState<string | null>(null);
-  const [request, setRequest] = useState<ContentRequirement | null>(null);
+  const [request, setRequest] = useState<{ req: ContentRequirement; creativeId?: string } | null>(null);
   const [liveDlg, setLiveDlg] = useState(false);
   const p = priorityOf(b.priorityId);
   const editable = state === "building" || state === "idea";
@@ -90,7 +90,7 @@ export default function PlanBuilderScreen({ builderId }: { builderId: string }) 
               <DecisionCard key={d.key} b={b} d={d} plan={plan} move={move} onChange={() => setPanel(d.key)} editable={editable} />
             ))}
             <CopyDirections b={b} plan={plan} editable={editable} />
-            {b.creatives && <CreativeStrip b={b} plan={plan} onReplace={setCover} editable={editable} />}
+            {b.creatives && <CreativeStrip b={b} move={move} plan={plan} onReplace={setCover} onOpenRequest={(req, creativeId) => setRequest({ req, creativeId })} editable={editable} />}
             <RequirementsSection moveId={move.id} plan={plan} editable={editable} />
             <Summary b={b} plan={plan} />
           </div>
@@ -133,8 +133,8 @@ export default function PlanBuilderScreen({ builderId }: { builderId: string }) 
       </footer>
 
       {panel && <ChangePanel b={b} k={panel} plan={plan} move={move} onClose={() => setPanel(null)} />}
-      <CreativeCoverDialog b={b} creativeId={cover} plan={plan} onClose={() => setCover(null)} onRequest={(req) => { setCover(null); setRequest(req); }} />
-      <ClientRequestSheet req={request} plan={plan} open={!!request} onClose={() => setRequest(null)} />
+      <CreativeCoverDialog b={b} creativeId={cover} plan={plan} onClose={() => setCover(null)} onRequest={(req, creativeId) => { setCover(null); setRequest({ req, creativeId }); }} />
+      <ClientRequestSheet req={request?.req ?? null} creativeId={request?.creativeId} plan={plan} open={!!request} onClose={() => setRequest(null)} />
       <LiveDialog open={liveDlg} b={b} move={move} plan={plan} onClose={() => setLiveDlg(false)} />
     </div>
   );
@@ -150,7 +150,7 @@ export default function PlanBuilderScreen({ builderId }: { builderId: string }) 
  */
 function Approvals({ b, move, r, plan }: { b: BuilderProposal; move: Move; r: Readiness; plan: PlanApi }) {
   const toast = useToast();
-  const reqd = requiredApprovals(move, b, plan.policy, plan.overlay);
+  const reqd = requiredApprovals(move, b, plan.policy, plan.overlay, { planApproved: PLAN_APPROVED });
   const open = reqd.filter((a) => !a.given);
   const needsAck = approvalNeedsAck(r, move.id, plan.overlay);
   const give = (action: (typeof reqd)[number]["action"]) => {
@@ -178,6 +178,7 @@ function Approvals({ b, move, r, plan }: { b: BuilderProposal; move: Move; r: Re
           אשר: {APPROVAL_ACTION_WORD[a.action]} · כ{plan.approverName(a.by)}
         </Button>
       ))}
+      {open.some((a) => a.reason) && <ul className="f-pl-approvals__why">{open.filter((a) => a.reason).map((a) => <li key={a.action} className="f-pl-meta">{APPROVAL_ACTION_WORD[a.action]}: {a.reason}</li>)}</ul>}
     </div>
   );
 }
@@ -279,57 +280,82 @@ function Details({ b }: { b: BuilderProposal }) {
 
 /* ---------- Meta creative strip ---------- */
 
-function CreativeStrip({ b, plan, onReplace, editable }: { b: BuilderProposal; plan: PlanApi; onReplace: (id: string) => void; editable: boolean }) {
+/**
+ * The Meta creative strip: each creative with its origin, whether it shows real people (authentic — only cropped, never
+ * materially adapted), its approval and any replacement request. Approving the last waiting creative records the
+ * policy's "new creative" approval for the move, so it is never asked for twice.
+ */
+function CreativeStrip({ b, move, plan, onReplace, onOpenRequest, editable }: { b: BuilderProposal; move: Move; plan: PlanApi; onReplace: (id: string) => void; onOpenRequest: (req: ContentRequirement, creativeId: string) => void; editable: boolean }) {
   const list = (b.creatives ?? []).map((c) => ({ ...c, a: plan.overlay.creatives[c.id] ?? c.availability }));
   const awaiting = list.filter((c) => c.a === "awaiting_approval").length;
   const base = REQUIREMENTS.find((r) => r.creativeIds?.some((id) => list.some((c) => c.id === id)));
+  const approver = plan.approverName(approverFor(plan.policy, "new_creative"));
+  const approve = (id: string) => {
+    plan.setCreative(id, "approved");
+    if (list.filter((c) => c.a === "awaiting_approval" && c.id !== id).length === 0) plan.giveApproval(move.id, "new_creative");
+  };
   return (
     <section id="creative" className="f-pl-dcard f-pl-dcard--creative" aria-labelledby="creative-h" tabIndex={-1}>
-      <div className="f-pl-creative__head"><h2 id="creative-h" className="f-pl-dcard__label">קריאייטיב · {list.length} אנכיים 9:16</h2>{awaiting > 0 && <span className="f-pl-amber">{awaiting} ממתינים לאישור {plan.approverName("client")}</span>}</div>
+      <div className="f-pl-creative__head"><h2 id="creative-h" className="f-pl-dcard__label">קריאייטיב · {list.length} אנכיים 9:16</h2>{awaiting > 0 && <span className="f-pl-amber">{awaiting} ממתינים לאישור {approver}</span>}</div>
       {base && <RequirementSpec req={base} approverName={plan.approverName} />}
       <ul className="f-pl-creative">
-        {list.map((c) => (
-          <li key={c.id} className="f-pl-creative__item">
-            <span className={cx("f-pl-creative__tile", c.origin !== "original" && "f-pl-creative__tile--ai")} role="img" aria-label={`${c.label} · ${c.origin === "original" ? "אמיתי" : "משופר AI"}`}>
-              <span>{c.label} · {c.origin === "original" ? "אמיתי" : "משופר AI"}</span>
-            </span>
-            {c.a === "approved" && <span className="f-pl-good">✓ מאושר</span>}
-            {c.a === "awaiting_approval" && (
-              <span className="f-pl-creative__acts">
-                <Button size="sm" variant="strong" block onClick={() => plan.setCreative(c.id, "approved")} aria-label={`אשר · ${c.label}`}>אשר</Button>
-                {editable && <Button size="sm" variant="quiet" onClick={() => onReplace(c.id)} aria-label={`החלף · ${c.label}`}>החלף</Button>}
+        {list.map((c) => {
+          const word = c.origin === "original" ? "מקורי" : c.adaptation === "minor" ? "חיתוך AI בלבד" : "התאמת AI מהותית";
+          const violation = creativeViolation(c);
+          const replacement = base ? plan.overlay.requests[creativeReplacementRequirement(base, c).id] : undefined;
+          return (
+            <li key={c.id} className="f-pl-creative__item">
+              <span className={cx("f-pl-creative__tile", c.origin !== "original" && "f-pl-creative__tile--ai")} role="img" aria-label={`${c.label} · ${word}${c.authentic ? " · אנשים אמיתיים" : ""}`}>
+                <span>{c.label} · {word}{c.authentic ? " · אנשים אמיתיים" : ""}</span>
               </span>
-            )}
-            {c.a === "missing" && <span className="f-pl-red">חסר</span>}
-          </li>
-        ))}
+              {violation && <span className="f-pl-red">{violation}</span>}
+              {c.a === "approved" && <span className="f-pl-good">✓ מאושר</span>}
+              {c.a === "awaiting_approval" && (
+                <span className="f-pl-creative__acts">
+                  <Button size="sm" variant="strong" block onClick={() => approve(c.id)} aria-label={`אשר · ${c.label}`} disabled={!!violation} disabledReason={violation ?? undefined}>אשר · כ{approver}</Button>
+                  {editable && <Button size="sm" variant="quiet" onClick={() => onReplace(c.id)} aria-label={`החלף · ${c.label}`}>החלף</Button>}
+                </span>
+              )}
+              {c.a === "missing" && <span className="f-pl-red">חסר</span>}
+              {replacement && base && (
+                <button type="button" className="f-pl-linkbtn f-hit" onClick={() => onOpenRequest(creativeReplacementRequirement(base, c), c.id)}>
+                  בקשה להחלפה · {REQUEST_STATUS_WORD[requestStatus(replacement)]}
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
       <span className="f-pl-meta">{b.creativeNote}</span>
     </section>
   );
 }
 
-/** Replacing a builder creative: the allowed paths of its requirement (adaptable: existing, AI + client asset, request). */
-function CreativeCoverDialog({ b, creativeId, plan, onClose, onRequest }: { b: BuilderProposal; creativeId: string | null; plan: PlanApi; onClose: () => void; onRequest: (req: ContentRequirement) => void }) {
+/**
+ * Replacing ONE builder creative: the paths its own requirement allows (a creative showing real people is authentic —
+ * existing or a client request only), and a client request for exactly that slot (quantity 1), never the parent's.
+ */
+function CreativeCoverDialog({ b, creativeId, plan, onClose, onRequest }: { b: BuilderProposal; creativeId: string | null; plan: PlanApi; onClose: () => void; onRequest: (req: ContentRequirement, creativeId: string) => void }) {
   const toast = useToast();
   const c = b.creatives?.find((x) => x.id === creativeId);
   const base = REQUIREMENTS.find((r) => r.creativeIds?.includes(creativeId ?? ""));
+  const slot = c && base ? creativeReplacementRequirement(base, c) : null;
   return (
     <Dialog open={!!c} onClose={onClose} variant="drawer" labelledBy="cv-t" className="f-pl-panel f-pl-panel--change">
-      {c && base && (
+      {c && slot && (
         <div className="f-pl-panel__wrap">
           <div className="f-pl-panel__head">
             <div className="f-pl-panel__crumbrow"><span className="f-pl-meta">{b.title} · קריאייטיב</span><button type="button" className="f-pl-x f-hit" aria-label="סגירה" onClick={onClose}>×</button></div>
             <h2 id="cv-t" className="f-pl-panel__title">החלף · {c.label}</h2>
-            <span className="f-pl-meta">{base.spec}</span>
+            <span className="f-pl-meta">{slot.spec}</span>
           </div>
           <div className="f-pl-panel__body">
-            <RequirementSpec req={base} approverName={plan.approverName} />
+            <RequirementSpec req={slot} approverName={plan.approverName} />
             <CoverOptions
-              req={{ ...base, title: c.label, existingCandidates: [{ id: "as-hall-3", label: "אולם ערוך, ספטמבר", format: "4:5", note: "צריך התאמה ל־9:16" }], recommended: "ai_client", aiClientNote: "גרסה אנכית חדשה מנכס קיים של הלקוח. מסומן \"משופר AI\"." }}
+              req={{ ...slot, existingCandidates: c.authentic ? [] : [{ id: "as-hall-3", label: "אולם ערוך, ספטמבר", format: "4:5", note: "צריך התאמה ל־9:16" }], recommended: c.authentic ? "request" : "ai_client", aiClientNote: "גרסה אנכית חדשה מנכס קיים של הלקוח. מסומן \"משופר AI\"." }}
               today={plan.today}
               onChoose={(choice) => {
-                if (choice === "request") { onRequest(base); return; }
+                if (choice === "request") { onRequest(slot, c.id); return; }
                 plan.setCreative(c.id, "awaiting_approval");
                 toast.push({ title: `${COVER_WORD[choice]} · ${c.label}`, detail: "גרסה חלופית ממתינה לאישור · נשאר בבונה" });
                 onClose();

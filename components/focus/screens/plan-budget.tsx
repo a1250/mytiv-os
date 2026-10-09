@@ -74,7 +74,7 @@ function Budget() {
             <li className="f-pl-btile f-pl-btile--amber"><span aria-hidden>▲</span><span className="f-pl-btile__text"><b>{fast.m.longName} · {priorityOf(fast.m.priorityId).shortName}</b> ניצל <Num>{fast.l.pct}%</Num> אחרי <Num>{b.elapsedPct}%</Num> מהחודש</span><Link href={`${R.planMoves}#move-${fast.m.id}`} className="f-pl-link">פתח</Link></li>
           )}
           {b.unallocated > 0 && (
-            <li className="f-pl-btile"><span aria-hidden>○</span><span className="f-pl-btile__text"><Money v={b.unallocated} strong /> לא מוקצים{sunsetNeed && b.pendingFromUnallocated === 0 ? " · מוצע: מהלך Google לשקיעה" : b.pendingFromUnallocated > 0 ? " · מוצעים למהלך Google, ממתין לאישור בעלים" : ""}</span>{sunsetNeed && b.pendingFromUnallocated === 0 && <Link href={R.planCreateMove(sunsetNeed.id)} className="f-pl-link">הקצה</Link>}</li>
+            <li className="f-pl-btile"><span aria-hidden>○</span><span className="f-pl-btile__text"><Money v={b.unallocated} strong /> לא מוקצים{sunsetNeed && b.pendingFromUnallocated === 0 ? " · מוצע: מהלך Google לשקיעה" : b.pendingFromUnallocated > 0 ? " · מוצעים למהלך Google, ממתין לאישור הלקוח" : ""}</span>{sunsetNeed && b.pendingFromUnallocated === 0 && <Link href={R.planCreateMove(sunsetNeed.id)} className="f-pl-link">הקצה</Link>}</li>
           )}
           {unknownMove && (
             <li className="f-pl-btile"><span aria-hidden>○</span><span className="f-pl-btile__text">הוצאה של {priorityOf(unknownMove.m.priorityId).name} <b>לא ידועה</b>: {unknownMove.m.channelLabel} לא מחובר</span><button type="button" className="f-pl-linkbtn f-hit" onClick={() => setEntry(unknownMove.m)}>הזן ידנית</button></li>

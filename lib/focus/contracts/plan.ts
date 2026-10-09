@@ -271,13 +271,23 @@ export type ContentRequirement = {
 export type RequirementStatus = "open" | "partly_covered" | "covered" | "approved";
 
 /**
+ * The lifecycle of a client material request (spec §9): drafted → sent (by hand) → received (the material is in the
+ * library) → in review (awaiting its approver) → approved (covers the requirement). `cancelled` keeps the history and
+ * the linked task; asking again re-opens the same request instead of creating a second one.
+ */
+export type RequestStatus = "drafted" | "sent" | "received" | "in_review" | "approved" | "cancelled";
+
+/**
  * A Client Material Request (spec §9): what the client must send, exactly, and why. A task of kind "client request"
- * with this structured payload; sending is manual in V1 (WhatsApp / email by a person). One open request per
- * requirement.
+ * with this structured payload; sending is manual in V1 (WhatsApp / email by a person). One request (and one task)
+ * per requirement or replaced creative, ever.
  */
 export type ClientMaterialRequest = {
   id: string;
+  /** the requirement the material covers (for a replaced creative: a per-creative requirement id) */
   requirementId: string;
+  /** set when the request replaces one creative of a builder (the slot it fills) */
+  creativeId?: string;
   moveId: string;
   priorityId: string;
   /** the move's name as the client knows it ("אירועים עסקיים — Meta לידים") */
@@ -293,6 +303,15 @@ export type ClientMaterialRequest = {
   taskId: string;
   /** marked by a person after sending by hand (V1 has no automated sending) */
   sentAt: IsoDate | null;
+  /** the material arrived (uploaded by hand in V1) and entered the library, awaiting its approver */
+  receivedAt: IsoDate | null;
+  /** the file name that arrived (V1: from the computer; Drive later) */
+  fileName?: string;
+  /** the approver accepted the material: it covers the requirement */
+  approvedAt: IsoDate | null;
+  cancelledAt: IsoDate | null;
+  /** every step, oldest first — kept through cancel and re-open */
+  history: { at: IsoDate; text: string }[];
 };
 
 export type AssetSummary = {
@@ -304,8 +323,15 @@ export type AssetSummary = {
   rightsNote?: string;
 };
 
-/** A creative inside a builder (Meta creative strip). */
-export type Creative = { id: string; label: string; origin: Extract<ContentOrigin, "original" | "ai_edited">; availability: AssetAvailability };
+/**
+ * A creative inside a builder (Meta creative strip). `authentic` = it shows real people (staff, customers) or a real
+ * event: only a minor adaptation (crop, resize, format) is allowed, never a material one. `adaptation` says what the AI
+ * changed on an `ai_edited` creative: minor (crop / format) or material (scene, background, people, product, claims).
+ */
+export type Creative = {
+  id: string; label: string; origin: Extract<ContentOrigin, "original" | "ai_edited">; availability: AssetAvailability;
+  authentic?: boolean; adaptation?: "minor" | "material";
+};
 
 /* ---------- timeline ---------- */
 
@@ -418,8 +444,10 @@ export type MoveMessageDirection = {
   name: string;
   /** core promise — the one claim every variant keeps */
   promise: string;
-  /** proof points the variants may draw from (all verified in the Brain) */
+  /** proof points the variants may draw from */
   proof: string[];
+  /** proof points the Brain does not hold — flagged, never combined into another direction */
+  unverified?: string[];
   tone: string;
   /** primary call-to-action intent ("קבלו הצעת מחיר") */
   cta: string;
@@ -513,7 +541,7 @@ export type ReadinessDimension = "strategy" | "targeting" | "budget" | "copy" | 
 export type ReadinessState = "ready" | "waiting" | "missing" | "blocked" | "unknown";
 
 export type ReadinessOverall =
-  | "blocked" | "waiting_client" | "missing" | "waiting_generation" | "ready_for_review" | "waiting_approval" | "approved";
+  | "blocked" | "waiting_client" | "missing" | "waiting_decision" | "ready_for_review" | "waiting_approval" | "approved";
 
 export type Readiness = {
   dims: Record<ReadinessDimension, { state: ReadinessState; text: string; /** who acts (WAITING) */ actor?: string }>;

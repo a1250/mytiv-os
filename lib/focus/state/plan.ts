@@ -1,7 +1,7 @@
 import type {
   ApprovalAction, ApproverKind, AssetAvailability, AuthenticityClass, BuilderProposal, ClientApprovalPolicy, ClientMaterialRequest, ContentRequirement,
   CopyVariant, CoverOption, DecisionKey, Move, MoveMessageDirection, MoveState, Plan, PlanNeed, Priority, PriorityPlan, Readiness, ReadinessDimension,
-  ReadinessState, RefineKey, RequirementStatus, DayItem, DayItemStatus, DayItemType, ProductionRow, Recommendation, RecommendationRoute, TimelineItem,
+  ReadinessState, RefineKey, RequestStatus, RequirementStatus, DayItem, DayItemStatus, DayItemType, ProductionRow, Recommendation, RecommendationRoute, TimelineItem,
 } from "@/lib/focus/contracts/plan";
 import type { Reading } from "@/lib/focus/contracts/common";
 
@@ -31,7 +31,7 @@ export type CopyChoice = {
   set: "main" | "alt";
   directionId?: string;
   refinements: RefineKey[];
-  /** parts taken from other directions, in words (a combination keeps the chosen direction's promise) */
+  /** proof points taken from other directions, as "directionId::proof" (a combination keeps the chosen promise) */
   combined?: string[];
 };
 
@@ -193,9 +193,16 @@ export function requirementSlots(req: ContentRequirement, o: PlanOverlay, builde
     return req.creativeIds.map((id) => o.creatives[id] ?? creatives.find((c) => c.id === id)?.availability ?? "missing");
   }
   const cover = o.requirements[req.id];
-  // a chosen way to cover a missing asset makes it exist (awaiting approval) — except a request to the client,
-  // which only creates a request + task: the asset is still missing until it arrives
-  if (cover && cover.choice !== "request") return req.slots.map((s) => (s === "missing" ? "awaiting_approval" : s));
+  // a chosen way to cover a missing asset makes it exist (awaiting approval) — except a request to the client, which
+  // only creates a request + task: the asset is missing until the material arrives (then in review), and covers the
+  // requirement once its approver accepts it
+  if (cover?.choice === "request") {
+    const r = o.requests[req.id];
+    if (r?.approvedAt && !r.cancelledAt) return req.slots.map((s) => (s === "missing" ? "approved" : s));
+    if (r?.receivedAt && !r.cancelledAt) return req.slots.map((s) => (s === "missing" ? "awaiting_approval" : s));
+    return req.slots;
+  }
+  if (cover) return req.slots.map((s) => (s === "missing" ? "awaiting_approval" : s));
   return req.slots;
 }
 
@@ -253,10 +260,23 @@ export type Routes = {
   requirement: (id: string) => string;
 };
 
-/** decision waiting › main blocker › nearest missing asset › next due task › "nothing needed" (fixed order). */
-export function nextAction(pp: PriorityPlan, moves: Move[], reqs: ContentRequirement[], o: PlanOverlay, f: Pick<PlanFixtures, "builders">, routes: Routes): NextAction {
+/**
+ * decision waiting › main blocker › nearest missing asset › next due task › "nothing needed" (fixed order). A move
+ * with a builder speaks through its readiness (`readinessOf`), so the Plan and the builder never disagree about what
+ * comes next for that move.
+ */
+export function nextAction(pp: PriorityPlan, moves: Move[], reqs: ContentRequirement[], o: PlanOverlay, f: Pick<PlanFixtures, "builders">, routes: Routes, readinessOf?: (m: Move) => Readiness | null): NextAction {
   const mine = movesOf(pp, moves);
   const trouble = pp.status === "at_risk" || pp.status === "off_track";
+  if (readinessOf) {
+    for (const m of mine) {
+      if (m.state === "live" || m.state === "paused" || m.state === "ended" || m.state === "planned" || m.state === "idea") continue;
+      const r = readinessOf(m);
+      if (!r || !m.builderId) continue;
+      if (r.overall === "waiting_approval") return { kind: "decision", label: `${r.next.label} · ${m.channelLabel}`, href: `${routes.builder(m.builderId)}#readiness`, emphasis: "primary" };
+      if (r.overall !== "approved") return { kind: r.overall === "blocked" ? "blocker" : "decision", label: `${r.next.label} · ${m.longName}`, href: `${routes.builder(m.builderId)}#readiness`, emphasis: trouble || r.overall === "ready_for_review" ? "primary" : "secondary" };
+    }
+  }
   // 1. a decision waiting for the owner: creatives awaiting approval in a move being built, or a move ready for review
   for (const m of mine) {
     const b = m.builderId ? f.builders.find((x) => x.id === m.builderId) : undefined;
@@ -545,7 +565,7 @@ export function isHttpsUrl(v: string): boolean {
 /* ---------- recommendations ---------- */
 
 export const ROUTE_WORD: Record<RecommendationRoute, string> = {
-  plan: "שינוי תוכנית · דורש אישור בעלים",
+  plan: "שינוי תוכנית · דורש אישור לקוח",
   marketing: "שינוי בביצוע המהלך · פעולת שיווק",
   work: "עבודה בלבד · נוצרות משימות",
 };
@@ -606,6 +626,29 @@ export function requestTooLate(req: ContentRequirement, today: number): string |
   return `נותרו ${Math.max(0, req.neededByDay - today)} ימים; בקשה מהלקוח צריכה כ־${REQUEST_LEAD_DAYS}.${fallback ? ` פתרון ביניים: ${fallback}.` : " לא קיים פתרון ביניים לחומר אמיתי: הבקשה נשלחת, ומועד ההשקה בסיכון."}`;
 }
 
+/** State-layer guard: a cover path the requirement's authenticity class refuses is never stored. */
+export function coverAllowed(req: ContentRequirement, choice: CoverOption): boolean {
+  return allowedPaths(req.authenticity).includes(choice);
+}
+
+/**
+ * Upload compatibility (an upload arrives under "use existing" or as a client's material): brand-fixed material only
+ * comes from the approved library; video material needs a video file; photo / graphic / logo needs an image.
+ */
+export function uploadCompatible(req: ContentRequirement, file: { name: string; type: string }): string | null {
+  if (req.authenticity === "brand_fixed") return "נכס מותג מגיע רק מהספרייה המאושרת, לא מהעלאה";
+  const video = req.assetType === "video" || req.assetType === "testimonial";
+  if (video && !file.type.startsWith("video/")) return `${req.title}: נדרש קובץ וידאו (${req.format}${req.duration ? `, ${req.duration}` : ""})`;
+  if (!video && !file.type.startsWith("image/")) return `${req.title}: נדרש קובץ תמונה (${req.format})`;
+  return null;
+}
+
+/** A creative that shows real people or a real event may only be adapted minorly (crop, resize, format). */
+export function creativeViolation(c: { authentic?: boolean; origin: string; adaptation?: "minor" | "material" }): string | null {
+  if (c.authentic && c.origin === "ai_edited" && c.adaptation !== "minor") return "חומר אמיתי (אנשים או אירוע אמיתיים) לא עובר התאמת AI מהותית";
+  return null;
+}
+
 /** Requirement status (spec §9): open → partly covered → covered → approved, from the slots. */
 export function requirementStatus(slots: AssetAvailability[]): RequirementStatus {
   const c = countSlots(slots);
@@ -624,10 +667,11 @@ export type CopyState = {
   /** the three directions on screen (main or the three new ones) */
   directions: MoveMessageDirection[];
   chosen: MoveMessageDirection | null;
-  /** the variants under the chosen direction, with refinements applied (display only) */
+  /** the variants under the chosen direction, with refinements and combined proof applied (display only) */
   variants: CopyVariant[];
   refinements: RefineKey[];
-  combined: string[];
+  /** proof points combined from other directions (all verified — an unverified one is never combined) */
+  combined: { directionId: string; directionName: string; proof: string }[];
   /** "3 כיוונים חדשים" is possible only when the builder has alternatives */
   canAskNew: boolean;
 };
@@ -646,12 +690,35 @@ export function refineVariant(v: CopyVariant, d: MoveMessageDirection, refinemen
   return { ...v, hook, body };
 }
 
+/** A proof point may be combined into another direction only when the Brain holds it (not unverified, no refused claim). */
+export function canCombine(source: MoveMessageDirection, proof: string): { ok: boolean; reason?: string } {
+  if (!source.proof.includes(proof)) return { ok: false, reason: "נקודת הוכחה לא קיימת בכיוון" };
+  if (source.unverified?.includes(proof)) return { ok: false, reason: `"${proof}" לא במוח העסק — לא משלבים עובדה שלא אומתה` };
+  const claim = unverifiedClaim(proof);
+  if (claim) return { ok: false, reason: `טענה שלא אושרה: "${claim}"` };
+  return { ok: true };
+}
+
 export function copyState(b: BuilderProposal, o: PlanOverlay): CopyState {
   const choice = o.copy[b.id] ?? { set: "main", refinements: [] };
+  const all = [...b.copy.directions, ...b.copy.alternatives];
   const directions = choice.set === "alt" && b.copy.alternatives.length ? b.copy.alternatives : b.copy.directions;
-  const chosen = choice.directionId ? [...b.copy.directions, ...b.copy.alternatives].find((d) => d.id === choice.directionId) ?? null : null;
-  const variants = chosen ? b.copy.variants.filter((v) => v.directionId === chosen.id).map((v) => refineVariant(v, chosen, choice.refinements)) : [];
-  return { directions, chosen, variants, refinements: choice.refinements, combined: choice.combined ?? [], canAskNew: b.copy.alternatives.length > 0 };
+  const chosen = choice.directionId ? all.find((d) => d.id === choice.directionId) ?? null : null;
+  // combined parts are revalidated on every read: a part that is no longer allowed is dropped, never shown
+  const combined = (choice.combined ?? []).flatMap((key) => {
+    const [directionId, proof] = key.split("::");
+    const src = all.find((d) => d.id === directionId);
+    if (!src || !chosen || src.id === chosen.id || !proof || !canCombine(src, proof).ok) return [];
+    return [{ directionId, directionName: src.name, proof }];
+  });
+  const variants = chosen
+    ? b.copy.variants.filter((v) => v.directionId === chosen.id).map((v) => {
+        const r = refineVariant(v, chosen, choice.refinements);
+        const extra = combined.map((c) => c.proof).filter((p) => !r.body.includes(p));
+        return extra.length ? { ...r, body: `${r.body} ${extra.join(" · ")}.` } : r;
+      })
+    : [];
+  return { directions, chosen, variants, refinements: choice.refinements, combined, canAskNew: b.copy.alternatives.length > 0 };
 }
 
 /**
@@ -671,6 +738,7 @@ export function variantConforms(v: CopyVariant, d: MoveMessageDirection): { ok: 
 export function directionFlags(d: MoveMessageDirection): string[] {
   const out: string[] = [];
   if (d.flag) out.push(d.flag);
+  for (const u of d.unverified ?? []) if (!d.flag?.includes(u)) out.push(`"${u}" לא במוח העסק — אשר או הסר`);
   const claim = unverifiedClaim(`${d.promise} ${d.proof.join(" ")}`);
   if (claim) out.push(`טענה שלא אושרה במוח העסק: "${claim}"`);
   return out;
@@ -692,19 +760,10 @@ export function approverFor(policy: ClientApprovalPolicy, action: ApprovalAction
   return policy.rules[action];
 }
 
-export type RequiredApproval = { action: ApprovalAction; by: ApproverKind; given: boolean };
+export type RequiredApproval = { action: ApprovalAction; by: ApproverKind; given: boolean; /** why it lands on this approver */ reason?: string };
 
-/**
- * The approvals a move needs before launch, from the Client's policy: the direction, the variants under it, every
- * creative that goes live, and the launch itself. Already-given approvals come from the overlay.
- */
-export function requiredApprovals(m: Move, b: BuilderProposal | undefined, policy: ClientApprovalPolicy, o: PlanOverlay): RequiredApproval[] {
-  const given = o.approvalsGiven[m.id] ?? [];
-  const actions: ApprovalAction[] = ["direction", "variants"];
-  if (b?.creatives?.length) actions.push("new_creative");
-  actions.push("launch");
-  return actions.map((action) => ({ action, by: approverFor(policy, action), given: given.includes(action) }));
-}
+/** The context a policy decision needs that is not on the move: whether the Client approved the period's Plan. */
+export type ApprovalContext = { planApproved: boolean };
 
 /**
  * DELEGATED launch (owner decision L14): the operator may approve a launch only when the move is inside a
@@ -722,10 +781,60 @@ export function delegatedLaunchAllowed(input: {
   return { ok: true };
 }
 
+/** The money of a move comes from outside its Priority's approved allocation (the unallocated pool or another Priority). */
+export function outsideAllocation(b: BuilderProposal, o: PlanOverlay): boolean {
+  return b.budget.fromUnallocated || o.builders[b.id]?.budgetSource === "other_priority";
+}
+
+/** A change to what the move promotes, its result or its audience after the Plan was approved. */
+export function materialChange(b: BuilderProposal, o: PlanOverlay): boolean {
+  const d = o.builders[b.id]?.decisions ?? {};
+  return !!(d.promote || d.result || d.audience);
+}
+
+/**
+ * The approvals a move needs before launch, from the Client's policy — the real path readiness and the builder use:
+ * - a Plan change (money from outside the Priority's allocation) → `plan`, the Client under every preset (floor);
+ * - the direction and the variants under it;
+ * - every new creative; an AI-edited creative adds `material_adaptation` (floor: the Client) or `minor_adaptation`;
+ * - the launch: under DELEGATED the operator only when `delegatedLaunchAllowed` holds, otherwise the Client.
+ * A move that reached approved / live in an older session without stored approvals counts them as given (legacy).
+ */
+export function requiredApprovals(m: Move, b: BuilderProposal | undefined, policy: ClientApprovalPolicy, o: PlanOverlay, ctx: ApprovalContext = { planApproved: true }): RequiredApproval[] {
+  const legacy = (m.state === "approved" || m.state === "live" || m.state === "paused" || m.state === "ended") && o.approvalsGiven[m.id] === undefined;
+  const given = o.approvalsGiven[m.id] ?? [];
+  const out: RequiredApproval[] = [];
+  const add = (action: ApprovalAction, reason?: string, by: ApproverKind = approverFor(policy, action)) => {
+    if (!out.some((a) => a.action === action)) out.push({ action, by, given: legacy || given.includes(action), ...(reason ? { reason } : {}) });
+  };
+  if (b && outsideAllocation(b, o)) add("plan", "הכסף מגיע מחוץ להקצאת הנושא · שינוי תוכנית");
+  add("direction");
+  add("variants");
+  if (b?.creatives?.length) {
+    add("new_creative");
+    const edited = b.creatives.filter((c) => c.origin === "ai_edited");
+    if (edited.some((c) => c.adaptation !== "minor")) add("material_adaptation", `התאמת AI מהותית: ${edited.filter((c) => c.adaptation !== "minor").map((c) => c.label).join(", ")}`);
+    if (edited.some((c) => c.adaptation === "minor")) add("minor_adaptation", `חיתוך / פורמט: ${edited.filter((c) => c.adaptation === "minor").map((c) => c.label).join(", ")}`);
+  }
+  // the launch: DELEGATED moves it to the operator only inside the L14 conditions
+  let launchBy = approverFor(policy, "launch");
+  let launchReason: string | undefined;
+  if (launchBy === "operator" && b) {
+    const clientOpen = out.filter((a) => a.by === "client" && !a.given).length;
+    const d = delegatedLaunchAllowed({
+      planApproved: ctx.planApproved, withinAllocation: !outsideAllocation(b, o), totalSpendUnchanged: !outsideAllocation(b, o),
+      clientApprovalsOutstanding: clientOpen, materialChangeOutsidePlan: materialChange(b, o),
+    });
+    if (!d.ok) { launchBy = "client"; launchReason = `השקה באישור הלקוח: ${d.reason}`; }
+  }
+  add("launch", launchReason, launchBy);
+  return out;
+}
+
 /* ---------- client material request (spec §9) ---------- */
 
 /** Build the structured request from the requirement: never "send us content". One per requirement (dedup by id). */
-export function buildClientRequest(req: ContentRequirement, move: Move, priority: Priority, taskId: string, launchDay: number | undefined): ClientMaterialRequest {
+export function buildClientRequest(req: ContentRequirement, move: Move, priority: Priority, taskId: string, launchDay: number | undefined, at = "2026-10-07"): ClientMaterialRequest {
   const item = { what: req.title, quantity: req.quantity, format: req.format + (req.dimensions ? ` (${req.dimensions})` : ""), ...(req.duration ? { duration: req.duration } : {}) };
   const needed = req.neededByDay ?? launchDay ?? 31;
   return {
@@ -736,8 +845,90 @@ export function buildClientRequest(req: ContentRequirement, move: Move, priority
     why: `נדרש ל${move.longName}${launchDay ? `, שמתוכנן לעלות ב־${launchDay}.10` : ""}. תפקידו במהלך: ${req.purpose}.`,
     captureInstructions: req.captureInstructions ?? "לצלם באור טבעי, בפורמט המבוקש, בלי פילטרים.",
     uploadTo: "תיקיית UMINO · חומרים לשיווק (קישור ישלח עם הבקשה; תיקיית Mytiv ב־Drive תחובר בהמשך)",
-    taskId, sentAt: null,
+    taskId, sentAt: null, receivedAt: null, approvedAt: null, cancelledAt: null,
+    history: [{ at, text: "הבקשה נוצרה (טיוטה)" }],
   };
+}
+
+/**
+ * The requirement for replacing ONE creative of a builder: exactly that slot (quantity 1), keyed by the creative, with
+ * the creative's own authenticity (real people → authentic). Never the parent requirement's quantity.
+ */
+export function creativeReplacementRequirement(base: ContentRequirement, c: { id: string; label: string; authentic?: boolean }): ContentRequirement {
+  return {
+    ...base, id: `${base.id}--${c.id}`, title: `קריאייטיב חלופי · ${c.label}`, gapLabel: `קריאייטיב חלופי · ${c.label}`,
+    quantity: 1, slots: ["missing"], creativeIds: undefined, existingCandidates: [], recommended: undefined,
+    authenticity: c.authentic ? "authentic" : base.authenticity, purpose: `החלפת "${c.label}" (${base.purpose})`,
+    spec: `${base.format}${base.dimensions ? ` · ${base.dimensions}` : ""} · מחליף את "${c.label}"`,
+  };
+}
+
+/** Where a request is in its lifecycle (derived from its dates). */
+export function requestStatus(r: ClientMaterialRequest): RequestStatus {
+  if (r.cancelledAt) return "cancelled";
+  if (r.approvedAt) return "approved";
+  if (r.receivedAt) return "in_review";
+  if (r.sentAt) return "sent";
+  return "drafted";
+}
+export const REQUEST_STATUS_WORD: Record<RequestStatus, string> = {
+  drafted: "טיוטה · עוד לא נשלחה", sent: "נשלחה ידנית · ממתינה לחומר", received: "החומר התקבל", in_review: "התקבל · בבדיקה", approved: "אושר · מכסה את הדרישה", cancelled: "בוטלה",
+};
+
+/**
+ * What creating a request for this key should do — the dedup rule lives in the state layer: an open request is
+ * returned as is; a cancelled one is re-opened (same task, history kept); only a key with no request ever creates one.
+ */
+export function requestCreatePlan(o: PlanOverlay, key: string): "existing" | "reopen" | "create" {
+  const r = o.requests[key];
+  if (!r) return "create";
+  return r.cancelledAt ? "reopen" : "existing";
+}
+
+const pushHistory = (r: ClientMaterialRequest, at: string, text: string): ClientMaterialRequest => ({ ...r, history: [...r.history, { at, text }] });
+
+/** Store a new request and point the requirement (or the replaced creative) at it. */
+export function addRequest(o: PlanOverlay, r: ClientMaterialRequest): PlanOverlay {
+  if (o.requests[r.requirementId] && !o.requests[r.requirementId].cancelledAt) return o;
+  return { ...o, requests: { ...o.requests, [r.requirementId]: r }, ...(r.creativeId ? {} : { requirements: { ...o.requirements, [r.requirementId]: { choice: "request" as const, taskId: r.taskId } } }) };
+}
+
+export function reopenRequest(o: PlanOverlay, key: string, at: string): PlanOverlay {
+  const r = o.requests[key];
+  if (!r?.cancelledAt) return o;
+  const reopened = pushHistory({ ...r, cancelledAt: null, sentAt: null, receivedAt: null, approvedAt: null, fileName: undefined }, at, "הבקשה נפתחה מחדש (אותה משימה)");
+  return { ...o, requests: { ...o.requests, [key]: reopened }, ...(r.creativeId ? {} : { requirements: { ...o.requirements, [key]: { choice: "request" as const, taskId: r.taskId } } }) };
+}
+
+export function markRequestSent(o: PlanOverlay, key: string, at: string): PlanOverlay {
+  const r = o.requests[key];
+  if (!r || requestStatus(r) !== "drafted") return o;
+  return { ...o, requests: { ...o.requests, [key]: pushHistory({ ...r, sentAt: at }, at, "נשלחה ידנית ללקוח") } };
+}
+
+/** The material arrived (uploaded by hand): it enters the library and waits for its approver. Only after sending. */
+export function receiveMaterial(o: PlanOverlay, key: string, fileName: string, at: string): PlanOverlay {
+  const r = o.requests[key];
+  if (!r || requestStatus(r) !== "sent") return o;
+  const next = { ...o, requests: { ...o.requests, [key]: pushHistory({ ...r, receivedAt: at, fileName }, at, `החומר התקבל: ${fileName} · בבדיקה`) } };
+  return r.creativeId ? { ...next, creatives: { ...next.creatives, [r.creativeId]: "awaiting_approval" } } : next;
+}
+
+/** The approver accepts the material: it covers the requirement (or replaces the creative). Only from review. */
+export function approveMaterial(o: PlanOverlay, key: string, at: string, by: string): PlanOverlay {
+  const r = o.requests[key];
+  if (!r || requestStatus(r) !== "in_review") return o;
+  const next = { ...o, requests: { ...o.requests, [key]: pushHistory({ ...r, approvedAt: at }, at, `אושר על ידי ${by} · מכסה את הדרישה`) } };
+  return r.creativeId ? { ...next, creatives: { ...next.creatives, [r.creativeId]: "approved" } } : next;
+}
+
+/** Cancel keeps the request, its history and its task; the requirement is free to be covered another way. */
+export function cancelRequest(o: PlanOverlay, key: string, at: string): PlanOverlay {
+  const r = o.requests[key];
+  if (!r || r.cancelledAt) return o;
+  const req = { ...o.requirements };
+  if (req[key]?.choice === "request") delete req[key];
+  return { ...o, requirements: req, requests: { ...o.requests, [key]: pushHistory({ ...r, cancelledAt: at }, at, "הבקשה בוטלה (ההיסטוריה והמשימה נשמרו)") } };
 }
 
 /** The request as plain text a person can paste into WhatsApp or an email (V1 sending is manual). */
@@ -753,12 +944,14 @@ export const READINESS_DIM_WORD: Record<ReadinessDimension, string> = {
 };
 export const READINESS_STATE_WORD: Record<ReadinessState, string> = { ready: "מוכן", waiting: "ממתין", missing: "חסר", blocked: "חסום", unknown: "לא ידוע" };
 export const READINESS_OVERALL_WORD: Record<Readiness["overall"], string> = {
-  blocked: "חסום", waiting_client: "ממתין לחומר מהלקוח", missing: "חסר", waiting_generation: "ממתין ליצירה", ready_for_review: "מוכן לבדיקה", waiting_approval: "ממתין לאישור", approved: "אושר · מוכן להשקה",
+  blocked: "חסום", waiting_client: "ממתין לחומר מהלקוח", missing: "חסר", waiting_decision: "ממתין להחלטה", ready_for_review: "מוכן לבדיקה", waiting_approval: "ממתין לאישור", approved: "אושר · מוכן להשקה",
 };
 
 export type ReadinessInput = {
   move: Move; builder: BuilderProposal; state: MoveState; requirements: ContentRequirement[]; overlay: PlanOverlay; builders: BuilderProposal[];
   policy: ClientApprovalPolicy; approverName: (kind: ApproverKind) => string; unallocated: number;
+  /** whether the Client approved the period's Plan (DELEGATED launch needs it); default true */
+  planApproved?: boolean;
 };
 
 /**
@@ -788,7 +981,7 @@ export function readiness(i: ReadinessInput): Readiness {
   else {
     const bad = cs.variants.map((v) => variantConforms(v, cs.chosen!)).find((r) => !r.ok);
     const flags = directionFlags(cs.chosen);
-    dims.copy = bad ? dim("blocked", bad.reason!) : flags.length ? dim("waiting", `כיוון "${cs.chosen.name}" · לאשר או להסיר: ${flags[0]}`, i.approverName("operator")) : dim("ready", `כיוון "${cs.chosen.name}" · ${cs.variants.length} גרסאות`);
+    dims.copy = bad ? dim("blocked", bad.reason!) : flags.length ? dim("waiting", `כיוון "${cs.chosen.name}" · לאמת במוח העסק או לבחור כיוון אחר: ${flags[0]}`, i.approverName("operator")) : dim("ready", `כיוון "${cs.chosen.name}" · ${cs.variants.length} גרסאות${cs.combined.length ? ` · משולב: ${cs.combined.map((c) => c.proof).join(", ")}` : ""}`);
   }
   // creative: every requirement of the move covered; the client or a generation job may be acting
   const reqs = i.requirements.filter((r) => r.moveId === m.id);
@@ -796,15 +989,22 @@ export function readiness(i: ReadinessInput): Readiness {
   const total = slotsOf.reduce((s, x) => s + x.slots.length, 0);
   const covered = slotsOf.reduce((s, x) => s + x.slots.filter((a) => a !== "missing").length, 0);
   const brandMissing = slotsOf.find((x) => x.r.authenticity === "brand_fixed" && x.slots.includes("missing"));
-  const requested = slotsOf.find((x) => x.slots.includes("missing") && x.cover?.choice === "request");
+  const reqOf = (x: (typeof slotsOf)[number]) => (x.cover?.choice === "request" ? o.requests[x.r.id] : undefined);
+  const drafted = slotsOf.find((x) => x.slots.includes("missing") && x.cover?.choice === "request" && (!reqOf(x) || requestStatus(reqOf(x)!) === "drafted"));
+  const requested = slotsOf.find((x) => x.slots.includes("missing") && x.cover?.choice === "request" && reqOf(x) && requestStatus(reqOf(x)!) === "sent");
+  const inReview = slotsOf.find((x) => reqOf(x) && requestStatus(reqOf(x)!) === "in_review");
   const missing = slotsOf.find((x) => x.slots.includes("missing") && !x.cover);
   // V1 prepares nothing for real: a chosen path makes the asset exist and wait for approval (no generation job runs)
   const creativeApproved = (o.approvalsGiven[m.id] ?? []).includes("new_creative");
   const awaiting = slotsOf.reduce((s, x) => s + x.slots.filter((a) => a === "awaiting_approval").length, 0);
   const count = total ? ` · ${covered} מתוך ${total}` : "";
+  const badCreative = (b.creatives ?? []).find((c) => creativeViolation(c));
   if (brandMissing) dims.creative = dim("blocked", `${brandMissing.r.title}: נכס מותג חסר בספרייה המאושרת`);
-  else if (requested) dims.creative = dim("waiting", `${requested.r.title} · בקשה ללקוח${count}`, "הלקוח");
+  else if (badCreative) dims.creative = dim("blocked", `${badCreative.label}: ${creativeViolation(badCreative)}`);
+  else if (requested) dims.creative = dim("waiting", `${requested.r.title} · בקשה ללקוח נשלחה${count}`, "הלקוח");
+  else if (drafted) dims.creative = dim("waiting", `${drafted.r.title} · הבקשה עוד לא נשלחה${count}`, i.approverName("operator"));
   else if (missing) dims.creative = dim("missing", `${missing.r.title}${count}`);
+  else if (inReview) dims.creative = dim("waiting", `${inReview.r.title} · החומר התקבל, בבדיקה${count}`, i.approverName(inReview.r.approval));
   else if (awaiting > 0 && !creativeApproved) dims.creative = dim("waiting", `${awaiting} נכסים ממתינים לאישור${count}`, i.approverName(approverFor(policy, "new_creative")));
   else dims.creative = dim("ready", total ? `כל הנכסים מאושרים${count}` : "אין דרישות תוכן");
   // landing / destination
@@ -817,7 +1017,7 @@ export function readiness(i: ReadinessInput): Readiness {
       ? dim("unknown", `לא נבדק (V1) · חסר: ${b.tracking.missing[0]}`)
       : dim("unknown", `לא נבדק (V1)${b.tracking.checked.length ? ` · מוצהר ידנית: ${b.tracking.checked.join(", ")}` : ""} · סיכון עד חיבור`);
   // approval: what the Client's policy requires, who gives each
-  const reqd = requiredApprovals(m, b, policy, o);
+  const reqd = requiredApprovals(m, b, policy, o, { planApproved: i.planApproved ?? true });
   const open = reqd.filter((a) => !a.given);
   const reviewDone = state === "ready_for_review" || state === "approved" || state === "live" || state === "paused" || state === "ended";
   const approver = open[0] ? i.approverName(open[0].by) : undefined;
@@ -832,12 +1032,14 @@ export function readiness(i: ReadinessInput): Readiness {
   let next: Readiness["next"];
   const operator = i.approverName("operator");
   if (blockers.length) { overall = "blocked"; next = { label: blockers[0], actor: operator }; }
-  else if (dims.creative.state === "waiting" && dims.creative.actor === "הלקוח") { overall = "waiting_client"; next = { label: `הלקוח מעלה: ${requested!.r.title}`, actor: "הלקוח" }; }
+  else if (requested) { overall = "waiting_client"; next = { label: `הלקוח מעלה: ${requested.r.title}`, actor: "הלקוח" }; }
   else if (dims.copy.state === "missing") { overall = "missing"; next = { label: "בחר כיוון מסר", actor: operator }; }
+  else if (drafted) { overall = "waiting_decision"; next = { label: `שלח ללקוח ידנית: ${drafted.r.title}`, actor: operator }; }
   else if (dims.creative.state === "missing") { overall = "missing"; next = { label: `כסה: ${missing!.r.title}`, actor: operator }; }
   else if (dims.landing.state === "missing") { overall = "missing"; next = { label: `הכן את ${b.destination.label}`, actor: operator }; }
   else if (dims.targeting.state === "missing") { overall = "missing"; next = { label: "הגדר קהל", actor: operator }; }
-  else if (dims.copy.state === "waiting") { overall = "missing"; next = { label: dims.copy.text, actor: operator }; }
+  else if (dims.copy.state === "waiting") { overall = "waiting_decision"; next = { label: dims.copy.text, actor: operator }; }
+  else if (inReview) { overall = "waiting_decision"; next = { label: `אשר את החומר שהתקבל: ${inReview.r.title}`, actor: dims.creative.actor! }; }
   else if (dims.creative.state === "waiting") { overall = reviewDone ? "waiting_approval" : "ready_for_review"; next = reviewDone ? { label: "אשר את הנכסים הממתינים", actor: dims.creative.actor! } : { label: "שלח לבדיקה", actor: operator }; }
   else if (!nonApprovalReady) { overall = "missing"; next = { label: "השלם את ההצעה", actor: operator }; }
   else if (dims.approval.state === "ready") { overall = "approved"; next = { label: "העלה בפלטפורמה וסמן \"פעיל\"", actor: operator }; }
@@ -866,9 +1068,13 @@ export function derivedNeeds(pp: PriorityPlan, moves: Move[], reqs: ContentRequi
       const slots = requirementSlots(r, o, builders);
       if (!slots.includes("missing")) continue;
       const requested = o.requirements[r.id]?.choice === "request";
-      out.push(requested
+      const req = o.requests[r.id];
+      const sent = !!req && (requestStatus(req) === "sent");
+      out.push(requested && sent
         ? { id: `need-client-${r.id}`, priorityId: pp.priorityId, moveId: m.id, kind: "client_material", title: `ממתין ללקוח: ${r.title}${r.neededByDay ? ` · עד ${r.neededByDay}.10` : ""}`, detail: "בקשת חומר נשלחה ללקוח", resolver: NEED_RESOLVER.client_material }
-        : { id: `need-content-${r.id}`, priorityId: pp.priorityId, moveId: m.id, kind: "missing_content", title: r.title, detail: r.spec, resolver: NEED_RESOLVER.missing_content });
+        : requested
+          ? { id: `need-client-${r.id}`, priorityId: pp.priorityId, moveId: m.id, kind: "client_material", title: `בקשה ללקוח עוד לא נשלחה: ${r.title}`, detail: "לשלוח ידנית ולסמן כנשלח", resolver: NEED_RESOLVER.missing_content }
+          : { id: `need-content-${r.id}`, priorityId: pp.priorityId, moveId: m.id, kind: "missing_content", title: r.title, detail: r.spec, resolver: NEED_RESOLVER.missing_content });
     }
     if (m.state === "ready_for_review") out.push({ id: `need-approval-${m.id}`, priorityId: pp.priorityId, moveId: m.id, kind: "missing_approval", title: `אשר את ${m.longName}`, detail: "ההצעה נבדקה וממתינה לאישור", resolver: NEED_RESOLVER.missing_approval });
   }

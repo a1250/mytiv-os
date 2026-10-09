@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import type { BuilderProposal, RefineKey } from "@/lib/focus/contracts/plan";
-import { REFINE_WORD, copyState, directionFlags, variantConforms } from "@/lib/focus/state/plan";
+import { REFINE_WORD, canCombine, copyState, directionFlags, variantConforms } from "@/lib/focus/state/plan";
 import Link from "@/components/focus/ui/link";
 import { R } from "@/lib/focus/routes";
 import { Button } from "@/components/focus/ui/button";
@@ -56,9 +56,15 @@ export function CopyDirections({ b, plan, editable }: { b: BuilderProposal; plan
                   ? <Button size="sm" variant={chosen ? "secondary" : "strong"} block onClick={() => plan.chooseDirection(b.id, d.id)} disabled={chosen} disabledReason={chosen ? "זה הכיוון שנבחר" : undefined}>{chosen ? "נבחר" : "בחר כיוון זה"}</Button>
                   : <span className="f-pl-meta">{chosen ? "הכיוון שנבחר" : "לא נבחר"}</span>}
                 {editable && cs.chosen && !chosen && (
-                  <button type="button" className="f-pl-linkbtn f-hit" onClick={() => plan.combineInto(b.id, `${d.name}: ${d.proof[0]}`)} aria-pressed={cs.combined.includes(`${d.name}: ${d.proof[0]}`)}>
-                    {cs.combined.includes(`${d.name}: ${d.proof[0]}`) ? "הוסר שילוב" : "שלב את ההוכחה"}
-                  </button>
+                  <div className="f-pl-dir__combine" role="group" aria-label={`שילוב הוכחה מ־${d.name}`}>
+                    {d.proof.map((pf) => {
+                      const ok = canCombine(d, pf);
+                      const on = cs.combined.some((c) => c.directionId === d.id && c.proof === pf);
+                      return ok.ok
+                        ? <button key={pf} type="button" className={cx("f-pl-kw", "f-pl-kw--btn", on && "f-pl-kw--on")} aria-pressed={on} onClick={() => plan.combineInto(b.id, d.id, pf)}>{on ? "✓ " : "+ "}{pf}</button>
+                        : <span key={pf} className="f-pl-kw f-pl-kw--off" title={ok.reason}>{pf} · לא אומת</span>;
+                    })}
+                  </div>
                 )}
               </div>
             </li>
@@ -86,7 +92,7 @@ export function CopyDirections({ b, plan, editable }: { b: BuilderProposal; plan
             <span><b>הגרסאות מתחת לכיוון</b> <span className="f-pl-meta">· {cs.variants.length} {b.channel === "meta" ? "לפי קרבת הקהל" : "לפי קבוצת מודעות"}</span></span>
             <span className="f-pl-meta" aria-hidden>{open ? "▾" : "›"}</span>
           </button>
-          {cs.combined.length > 0 && <p className="f-pl-meta">משולב: {cs.combined.join(" · ")} — ההבטחה של הכיוון שנבחר נשמרת.</p>}
+          {cs.combined.length > 0 && <p className="f-pl-meta">משולב בגרסאות: {cs.combined.map((c) => `${c.proof} (מ־${c.directionName})`).join(" · ")} — אומת במוח העסק; ההבטחה של הכיוון שנבחר נשמרת.</p>}
           {open && (
             <ul className="f-pl-variants__list">
               {cs.variants.map((v) => {

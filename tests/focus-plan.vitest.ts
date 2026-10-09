@@ -16,6 +16,8 @@ import {
   unverifiedClaim, type PlanFixtures, type PlanOverlay,
   APPROVAL_FLOOR, allowedPaths, approvalNeedsAck, approverFor, buildClientRequest, clientRequestText, copyState, delegatedLaunchAllowed, derivedNeeds, directionFlags,
   pathRefusal, readiness, recommendedPath, requestTooLate, requiredApprovals, requirementStatus, variantConforms, type ReadinessInput,
+  addRequest, approveMaterial, canCombine, cancelRequest, coverAllowed, creativeReplacementRequirement, creativeViolation, markRequestSent, receiveMaterial,
+  reopenRequest, requestCreatePlan, requestStatus, uploadCompatible,
 } from "@/lib/focus/state/plan";
 
 const F: PlanFixtures = { plan: PLAN_OCTOBER, moves: MOVES, proposed: PROPOSED_MOVES, recs: RECOMMENDATIONS, requirements: REQUIREMENTS, builders: BUILDERS };
@@ -304,19 +306,32 @@ describe("V1 model guards", () => {
 const approverName = (k: "client" | "operator") => (k === "client" ? PEOPLE.ron.name : PEOPLE.dana.name);
 const builderOf = (id: string) => BUILDERS.find((b) => b.id === id)!;
 const moveOf = (id: string, ov = o()) => [...moves(ov), ...PROPOSED_MOVES.map((m) => applyMove(m, ov, RECOMMENDATIONS))].find((m) => m.id === id)!;
-function ready(builderId: string, ov = o(), state?: Move["state"]): ReturnType<typeof readiness> {
+function ready(builderId: string, ov = o(), state?: Move["state"], policy = CLIENT_APPROVAL_POLICY, planApproved = true): ReturnType<typeof readiness> {
   const b = builderOf(builderId);
   const m = moveOf(b.moveId, ov);
-  const i: ReadinessInput = { move: m, builder: b, state: state ?? m.state, requirements: REQUIREMENTS, overlay: ov, builders: BUILDERS, policy: CLIENT_APPROVAL_POLICY, approverName, unallocated: 1200 };
+  const i: ReadinessInput = { move: m, builder: b, state: state ?? m.state, requirements: REQUIREMENTS, overlay: ov, builders: BUILDERS, policy, approverName, unallocated: 1200, planApproved };
   return readiness(i);
 }
-/** everything the Meta events move needs before approval, short of the approvals themselves */
-const eventsComplete = (extra: Partial<PlanOverlay> = {}) => o({
+const AT = "2026-10-07";
+const testimonial = () => REQUIREMENTS.find((r) => r.id === "req-events-testimonial")!;
+/** a client request for a requirement, driven through the real lifecycle reducers up to `stage` */
+function withRequest(ov: PlanOverlay, reqId: string, stage: "drafted" | "sent" | "received" | "approved"): PlanOverlay {
+  const req = REQUIREMENTS.find((r) => r.id === reqId)!;
+  let next = addRequest(ov, buildClientRequest(req, moveOf(req.moveId), PRIORITIES.find((p) => p.id === req.priorityId)!, `t-${reqId}`, 13, AT));
+  if (stage === "drafted") return next;
+  next = markRequestSent(next, reqId, AT);
+  if (stage === "sent") return next;
+  next = receiveMaterial(next, reqId, "testimonial.mp4", AT);
+  if (stage === "received") return next;
+  return approveMaterial(next, reqId, AT, PEOPLE.ron.name);
+}
+/** everything the Meta events move needs before approval, short of the approvals themselves (the testimonial arrived from the client and was approved) */
+const eventsComplete = (extra: Partial<PlanOverlay> = {}) => withRequest(o({
   copy: { "events-meta": { set: "main", directionId: "d-em-mood", refinements: [] } },
   creatives: { "cr-table": "approved", "cr-toast": "approved" },
-  requirements: { "req-events-testimonial": { choice: "existing", assetId: "as-cmr-1" }, "req-events-next": { choice: "ai_client" }, "req-events-card": { choice: "generate" } },
+  requirements: { "req-events-next": { choice: "ai_client" }, "req-events-card": { choice: "generate" } },
   ...extra,
-});
+}), "req-events-testimonial", "approved");
 
 describe("lifecycle is the locked seven-step chain; approval waiting is readiness, not a state", () => {
   it("ready_for_review replaced waiting_approval; an old session shape is migrated on read", () => {
@@ -348,12 +363,16 @@ describe("campaign readiness (derived): eight dimensions, one next action, at mo
     expect(r.overall).toBe("missing");
     expect(r.next.label).toBe("בחר כיוון מסר");
   });
-  it("a testimonial requested from the client → WAITING for the client, named as the actor, status 'waiting for client material'", () => {
-    const ov = o({ copy: { "events-meta": { set: "main", directionId: "d-em-direct", refinements: [] } }, requirements: { "req-events-testimonial": { choice: "request" } } });
-    const r = ready("events-meta", ov);
-    expect(r.dims.creative).toMatchObject({ state: "waiting", actor: "הלקוח" });
-    expect(r.overall).toBe("waiting_client");
-    expect(r.next).toMatchObject({ actor: "הלקוח" });
+  it("a testimonial request: drafted → the operator must send it; sent → WAITING for the client, 'waiting for client material'", () => {
+    const base = o({ copy: { "events-meta": { set: "main", directionId: "d-em-mood", refinements: [] } } });
+    const drafted = ready("events-meta", withRequest(base, "req-events-testimonial", "drafted"));
+    expect(drafted.dims.creative).toMatchObject({ state: "waiting", actor: PEOPLE.dana.name });
+    expect(drafted.overall).toBe("waiting_decision");
+    expect(drafted.next.label).toMatch(/^שלח ללקוח ידנית/);
+    const sent = ready("events-meta", withRequest(base, "req-events-testimonial", "sent"));
+    expect(sent.dims.creative).toMatchObject({ state: "waiting", actor: "הלקוח" });
+    expect(sent.overall).toBe("waiting_client");
+    expect(sent.next).toMatchObject({ actor: "הלקוח" });
   });
   it("the fall-menu move is BLOCKED by the Brain (offer not cleared) and its destination is MISSING; blockers ≤ 2", () => {
     const r = ready("fallmenu-meta");
@@ -378,15 +397,19 @@ describe("campaign readiness (derived): eight dimensions, one next action, at mo
     expect(r.dims.tracking.text).toMatch(/מדד ידני/);
     expect(r.trackingRisk).toBe(false);
   });
-  it("readiness recomputes: when the client's material arrives the move becomes ready for review", () => {
-    const base = eventsComplete({ requirements: { "req-events-testimonial": { choice: "request" }, "req-events-next": { choice: "ai_client" }, "req-events-card": { choice: "generate" } } });
-    expect(ready("events-meta", base).overall).toBe("waiting_client");
-    const arrived = o({ ...base, requirements: { ...base.requirements, "req-events-testimonial": { choice: "existing", assetId: "as-cmr-1" } } });
-    expect(ready("events-meta", arrived).dims.creative.state).toBe("waiting"); // exists, awaiting approval by the client
-    expect(ready("events-meta", arrived).overall).toBe("ready_for_review");
+  it("readiness recomputes along the request lifecycle: sent → received (in review, the approver named) → approved → ready for review", () => {
+    const base = o({ copy: { "events-meta": { set: "main", directionId: "d-em-mood", refinements: [] } }, creatives: { "cr-table": "approved", "cr-toast": "approved" }, requirements: { "req-events-next": { choice: "ai_client" }, "req-events-card": { choice: "generate" } } });
+    expect(ready("events-meta", withRequest(base, "req-events-testimonial", "sent")).overall).toBe("waiting_client");
+    const received = ready("events-meta", withRequest(base, "req-events-testimonial", "received"));
+    expect(received.dims.creative).toMatchObject({ state: "waiting", actor: PEOPLE.ron.name });
+    expect(received.overall).toBe("waiting_decision");
+    expect(received.next.label).toMatch(/^אשר את החומר שהתקבל/);
+    const approved = ready("events-meta", withRequest(base, "req-events-testimonial", "approved"));
+    expect(requirementSlots(testimonial(), withRequest(base, "req-events-testimonial", "approved"), BUILDERS)).toEqual(["approved"]);
+    expect(approved.overall).toBe("ready_for_review");
   });
   it("after every approval is given the move is approved / ready to launch", () => {
-    const ov = eventsComplete({ moveStates: { "m-events-meta": "approved" }, approvalsGiven: { "m-events-meta": ["direction", "variants", "new_creative", "launch"] } });
+    const ov = eventsComplete({ moveStates: { "m-events-meta": "approved" }, approvalsGiven: { "m-events-meta": ["direction", "variants", "new_creative", "material_adaptation", "minor_adaptation", "launch"] } });
     const r = ready("events-meta", ov);
     expect(r.dims.approval.state).toBe("ready");
     expect(r.dims.creative.state).toBe("ready");
@@ -396,11 +419,11 @@ describe("campaign readiness (derived): eight dimensions, one next action, at mo
 });
 
 describe("client approval policy: STANDARD by default, a floor no preset crosses", () => {
-  it("UMINO's policy is STANDARD; the client approves the direction, creatives and launch, the operator the variants", () => {
+  it("UMINO's policy is STANDARD; the client approves the direction, creatives, the material AI adaptation and the launch; the operator the variants and the crop", () => {
     expect(CLIENT_APPROVAL_POLICY.preset).toBe("standard");
     expect(CLIENT_APPROVAL_POLICY.rules).toEqual(APPROVAL_PRESETS.standard);
     const req = requiredApprovals(moveOf("m-events-meta"), builderOf("events-meta"), CLIENT_APPROVAL_POLICY, o());
-    expect(req.map((a) => [a.action, a.by])).toEqual([["direction", "client"], ["variants", "operator"], ["new_creative", "client"], ["launch", "client"]]);
+    expect(req.map((a) => [a.action, a.by])).toEqual([["direction", "client"], ["variants", "operator"], ["new_creative", "client"], ["material_adaptation", "client"], ["minor_adaptation", "operator"], ["launch", "client"]]);
     expect(req.every((a) => !a.given)).toBe(true);
   });
   it("the floor: plan approval and a material AI adaptation need the client under DELEGATED too", () => {
@@ -549,11 +572,13 @@ describe("plan needs: planning kinds in the Plan, build-level kinds derived", ()
     expect(needs.every((n) => n.resolver)).toBe(true);
     expect(openNeeds(pp("p-events"), moves())).toHaveLength(0);
   });
-  it("a requested asset becomes 'waiting for the client'; a move ready for review becomes 'approve'", () => {
-    const ov = o({ requirements: { "req-events-testimonial": { choice: "request" } }, moveStates: { "m-events-meta": "ready_for_review" } });
-    const kinds = derivedNeeds(pp("p-events"), moves(ov), REQUIREMENTS, ov, BUILDERS).map((n) => n.kind);
-    expect(kinds).toContain("client_material");
-    expect(kinds).toContain("missing_approval");
+  it("a requested asset: drafted reads 'not sent yet' (Marketing), sent reads 'waiting for the client'; a move ready for review becomes 'approve'", () => {
+    const drafted = withRequest(o({ moveStates: { "m-events-meta": "ready_for_review" } }), "req-events-testimonial", "drafted");
+    const dn = derivedNeeds(pp("p-events"), moves(drafted), REQUIREMENTS, drafted, BUILDERS);
+    expect(dn.find((n) => n.kind === "client_material")).toMatchObject({ title: expect.stringMatching(/עוד לא נשלחה/), resolver: "שיווק" });
+    expect(dn.map((n) => n.kind)).toContain("missing_approval");
+    const sent = withRequest(o(), "req-events-testimonial", "sent");
+    expect(derivedNeeds(pp("p-events"), moves(sent), REQUIREMENTS, sent, BUILDERS).find((n) => n.kind === "client_material")).toMatchObject({ title: expect.stringMatching(/^ממתין ללקוח/), resolver: "הלקוח" });
   });
 });
 
@@ -564,5 +589,158 @@ describe("tenant isolation in fixtures", () => {
     for (const r of REQUIREMENTS) expect(PRIORITIES.find((p) => p.id === r.priorityId)?.clientId).toBe(PLAN_CLIENT.id);
     expect(CLIENT_APPROVAL_POLICY.clientId).toBe(PLAN_CLIENT.id);
     expect(PLAN_OCTOBER.client.id).toBe(PLAN_CLIENT.id);
+  });
+});
+
+/* ---------- remediation of the independent review (cb89da7): P2-1…P2-3 and the P3 safety rules ---------- */
+
+const DELEGATED = { ...CLIENT_APPROVAL_POLICY, preset: "delegated" as const, rules: APPROVAL_PRESETS.delegated };
+
+describe("P2-1 · the approval floor and the DELEGATED launch rule live in the real requiredApprovals / readiness path", () => {
+  it("money from the unallocated pool is a Plan change: `plan` is required from the Client under every preset", () => {
+    for (const policy of [CLIENT_APPROVAL_POLICY, DELEGATED]) {
+      const plan = requiredApprovals(moveOf("m-sunset-google"), builderOf("sunset-google"), policy, o()).find((a) => a.action === "plan");
+      expect(plan).toMatchObject({ by: "client" });
+    }
+    const custom = { ...DELEGATED, preset: "custom" as const, rules: { ...APPROVAL_PRESETS.delegated, plan: "operator" as const } };
+    expect(requiredApprovals(moveOf("m-sunset-google"), builderOf("sunset-google"), custom, o()).find((a) => a.action === "plan")?.by).toBe("client");
+  });
+  it("DELEGATED: money outside the approved allocation → the launch goes back to the Client, with the reason", () => {
+    const launch = requiredApprovals(moveOf("m-sunset-google"), builderOf("sunset-google"), DELEGATED, o()).find((a) => a.action === "launch")!;
+    expect(launch.by).toBe("client");
+    expect(launch.reason).toMatch(/השקה באישור הלקוח/);
+  });
+  it("DELEGATED: a material AI adaptation is a Client approval (floor); while it is open the launch stays with the Client", () => {
+    const req = requiredApprovals(moveOf("m-events-meta"), builderOf("events-meta"), DELEGATED, o());
+    expect(req.find((a) => a.action === "material_adaptation")?.by).toBe("client");
+    expect(req.find((a) => a.action === "launch")).toMatchObject({ by: "client", reason: expect.stringMatching(/אישור לקוח חובה/) });
+    const after = requiredApprovals(moveOf("m-events-meta"), builderOf("events-meta"), DELEGATED, o({ approvalsGiven: { "m-events-meta": ["material_adaptation"] } }));
+    expect(after.find((a) => a.action === "launch")?.by).toBe("operator");
+  });
+  it("DELEGATED: no Client-approved Plan, or a material change to the proposal → the Client approves the launch", () => {
+    const given = o({ approvalsGiven: { "m-events-meta": ["material_adaptation"] } });
+    expect(requiredApprovals(moveOf("m-events-meta"), builderOf("events-meta"), DELEGATED, given, { planApproved: false }).find((a) => a.action === "launch")?.by).toBe("client");
+    const changed = o({ ...given, builders: { "events-meta": { decisions: { audience: { value: "קהל אחר" } } } } });
+    expect(requiredApprovals(moveOf("m-events-meta"), builderOf("events-meta"), DELEGATED, changed).find((a) => a.action === "launch")?.by).toBe("client");
+  });
+  it("readiness uses the same rule: under DELEGATED with the conditions met, the launch waits for the operator by name", () => {
+    const ov = eventsComplete({ moveStates: { "m-events-meta": "ready_for_review" }, approvalsGiven: { "m-events-meta": ["direction", "variants", "new_creative", "material_adaptation", "minor_adaptation"] } });
+    const r = ready("events-meta", ov, undefined, DELEGATED);
+    expect(r.overall).toBe("waiting_approval");
+    expect(r.approver).toBe(PEOPLE.dana.name);
+    expect(ready("events-meta", ov, undefined, DELEGATED, false).approver).toBe(PEOPLE.ron.name);
+  });
+  it("a move approved in an older session without stored approvals counts them as given (legacy), never 'waiting' while approved", () => {
+    const ov = eventsComplete({ moveStates: { "m-events-meta": "approved" } });
+    expect(requiredApprovals(moveOf("m-events-meta", ov), builderOf("events-meta"), CLIENT_APPROVAL_POLICY, ov).every((a) => a.given)).toBe(true);
+    expect(ready("events-meta", ov).dims.approval.state).toBe("ready");
+  });
+});
+
+describe("P2-2 · replacing ONE creative asks the client for exactly that slot", () => {
+  const base = REQUIREMENTS.find((r) => r.id === "req-events-vertical")!;
+  const toast = builderOf("events-meta").creatives!.find((c) => c.id === "cr-toast")!;
+  const table = builderOf("events-meta").creatives!.find((c) => c.id === "cr-table")!;
+  it("the replacement requirement is quantity 1, keyed by the creative, named after it", () => {
+    const r = creativeReplacementRequirement(base, table);
+    expect(r).toMatchObject({ id: "req-events-vertical--cr-table", quantity: 1, slots: ["missing"] });
+    expect(r.creativeIds).toBeUndefined();
+    const req = buildClientRequest(r, moveOf("m-events-meta"), PRIORITIES.find((p) => p.id === "p-events")!, "t-1", 13);
+    expect(req.items[0].quantity).toBe(1);
+    expect(req.items[0].what).toContain("שולחן ערוך");
+    expect(clientRequestText(req)).not.toMatch(/3 × 3/);
+  });
+  it("a creative that shows real staff is authentic: its replacement allows only existing or a client request", () => {
+    const r = creativeReplacementRequirement(base, toast);
+    expect(r.authenticity).toBe("authentic");
+    expect(allowedPaths(r.authenticity)).toEqual(["existing", "request"]);
+  });
+  it("the replacement request feeds the creative slot: received → the creative is in review; approved → approved", () => {
+    const r = creativeReplacementRequirement(base, table);
+    let ov = addRequest(o(), { ...buildClientRequest(r, moveOf("m-events-meta"), PRIORITIES.find((p) => p.id === "p-events")!, "t-1", 13, AT), creativeId: "cr-table" });
+    expect(ov.requirements[r.id]).toBeUndefined(); // the parent requirement is untouched
+    ov = receiveMaterial(markRequestSent(ov, r.id, AT), r.id, "table.jpg", AT);
+    expect(ov.creatives["cr-table"]).toBe("awaiting_approval");
+    ov = approveMaterial(ov, r.id, AT, PEOPLE.ron.name);
+    expect(ov.creatives["cr-table"]).toBe("approved");
+  });
+});
+
+describe("P2-3 · the client material request lifecycle: drafted → sent → received → in review → approved, history kept", () => {
+  const key = "req-events-testimonial";
+  it("statuses follow the dates; a step cannot be skipped", () => {
+    let ov = withRequest(o(), key, "drafted");
+    expect(requestStatus(ov.requests[key])).toBe("drafted");
+    expect(receiveMaterial(ov, key, "x.mp4", AT)).toBe(ov); // not before it was sent
+    expect(approveMaterial(ov, key, AT, "רון")).toBe(ov);   // not before it arrived
+    ov = markRequestSent(ov, key, AT);
+    expect(requestStatus(ov.requests[key])).toBe("sent");
+    expect(requirementSlots(testimonial(), ov, BUILDERS)).toEqual(["missing"]);
+    ov = receiveMaterial(ov, key, "x.mp4", AT);
+    expect(requestStatus(ov.requests[key])).toBe("in_review");
+    expect(requirementSlots(testimonial(), ov, BUILDERS)).toEqual(["awaiting_approval"]);
+    ov = approveMaterial(ov, key, AT, "רון");
+    expect(requestStatus(ov.requests[key])).toBe("approved");
+    expect(requirementSlots(testimonial(), ov, BUILDERS)).toEqual(["approved"]);
+    expect(ov.requests[key].history.map((h) => h.text)).toHaveLength(4);
+  });
+  it("one request and one task per requirement, ever: an open request is returned, a cancelled one is re-opened with the same task", () => {
+    let ov = withRequest(o(), key, "sent");
+    expect(requestCreatePlan(ov, key)).toBe("existing");
+    expect(addRequest(ov, buildClientRequest(testimonial(), moveOf("m-events-meta"), PRIORITIES[0], "t-other", 13))).toBe(ov);
+    ov = cancelRequest(ov, key, AT);
+    expect(requestStatus(ov.requests[key])).toBe("cancelled");
+    expect(ov.requests[key].taskId).toBe(`t-${key}`);
+    expect(ov.requirements[key]).toBeUndefined(); // free to cover another way
+    expect(requestCreatePlan(ov, key)).toBe("reopen");
+    const before = ov.requests[key].history.length;
+    ov = reopenRequest(ov, key, AT);
+    expect(requestStatus(ov.requests[key])).toBe("drafted");
+    expect(ov.requests[key].taskId).toBe(`t-${key}`);
+    expect(ov.requests[key].history.length).toBe(before + 1);
+    expect(requestCreatePlan(o(), key)).toBe("create");
+  });
+});
+
+describe("P3 safety rules: authenticity in the state layer, uploads, creatives, copy combination, one next action", () => {
+  it("a cover path the authenticity class refuses is not allowed by the state guard", () => {
+    expect(coverAllowed(testimonial(), "generate")).toBe(false);
+    expect(coverAllowed(testimonial(), "ai_client")).toBe(false);
+    expect(coverAllowed(testimonial(), "existing")).toBe(true);
+    expect(coverAllowed(REQUIREMENTS.find((r) => r.id === "req-events-logo")!, "generate")).toBe(false);
+  });
+  it("uploads must fit the requirement: video for a testimonial, an image for a photo, nothing for brand-fixed", () => {
+    expect(uploadCompatible(testimonial(), { name: "a.jpg", type: "image/jpeg" })).toMatch(/וידאו/);
+    expect(uploadCompatible(testimonial(), { name: "a.mp4", type: "video/mp4" })).toBeNull();
+    expect(uploadCompatible(REQUIREMENTS.find((r) => r.id === "req-events-next")!, { name: "a.mp4", type: "video/mp4" })).toMatch(/תמונה/);
+    expect(uploadCompatible(REQUIREMENTS.find((r) => r.id === "req-events-logo")!, { name: "l.png", type: "image/png" })).toMatch(/מהספרייה/);
+  });
+  it("real people / a real event are authentic material: only a minor AI adaptation is allowed", () => {
+    expect(creativeViolation({ authentic: true, origin: "ai_edited", adaptation: "material" })).toMatch(/לא עובר התאמת AI מהותית/);
+    expect(creativeViolation({ authentic: true, origin: "ai_edited", adaptation: "minor" })).toBeNull();
+    for (const b of BUILDERS) for (const c of b.creatives ?? []) expect(creativeViolation(c)).toBeNull();
+  });
+  it("combining proof: an unverified point is refused and a tampered one is dropped on read; a verified one reaches every variant, which still conforms", () => {
+    const g = builderOf("sunset-google");
+    const proofDir = g.copy.directions.find((d) => d.id === "d-sg-proof")!;
+    expect(canCombine(proofDir, "מעל 1,000 סועדים בשקיעה בספטמבר").ok).toBe(false);
+    expect(canCombine(proofDir, "40 מקומות בשקיעה ליום").ok).toBe(true);
+    const tampered = copyState(g, o({ copy: { "sunset-google": { set: "main", directionId: "d-sg-direct", refinements: [], combined: ["d-sg-proof::מעל 1,000 סועדים בשקיעה בספטמבר"] } } }));
+    expect(tampered.combined).toEqual([]);
+    expect(tampered.variants.some((v) => v.body.includes("1,000"))).toBe(false);
+    const ok = copyState(g, o({ copy: { "sunset-google": { set: "main", directionId: "d-sg-direct", refinements: [], combined: ["d-sg-proof::40 מקומות בשקיעה ליום"] } } }));
+    expect(ok.variants.every((v) => v.body.includes("40 מקומות בשקיעה ליום"))).toBe(true);
+    for (const v of ok.variants) expect(variantConforms(v, ok.chosen!).ok).toBe(true);
+  });
+  it("a flagged direction reads 'waiting for a decision', not 'missing'", () => {
+    const r = ready("sunset-google", o({ copy: { "sunset-google": { set: "main", directionId: "d-sg-proof", refinements: [] } } }));
+    expect(r.dims.copy.state).toBe("waiting");
+    expect(r.overall).toBe("waiting_decision");
+  });
+  it("Overview and builder share one source: the Priority's next action is the move's readiness next action", () => {
+    const readinessOf = (m: Move) => (m.builderId ? ready(m.builderId) : null);
+    const a = nextAction(pp("p-events"), moves(), REQUIREMENTS, o(), F, routes, readinessOf);
+    expect(a.label).toContain(ready("events-meta").next.label);
+    expect(a.href).toBe("/b/events-meta#readiness");
   });
 });
