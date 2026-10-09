@@ -86,3 +86,27 @@ Deliberate deviations from the package (for review):
 - Mobile: the weekly agenda lists every day of the week with every item on its exact date, "+ הוסף" per day, items
   open the same panel (move / status), warnings inline. No month grid on mobile.
 - Demo only: added / moved items live in the browser session (`plan-v1` overlay: `dayItems`, `dayMoves`, `dayStatus`).
+
+## Remediation of the independent review (cb89da7)
+
+- Approvals: `requiredApprovals(move, builder, policy, overlay, { planApproved })` is the one path readiness, the
+  builder footer and the Overview use. It adds `plan` when the money comes from outside the Priority's allocation
+  (floor: the Client), `material_adaptation` (floor) / `minor_adaptation` for AI-edited creatives, and under DELEGATED
+  hands the launch to the operator only when `delegatedLaunchAllowed` holds (otherwise the Client, with the reason).
+  Moves approved in an older session without stored approvals count them as given.
+- Creatives carry `authentic` (real people / a real event) and `adaptation` (minor | material); an authentic creative
+  may only be cropped (`creativeViolation`). Approving the last waiting creative in the strip records the policy's
+  `new_creative` approval, so it is never asked twice.
+- Replacing ONE creative and asking the client builds `creativeReplacementRequirement` — quantity 1, keyed by the
+  creative, its own authenticity — and the request feeds that creative's slot when the material arrives / is approved.
+- Client Material Request lifecycle (pure overlay reducers, unit-tested): `addRequest` → `markRequestSent` →
+  `receiveMaterial` (upload checked by `uploadCompatible`) → in review → `approveMaterial` (covers the requirement);
+  `cancelRequest` keeps history + task; `requestCreatePlan` / `reopenRequest` make it one request and one task per
+  requirement, ever (plus a same-render guard in the hook). Readiness: drafted → "שלח ללקוח ידנית", sent → waiting for
+  the client, received → waiting for its approver, approved → covered.
+- State-layer authenticity guard (`coverAllowed`) refuses a disallowed path even outside the UI; brand-fixed material
+  has no upload; uploads must match the asset type.
+- Copy: a proof point is combined only when the Brain holds it (`canCombine`, `unverified`), is revalidated on every
+  read, and is added to every variant (which still conforms). A flagged direction reads `waiting_decision`
+  ("ממתין להחלטה"), which also replaces the unreachable "waiting for generation".
+- The Overview's next action for a priority comes from the move's readiness (`nextAction(..., readinessOf)`).

@@ -726,6 +726,9 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     const first = page.getByRole("button", { name: /^אשר: כיוון המסר · כרון/ });
     if (!((await first.getAttribute("aria-disabled")) === "true" || (await first.isDisabled()))) return "approval allowed before the tracking acknowledgment";
     await page.getByRole("checkbox", { name: /מכיר\/ה בכך שהמעקב לא נבדק/ }).check();
+    // the budget comes from the unallocated pool: a Plan change the Client approves (floor), with the reason shown
+    if (!(await page.locator(".f-pl-approvals").textContent()).includes("שינוי תוכנית")) return "plan-change reason not shown";
+    await page.getByRole("button", { name: /^אשר: אישור התוכנית · כרון/ }).click();
     await first.click();
     await page.getByRole("button", { name: /^אשר: גרסאות הטקסט · כדנה/ }).click();
     await page.getByRole("button", { name: /^אשר: השקת המהלך · כרון/ }).click();
@@ -760,17 +763,56 @@ const go = async (page, r) => { await page.goto(SITE + r, { waitUntil: "domconte
     const txt = await sheet.locator("textarea").inputValue();
     if (!txt.includes("אנחנו צריכים")) return "no request text";
     await sheet.getByRole("button", { name: "סמן כנשלח ידנית" }).click();
-    await sheet.getByText("נשלח ידנית · ממתין לחומר מהלקוח").waitFor();
+    await sheet.getByText("נשלחה ידנית · ממתינה לחומר").first().waitFor();
     await sheet.getByRole("button", { name: "סגור חלון", exact: true }).click();
     const stored = await page.evaluate(() => Object.keys(sessionStorage).map((k) => sessionStorage.getItem(k)).join(" "));
     const ready = (await page.locator("#readiness").textContent()).replace(/\s+/g, " ");
     return stored.includes("בקשה מהלקוח: סרטון המלצה") && ready.includes("ממתין לחומר מהלקוח") ? "request + task · readiness waits for the client" : `ready: ${ready.slice(0, 100)}`;
   });
-  await check("plan: Meta builder — approving both awaiting creatives clears the awaiting count", async () => {
+  await check("plan: the material arrives → a wrong file type is refused → a video is received (in review) → approved by רון → covers the requirement; history kept", async () => {
+    await page.getByRole("button", { name: "הבקשה ללקוח · סרטון המלצה מלקוח עסקי" }).click();
+    const sheet = page.getByRole("dialog");
+    const input = sheet.locator("input[type=file]");
+    await input.setInputFiles({ name: "photo.jpg", mimeType: "image/jpeg", buffer: Buffer.from("x") });
+    if (!(await sheet.textContent()).includes("נדרש קובץ וידאו")) return "image accepted for a testimonial";
+    await input.setInputFiles({ name: "testimonial.mp4", mimeType: "video/mp4", buffer: Buffer.from("x") });
+    await sheet.getByRole("button", { name: "סמן שהחומר התקבל" }).click();
+    await sheet.getByText("התקבל · בבדיקה").first().waitFor();
+    await sheet.getByRole("button", { name: /^אשר את החומר · כרון/ }).click();
+    await sheet.getByText("אושר · מכסה את הדרישה").first().waitFor();
+    await sheet.locator(".f-pl-reqhist summary").click();
+    const hist = await sheet.locator(".f-pl-reqhist").textContent();
+    await sheet.getByRole("button", { name: "סגור חלון", exact: true }).click();
+    const row = await page.locator(".f-pl-reqlist__item", { hasText: "סרטון המלצה מלקוח עסקי" }).textContent();
+    return ["נוצרה", "נשלחה ידנית", "התקבל", "אושר"].every((k) => hist.includes(k)) && row.includes("מאושר") ? "received → in review → approved · covered · 4 history steps" : `hist=${hist.slice(0, 80)} row=${row.slice(0, 60)}`;
+  });
+  await check("plan: replacing ONE creative and asking the client requests exactly 1 (never the parent quantity); a real-staff creative allows no AI path", async () => {
+    await page.getByRole("button", { name: "החלף · צוות בהרמת כוסית" }).click();
+    let dlg = page.getByRole("dialog");
+    const off = await dlg.locator(".f-pl-cover__opt--off").allTextContents();
+    if (!off.some((x) => x.includes("AI + נכס"))) return "AI path offered for real staff";
+    await dlg.getByRole("button", { name: "סגירה" }).first().click();
+    await page.getByRole("button", { name: "החלף · שולחן ערוך" }).click();
+    dlg = page.getByRole("dialog");
+    await dlg.locator("button.f-pl-cover__opt", { hasText: "בקש מהלקוח" }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "צור בקשה ומשימה" }).click();
+    const txt = await sheet.locator("textarea").inputValue();
+    await sheet.getByRole("button", { name: "סגור חלון", exact: true }).click();
+    return txt.includes("1 × קריאייטיב חלופי · שולחן ערוך") && !txt.includes("3 ×") ? "1 × the one creative" : txt.slice(0, 120);
+  });
+  await check("plan: Meta builder — approving both awaiting creatives clears the awaiting count (by the policy's approver)", async () => {
     if (!(await page.textContent("#creative")).includes("2 ממתינים")) return "not 2 awaiting";
     await page.getByRole("button", { name: /^אשר · / }).first().click();
     await page.getByRole("button", { name: /^אשר · / }).first().click();
     return (await page.locator("#creative .f-pl-good").count()) === 3 ? "3 approved" : false;
+  });
+  await check("plan: the Overview's next action for a priority is the builder's readiness next action (one source)", async () => {
+    await go(page, "/focus/plan/build/events-meta");
+    const next = (await page.locator(".f-pl-ready__next b").textContent()).trim();
+    await go(page, "/focus/plan");
+    const act = await page.locator(".f-pl-pri").first().locator(".f-pl-kv--act").textContent();
+    return act.includes(next) ? `both: ${next}` : `overview="${act.slice(0, 80)}" builder="${next}"`;
   });
   await check("plan: blocked builder cannot be sent; readiness says BLOCKED with the Brain reason and the missing destination", async () => {
     await go(page, "/focus/plan/build/fallmenu-meta");
